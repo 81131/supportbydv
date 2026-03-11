@@ -6,13 +6,23 @@ WORKDIR /app
 # Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
+RUN npm install axios
 
-# Copy the source code and build
+# Copy the source code
 COPY . .
+
+# Accept the build argument and set it as an environment variable for Vite
+ARG VITE_GOOGLE_CLIENT_ID
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+
+# Build the application
 RUN npm run build
 
 # Stage 2: Serve the optimized static files using Nginx
 FROM nginx:alpine
+
+# Copy the custom Nginx configuration to handle React routing and the Backend Proxy
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy the built assets from the builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html

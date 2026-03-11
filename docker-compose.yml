@@ -34,15 +34,17 @@ services:
       - db
 
   frontend:
-    build: 
-      context: ./frontend
-    container_name: supportbydv-frontend
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443" # Ready for SSL later
-    depends_on:
-      - backend
+      build: 
+        context: ./frontend
+        args:
+          - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+      container_name: supportbydv-frontend
+      restart: always
+      ports:
+        - "80:80"
+        - "443:443"
+      depends_on:
+        - backend
 
 volumes:
   postgres_data:
