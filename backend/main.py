@@ -1,5 +1,6 @@
 import os
 import time
+from backend.security import verify_csrf
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
@@ -39,6 +40,8 @@ app.add_middleware(
 # Connect the routers to the main app
 app.include_router(auth_router)
 app.include_router(files_router)  
+app.include_router(auth_router)
+app.include_router(files_router, dependencies=[Depends(verify_csrf)]) # Protects all file routes
 
 @app.get("/")
 def read_root():
