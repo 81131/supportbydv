@@ -5,6 +5,9 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
 from apis.files import router as files_router  
+from apis import quizzes
+from fastapi.staticfiles import StaticFiles 
+from apis import auth, files 
 
 # Importing the models package triggers your __init__.py loop, 
 # registering ALL tables with SQLAlchemy automatically.
@@ -37,11 +40,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
+
 # Connect the routers to the main app
 app.include_router(auth_router)
 app.include_router(files_router)  
 app.include_router(auth_router)
-app.include_router(files_router, dependencies=[Depends(verify_csrf)]) # Protects all file routes
+app.include_router(quizzes.router)
+app.include_router(files_router, dependencies=[Depends(verify_csrf)]) 
+app.include_router(files.router)
 
 @app.get("/")
 def read_root():

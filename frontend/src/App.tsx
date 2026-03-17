@@ -11,6 +11,7 @@ import NotFound from './pages/NotFound';
 import PS from './pages/PS';
 import OSSA from './pages/OSSA';
 import WMT from './pages/WMT';
+import QuizMaker from './pages/QuizMaker';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -86,6 +87,7 @@ if (isLoading) {
               <>
                 <Link to="/year01" className="nav-item" onClick={() => setIsMenuOpen(false)}>Year 01</Link>
                 <Link to="/y2s2" className="nav-item" onClick={() => setIsMenuOpen(false)}>Y2S2</Link>
+                <Link to="/quiz-maker" className="nav-item" onClick={() => setIsMenuOpen(false)}>Quiz Maker</Link>
               </>
             )}
             
@@ -130,6 +132,7 @@ if (isLoading) {
           <Route path="/y2s2/ps" element={<ProtectedRoute user={user}><PS /></ProtectedRoute>} />
           <Route path="/y2s2/ossa" element={<ProtectedRoute user={user}><OSSA /></ProtectedRoute>} />
           <Route path="/y2s2/wmt" element={<ProtectedRoute user={user}><WMT /></ProtectedRoute>} />
+          <Route path="/quiz-maker" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
