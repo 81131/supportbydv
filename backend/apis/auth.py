@@ -1,24 +1,29 @@
 import os
 from urllib import response
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from database import get_db
-from models.user import User
-from schemas.user import TokenPayload, Token
-from security import create_access_token  # Import our new function
+from models.user import User, UserRole
+from security import create_access_token  
+from pydantic import BaseModel
+from schemas.user import TokenPayload, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 GOOGLE_CLIENT_ID = os.getenv("VITE_GOOGLE_CLIENT_ID")
 
+class AuthResponse(BaseModel):
+    user: UserResponse
+
 # Notice the response_model is now Token
-@router.post("/google", response_model=Token)
+@router.post("/google", response_model=AuthResponse)
 def google_auth(
     payload: TokenPayload, 
-    response: Response, # Inject Response object
-    db: Session = Depends(get_db)):    
+    response: Response, 
+    db: Session = Depends(get_db)):
     try:
         # 1. Verify Google's token
         id_info = id_token.verify_oauth2_token(
@@ -39,14 +44,19 @@ def google_auth(
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                auth_provider="google"
+                auth_provider="google",
+                role=UserRole.STUDENT
             )
             db.add(user)
             db.commit()
             db.refresh(user)
 
         # 1. Generate internal JWT
-        access_token = create_access_token(data={"sub": str(user.id)})
+        
+        access_token = create_access_token(data={
+            "sub": str(user.id),
+            "role": user.role.value 
+        })        
         
         # 2. Set the HttpOnly Cookie (Auth)
         response.set_cookie(

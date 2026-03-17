@@ -8,18 +8,23 @@ import Home from './pages/Home';
 import Year01 from './pages/Year01';
 import Year2Sem2 from './pages/Year2Sem2';
 import NotFound from './pages/NotFound';
+import PS from './pages/PS';
+import OSSA from './pages/OSSA';
+import WMT from './pages/WMT';
 
 function App() {
   const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true); 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
-  useEffect(() => {
+useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
+    setIsLoading(false); // 👈 Tell React we are done checking!
   }, []);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
@@ -64,6 +69,11 @@ const handleLogout = async () => {
     setIsMenuOpen(false);
   }
 };
+
+if (isLoading) {
+    return <div style={{ color: 'var(--accent-gold)', textAlign: 'center', marginTop: '5rem' }}>Loading the Citadel... ⏳</div>; 
+  }
+  
   return (
     <Router>
       <div className="app-container">
@@ -117,6 +127,11 @@ const handleLogout = async () => {
               </ProtectedRoute>
             } 
           />
+          <Route path="/y2s2/ps" element={<ProtectedRoute user={user}><PS /></ProtectedRoute>} />
+          <Route path="/y2s2/ossa" element={<ProtectedRoute user={user}><OSSA /></ProtectedRoute>} />
+          <Route path="/y2s2/wmt" element={<ProtectedRoute user={user}><WMT /></ProtectedRoute>} />
+
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
 
@@ -165,7 +180,7 @@ const handleLogout = async () => {
           </div>
         )}
       </div>
-      <Route path="*" element={<NotFound />} />
+      
     </Router>
 
     
