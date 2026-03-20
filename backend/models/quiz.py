@@ -31,16 +31,23 @@ class Quiz(Base):
     title = Column(String, index=True)
     description = Column(String, nullable=True)
     
-    # New Relationships & Tracking
     module_id = Column(Integer, ForeignKey("modules.id"))
-    created_user_id = Column(Integer, ForeignKey("users.id")) # Assuming your user table is 'users'
+    created_user_id = Column(Integer, ForeignKey("users.id"))
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_timed = Column(Boolean, default=False)
+    time_limit_minutes = Column(Integer, nullable=True)
+    is_deleted = Column(Boolean, default=False)
+    
+    # NEW: The Award Flag
+    is_recommended = Column(Boolean, default=False)
     
     module = relationship("Module", back_populates="quizzes")
-    # user = relationship("User", back_populates="quizzes") # Add this if you want bi-directional user lookup
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
+    
+    # Ensure this is here so we can easily fetch the creator's role
+    creator = relationship("User", back_populates="quizzes", foreign_keys=[created_user_id])
 
 class Question(Base):
     __tablename__ = "questions"

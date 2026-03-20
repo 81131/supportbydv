@@ -27,6 +27,19 @@ class QuizCreate(BaseModel):
     title: str
     description: Optional[str] = None
     module_id: int
+
+    is_timed: bool = False
+    time_limit_minutes: Optional[int] = None
     
     # Nested questions list
     questions: List[QuestionCreate]
+
+class StudentAnswer(BaseModel):
+    question_id: int
+    selected_options: List[int] = [] 
+    numeric_answer: Optional[float] = None
+    text_answer: Optional[str] = None
+
+class QuizSubmission(BaseModel):
+    answers: List[StudentAnswer]
+    time_consumed_seconds: int = 0

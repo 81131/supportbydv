@@ -12,6 +12,8 @@ import PS from './pages/PS';
 import OSSA from './pages/OSSA';
 import WMT from './pages/WMT';
 import QuizMaker from './pages/QuizMaker';
+import TakeQuiz from './pages/TakeQuiz';
+import Leaderboard from './pages/Leaderboard';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -133,6 +135,9 @@ if (isLoading) {
           <Route path="/y2s2/ossa" element={<ProtectedRoute user={user}><OSSA /></ProtectedRoute>} />
           <Route path="/y2s2/wmt" element={<ProtectedRoute user={user}><WMT /></ProtectedRoute>} />
           <Route path="/quiz-maker" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
+          <Route path="/edit-quiz/:id" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
+          <Route path="/take-quiz/:id" element={<ProtectedRoute user={user}><TakeQuiz /></ProtectedRoute>} />
+          <Route path="/leaderboard" element={<ProtectedRoute user={user}><Leaderboard /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
