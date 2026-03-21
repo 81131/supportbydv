@@ -18,6 +18,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Forbidden from './pages/Forbidden'; // 👈 Make sure to import the new Forbidden page!
 import About from './pages/About';
 import NoteUploader from './pages/NoteUploader';
+import MyVault from './pages/MyVault';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -151,7 +152,9 @@ function App() {
           <Route path="/take-quiz/:id" element={<ProtectedRoute user={user}><TakeQuiz /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute user={user}><Leaderboard /></ProtectedRoute>} />
           <Route path="/upload-note" element={<ProtectedRoute user={user}><NoteUploader /></ProtectedRoute>} />
+          <Route path="/my-vault" element={<ProtectedRoute user={user}><MyVault /></ProtectedRoute>} />
           <Route path="/about" element={<About />} />
+        
           
           {/* Admin Dashboard is protected inside its own component, but we also wrap it here */}
           <Route path="/admin-dashboard" element={<ProtectedRoute user={user}><AdminDashboard /></ProtectedRoute>} />
