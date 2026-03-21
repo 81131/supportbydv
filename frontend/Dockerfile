@@ -8,6 +8,7 @@ COPY package*.json ./
 RUN npm install
 RUN npm install axios
 RUN npm install lucide-react
+RUN npm install react-easy-crop jspdf
 # Copy the source code
 COPY . .
 

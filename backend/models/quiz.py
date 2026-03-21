@@ -42,7 +42,7 @@ class Quiz(Base):
     
     # NEW: The Award Flag
     is_recommended = Column(Boolean, default=False)
-    
+    is_pinned = Column(Boolean, default=False) # 👈 Add this line!
     module = relationship("Module", back_populates="quizzes")
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
     

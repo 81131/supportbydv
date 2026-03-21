@@ -48,13 +48,17 @@ def google_auth(
                     detail="Your access to the Citadel has been revoked by the Maesters."
                 )
             
-            # Auto-upgrade you to NO_ONE if you were already in the DB before this update
+            # Auto-upgrade you to NO_ONE if you were already in the DB
             if user.email == SUPER_ADMIN_EMAIL and user.role != UserRole.NO_ONE:
                 user.role = UserRole.NO_ONE
                 
+            # Auto-migrate any other old "STUDENT" roles to the new "USER" role
+            elif user.role == UserRole.STUDENT:
+                user.role = UserRole.USER
+                
             # Track online presence
             user.last_active_at = func.now()
-            
+
         else:
             # --- 🎭 NEW ROLE ASSIGNMENT ---
             assigned_role = UserRole.NO_ONE if email == SUPER_ADMIN_EMAIL else UserRole.USER
@@ -75,8 +79,8 @@ def google_auth(
         # 3. Generate internal JWT
         access_token = create_access_token(data={
             "sub": str(user.id),
-            "role": user.role.value 
-        })        
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role) # 👈 Prevents string/enum crashes
+        })      
         
         # 4. Set the HttpOnly Cookie (Auth)
         response.set_cookie(

@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap');
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+
 :root {
   --bg-deep: #050505;
   --bg-surface: #121212;
@@ -10,9 +15,18 @@
   --border-dark: #333333;
 }
 
-body {
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden; 
   background-color: var(--bg-deep);
   color: var(--text-main);
   font-family: 'Inter', sans-serif;
@@ -24,11 +38,6 @@ h1, h2, h3, .brand-font {
   letter-spacing: 1px;
 }
 
-.app-container {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
 
 /* Navbar */
 .navbar {

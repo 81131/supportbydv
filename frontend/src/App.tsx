@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import './App.css';
@@ -14,6 +14,10 @@ import WMT from './pages/WMT';
 import QuizMaker from './pages/QuizMaker';
 import TakeQuiz from './pages/TakeQuiz';
 import Leaderboard from './pages/Leaderboard';
+import AdminDashboard from './pages/AdminDashboard';
+import Forbidden from './pages/Forbidden'; // 👈 Make sure to import the new Forbidden page!
+import About from './pages/About';
+import NoteUploader from './pages/NoteUploader';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -22,12 +26,12 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
-useEffect(() => {
+  useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
-    setIsLoading(false); // 👈 Tell React we are done checking!
+    setIsLoading(false);
   }, []);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
@@ -38,42 +42,39 @@ useEffect(() => {
     setIsMenuOpen(false);
   };
 
-const handleGoogleSuccess = async (credentialResponse: any) => {
-  try {
-    const response = await api.post('/auth/google', {
-      token: credentialResponse.credential
-    });
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    try {
+      const response = await api.post('/auth/google', {
+        token: credentialResponse.credential
+      });
 
-    // The token is now in a secure cookie, not the response body
-    const loggedInUser = response.data.user; 
-    
-    // We only store the non-sensitive user profile in localStorage for the UI
-    localStorage.setItem('user', JSON.stringify(loggedInUser));
-    
-    setUser(loggedInUser);
-    setIsModalOpen(false);
-    
-  } catch (error: any) {
-    console.error("Authentication failed:", error);
-    const message = error.response?.data?.detail || "Failed to log in.";
-    alert(message);
-  }
-};
-const handleLogout = async () => {
-  try {
-    // 1. Tell the backend to clear HttpOnly and CSRF cookies
-    await api.post('/auth/logout');
-  } catch (error) {
-    console.error("The Maesters failed to clear the session:", error);
-  } finally {
-    // 2. Always clear local state even if the network call fails
-    localStorage.removeItem('user');
-    setUser(null);
-    setIsMenuOpen(false);
-  }
-};
+      const loggedInUser = response.data.user; 
+      
+      localStorage.setItem('user', JSON.stringify(loggedInUser));
+      
+      setUser(loggedInUser);
+      setIsModalOpen(false);
+      
+    } catch (error: any) {
+      console.error("Authentication failed:", error);
+      const message = error.response?.data?.detail || "Failed to log in.";
+      alert(message);
+    }
+  };
 
-if (isLoading) {
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error("The Maesters failed to clear the session:", error);
+    } finally {
+      localStorage.removeItem('user');
+      setUser(null);
+      setIsMenuOpen(false);
+    }
+  };
+
+  if (isLoading) {
     return <div style={{ color: 'var(--accent-gold)', textAlign: 'center', marginTop: '5rem' }}>Loading the Citadel... ⏳</div>; 
   }
   
@@ -92,9 +93,17 @@ if (isLoading) {
                 <Link to="/quiz-maker" className="nav-item" onClick={() => setIsMenuOpen(false)}>Quiz Maker</Link>
               </>
             )}
-            
+            <Link to="/about" className="nav-item" onClick={() => setIsMenuOpen(false)}>About</Link>
             <Link to="/leaderboard" className="nav-item" onClick={() => setIsMenuOpen(false)}>Throne Room</Link>
-            
+            {user && (user.role === 'noOne' || user.role === 'admin') && (
+              <Link 
+                to="/admin-dashboard" 
+                style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Small Council
+              </Link>
+            )}
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>{user.first_name}</span>
@@ -103,6 +112,9 @@ if (isLoading) {
             ) : (
               <button className="btn-primary" onClick={() => openModal('login')}>Log In</button>
             )}
+
+            {/* 👇 FIX: Using the `user` state variable to check the role */}
+
           </div>
 
           <button className="mobile-toggle" onClick={toggleMenu}>
@@ -138,7 +150,13 @@ if (isLoading) {
           <Route path="/edit-quiz/:id" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
           <Route path="/take-quiz/:id" element={<ProtectedRoute user={user}><TakeQuiz /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute user={user}><Leaderboard /></ProtectedRoute>} />
+          <Route path="/upload-note" element={<ProtectedRoute user={user}><NoteUploader /></ProtectedRoute>} />
+          <Route path="/about" element={<About />} />
+          
+          {/* Admin Dashboard is protected inside its own component, but we also wrap it here */}
+          <Route path="/admin-dashboard" element={<ProtectedRoute user={user}><AdminDashboard /></ProtectedRoute>} />
 
+          <Route path="/forbidden" element={<Forbidden />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>

@@ -10,6 +10,7 @@ class UserRole(enum.Enum):
     VERIFIED = "verified"
     FACELESS = "faceless"
     USER = "user"
+    STUDENT = "student" 
 
 class User(Base):
     __tablename__ = "users"

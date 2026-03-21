@@ -6,6 +6,8 @@ from models.attempts import QuizAttempt, QuestionAttempt
 from schemas.quiz import QuizCreate, QuizSubmission
 from models.user import User, UserRole
 from security import get_current_user
+from pydantic import BaseModel
+
 
 router = APIRouter(prefix="/quizzes", tags=["Quizzes"])
 
@@ -47,24 +49,32 @@ def get_quizzes_by_module(module_id: int, db: Session = Depends(get_db)):
     
     result = []
     for q in quizzes:
-        # Fetch creator to extract the role securely
+        # 1. Fetch creator to extract the role securely
         creator = db.query(User).filter(User.id == q.created_user_id).first()
-        creator_role = creator.role.value if creator else "user"
         
+        # 2. Safely extract the role (Handling SQLAlchemy Enum weirdness)
+        if creator and hasattr(creator.role, 'value'):
+            creator_role = creator.role.value
+        elif creator:
+            creator_role = str(creator.role).replace('UserRole.', '')
+        else:
+            creator_role = "user"
+        
+        # 3. Append EVERYTHING to the result
         result.append({
             "id": q.id,
             "title": q.title,
             "description": q.description,
             "module_id": q.module_id,
             "created_user_id": q.created_user_id,
-            "creator_role": creator_role,
+            "creator_role": creator_role, # 👈 The missing piece!
             "is_recommended": q.is_recommended,
+            "is_pinned": q.is_pinned,
             "is_timed": q.is_timed,
             "time_limit_minutes": q.time_limit_minutes
         })
         
     return result
-
 
 @router.get("/{quiz_id}")
 def get_single_quiz(quiz_id: int, db: Session = Depends(get_db)):
@@ -290,3 +300,30 @@ def submit_and_grade_quiz(
         "attempt_number": current_attempt_number,
         "review": review_details
     }
+
+
+class GovernanceToggle(BaseModel):
+    is_pinned: bool = None
+    is_recommended: bool = None
+
+@router.put("/{quiz_id}/governance")
+def toggle_quiz_governance(
+    quiz_id: int, 
+    flags: GovernanceToggle, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "noOne":
+        raise HTTPException(status_code=403, detail="Only No One possesses this power.")
+        
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Scroll not found.")
+        
+    if flags.is_pinned is not None:
+        quiz.is_pinned = flags.is_pinned
+    if flags.is_recommended is not None:
+        quiz.is_recommended = flags.is_recommended
+        
+    db.commit()
+    return {"message": "The Citadel's archives have been updated."}

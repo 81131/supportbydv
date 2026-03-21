@@ -8,6 +8,8 @@ from apis.files import router as files_router
 from apis import quizzes
 from fastapi.staticfiles import StaticFiles 
 from apis import auth, files, leaderboard
+from apis import admin
+from apis import library
 
 
 # Importing the models package triggers your __init__.py loop, 
@@ -83,6 +85,8 @@ app.include_router(quizzes.router)
 app.include_router(files_router, dependencies=[Depends(verify_csrf)]) 
 app.include_router(files.router)
 app.include_router(leaderboard.router)
+app.include_router(admin.router)
+app.include_router(library.router)
 
 @app.get("/")
 def read_root():
