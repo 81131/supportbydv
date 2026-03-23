@@ -4,7 +4,7 @@
   box-sizing: border-box;
 }
 
-
+/* --- GLOBAL VARIABLES (DARK MODE DEFAULT) --- */
 :root {
   --bg-deep: #050505;
   --bg-surface: #121212;
@@ -13,14 +13,33 @@
   --accent-gold: #c5a059;
   --accent-red: #8b0000;
   --border-dark: #333333;
+  
+  /* Fonts */
+  --font-aesthetic: 'Cinzel', serif;
+  --font-reading: 'Inter', sans-serif;
+  
+  /* Overlays */
+  --overlay-opacity: 0.7;
 }
 
-.app-container {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+/* --- LIGHT MODE OVERRIDES --- */
+body.light-theme {
+  --bg-deep: #f4f4f5;
+  --bg-surface: #ffffff;
+  --text-main: #18181b; 
+  --text-muted: #52525b;
+  --accent-gold: #b8860b; /* Slightly darker gold for readability on white */
+  --accent-red: #b30000; 
+  --border-dark: #e4e4e7;
+  
+  /* Swap aesthetic font for readable font everywhere */
+  --font-aesthetic: 'Inter', sans-serif;
+  
+  /* Reduce overlay opacity for cards in light theme */
+  --overlay-opacity: 0.2;
 }
 
+/* --- BASE STYLES --- */
 html, body {
   margin: 0;
   padding: 0;
@@ -29,17 +48,32 @@ html, body {
   overflow-x: hidden; 
   background-color: var(--bg-deep);
   color: var(--text-main);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-reading);
+  transition: background-color 0.4s ease, color 0.4s ease; 
+}
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 h1, h2, h3, .brand-font {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-aesthetic);
   font-weight: 700;
   letter-spacing: 1px;
 }
 
+/* --- TOOLTIPS FOR CINZEL OVERRIDES --- */
+/* (In Light mode, we make aesthetic text look normal and be readable) */
+body.light-theme .brand-font, 
+body.light-theme h1, body.light-theme h2, body.light-theme h3 {
+  font-weight: 600;
+  letter-spacing: normal;
+  color: var(--text-main);
+}
 
-/* Navbar */
+/* --- NAVBAR --- */
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -47,6 +81,7 @@ h1, h2, h3, .brand-font {
   padding: 1rem 2rem;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-dark);
+  transition: background-color 0.4s ease, border-color 0.4s ease;
 }
 
 .logo {
@@ -68,10 +103,9 @@ h1, h2, h3, .brand-font {
   transition: color 0.3s ease;
 }
 
-.nav-item:hover {
-  color: var(--accent-gold);
-}
+.nav-item:hover { color: var(--accent-gold); }
 
+/* Standard Primary Button */
 .btn-primary {
   background-color: var(--accent-red);
   color: #fff;
@@ -79,13 +113,35 @@ h1, h2, h3, .brand-font {
   padding: 0.5rem 1.2rem;
   border-radius: 4px;
   cursor: pointer;
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-aesthetic);
   font-weight: 700;
   transition: background-color 0.3s ease;
 }
 
-.btn-primary:hover {
-  background-color: #5c0000;
+.btn-primary:hover { background-color: #5c0000; }
+
+/* Special Navbar Logout Button Fix */
+.btn-logout {
+  background-color: var(--border-dark);
+  color: #fff; /* Keep white against dark button, but ensure button color is visible */
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-reading);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light Theme overrides for special Navbar buttons */
+body.light-theme .btn-logout {
+  background-color: #404040; /* Very dark button for good contrast on white bar */
+  color: #fff !important; /* Forces white text inside the dark button */
+}
+
+body.light-theme .navbar span[style*="var(--accent-gold)"] {
+  color: var(--text-main) !important; /* Forces user name to be dark on white bar */
 }
 
 .mobile-toggle {
@@ -97,61 +153,7 @@ h1, h2, h3, .brand-font {
   cursor: pointer;
 }
 
-/* Hero Section */
-.hero {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 2rem;
-  background: radial-gradient(circle at center, #1a1a1a 0%, var(--bg-deep) 70%);
-}
-
-.hero-title {
-  font-size: 4rem;
-  margin-bottom: 0.5rem;
-  color: #ffffff;
-  text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
-}
-
-.hero-subtitle {
-  font-size: 1.2rem;
-  color: var(--text-muted);
-  max-width: 600px;
-  line-height: 1.6;
-  margin-bottom: 2rem;
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-  .nav-links {
-    display: none; /* Hide desktop links */
-    flex-direction: column;
-    position: absolute;
-    top: 60px;
-    left: 0;
-    width: 100%;
-    background-color: var(--bg-surface);
-    padding: 1rem 0;
-    border-bottom: 1px solid var(--border-dark);
-  }
-
-  .nav-links.open {
-    display: flex; /* Show when toggled */
-  }
-
-  .mobile-toggle {
-    display: block; /* Show hamburger menu */
-  }
-
-  .hero-title {
-    font-size: 2.5rem;
-  }
-}
-
-/* Hero Background Update */
+/* --- HERO SECTION (DARK MODE DEFAULT) --- */
 .hero {
   flex: 1;
   display: flex;
@@ -164,9 +166,63 @@ h1, h2, h3, .brand-font {
   background: linear-gradient(to bottom, rgba(5, 5, 5, 0.7), rgba(18, 18, 18, 0.95)), 
               url('/hall-of-faces.webp') no-repeat center center;
   background-size: cover;
+  transition: background 0.4s ease;
 }
 
-/* Modal Styling */
+.hero-title {
+  font-size: 4rem;
+  margin-bottom: 0.5rem;
+  color: #ffffff; 
+  text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+  transition: color 0.4s ease, text-shadow 0.4s ease;
+}
+
+.hero-subtitle {
+  font-size: 1.2rem;
+  color: #a0a0a0; 
+  max-width: 600px;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+  transition: color 0.4s ease;
+}
+
+/* --- HERO SECTION (LIGHT MODE OVERRIDES) --- */
+body.light-theme .hero {
+  /* Bright, frosty overlay that fades perfectly into the light theme's background */
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), rgba(244, 244, 245, 1)), 
+              url('/TheWall.jpeg') no-repeat center center;
+  background-size: cover;
+}
+
+body.light-theme .hero-title {
+  color: var(--text-main); /* Shifts to dark text on frosty wall */
+  text-shadow: 2px 2px 8px rgba(255, 255, 255, 0.8); /* Frosty white glow */
+}
+
+body.light-theme .hero-subtitle {
+  color: var(--text-muted); /* Shifts to dark grey text */
+}
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+  .nav-links {
+    display: none; 
+    flex-direction: column;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    width: 100%;
+    background-color: var(--bg-surface);
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-dark);
+  }
+
+  .nav-links.open { display: flex; }
+  .mobile-toggle { display: block; }
+  .hero-title { font-size: 2.5rem; }
+}
+
+/* --- MODALS & INPUTS --- */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -187,6 +243,7 @@ h1, h2, h3, .brand-font {
   text-align: center;
   position: relative;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.4s ease, border-color 0.4s ease;
 }
 
 .close-btn {
@@ -208,6 +265,13 @@ h1, h2, h3, .brand-font {
   color: var(--text-main);
   border-radius: 4px;
   box-sizing: border-box;
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
+/* Quiz Maker Text Area specific fix for light mode */
+body.light-theme .auth-input[style*="min-height"] {
+  background-color: var(--bg-surface);
+  color: var(--text-main) !important;
 }
 
 .auth-input:focus {
@@ -241,7 +305,7 @@ h1, h2, h3, .brand-font {
   gap: 10px;
 }
 
-/* Layout additions for React Router Pages */
+/* --- LAYOUT ADDITIONS --- */
 .main-content {
   flex: 1;
   display: flex;
@@ -262,9 +326,12 @@ h1, h2, h3, .brand-font {
   gap: 2rem;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 768px) { grid-template-columns: 1fr 1fr; }
+
+@media (min-width: 1024px) {
   .modules-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
   }
 }
 
@@ -273,10 +340,44 @@ h1, h2, h3, .brand-font {
   padding: 2rem;
   border-radius: 8px;
   border: 1px solid var(--border-dark);
+  transition: background-color 0.4s ease, border-color 0.4s ease;
 }
 
-/* Add this to frontend/src/App.css */
+/* --- QUIZ MAKER Visibility Patch for Light Theme --- */
+/* The general text and button visibility below the main form in Quiz Maker is problematic */
+body.light-theme div[style*="max-width: 600px"] {
+  border: 1px solid var(--border-dark); /* Add border to make form container clear on white */
+}
 
+body.light-theme h4[style*="Cinzel"] {
+  color: var(--text-main) !important; /* Forces all headings to be dark */
+}
+
+body.light-theme button[style*="border: 1px solid gold"] {
+  background-color: rgba(255, 215, 0, 0.1); /* Slight gold button tint for visibility */
+  color: var(--text-main) !important; /* Force text on MCQ buttons etc to be dark */
+}
+
+body.light-theme h2 {
+  color: var(--text-main) !important; /* Force overall heading readability */
+}
+
+/* --- ABOUT PAGE Visibility Patch for Light Theme --- */
+/* ( image_6.png unreadable text fix ) */
+body.light-theme div.main-content,
+body.light-theme div.page-container,
+body.light-theme .module-section p {
+  color: var(--text-main) !important; /* Ensure main body text on About Page is dark */
+}
+
+/* Reduced card overlays for Light Theme across about page and module page */
+.module-card::before, div[style*="max-height: 200px"] div::before {
+  background: rgba(0,0,0,var(--overlay-opacity)) !important;
+  z-index: 1;
+  transition: background 0.3s ease;
+}
+
+/* ... existing logic below for card specifics ... */
 .module-card {
   border: 1px solid var(--border-dark);
   border-radius: 8px;
@@ -289,22 +390,41 @@ h1, h2, h3, .brand-font {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  aspect-ratio: 1 / 1; /* Forces a perfect square */
+  aspect-ratio: 1 / 1; 
   overflow: hidden;
+  position: relative;
+}
+
+/* Ensure module text remains readable over the background images, but switch on light theme */
+.module-card h2, .module-card p {
+  z-index: 2;
+  position: relative;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+  color: #fff; /* Keep dark theme looking normal */
+}
+
+body.light-theme .module-card h2, body.light-theme .module-card p {
+    text-shadow: none; /* remove glow in light theme */
+    color: var(--text-main) !important; /* force text color change on cards */
+}
+
+/* Reduced dark cinematic overlay combined with the Hall of Faces */
+.module-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  /* background opacity determined by variable set at root based on theme */
+  z-index: 1;
+  transition: background 0.3s ease;
 }
 
 .module-card:hover {
   transform: translateY(-5px);
   border-color: var(--accent-gold);
-  /* A slight gold cinematic glow on hover */
   box-shadow: 0 10px 25px rgba(197, 160, 89, 0.15); 
 }
 
-/* Optional: Make sure the grid handles 3 columns nicely on desktop */
-@media (min-width: 1024px) {
-  .modules-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
-  }
+.module-card:hover::before {
+  /* Lightens slightly on hover *relative* to its base opacity */
+  background: rgba(0,0,0,0.1) !important;
 }

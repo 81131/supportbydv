@@ -19,6 +19,7 @@ import Forbidden from './pages/Forbidden'; // 👈 Make sure to import the new F
 import About from './pages/About';
 import NoteUploader from './pages/NoteUploader';
 import MyVault from './pages/MyVault';
+import ThemeToggle from './components/ThemeToggle';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -105,19 +106,29 @@ function App() {
                 Small Council
               </Link>
             )}
-            {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>{user.first_name}</span>
-                <button className="btn-primary" onClick={handleLogout} style={{ backgroundColor: 'var(--border-dark)' }}>Logout</button>
-              </div>
-            ) : (
-              <button className="btn-primary" onClick={() => openModal('login')}>Log In</button>
-            )}
 
-            {/* 👇 FIX: Using the `user` state variable to check the role */}
+            {/* 🪙 The Braavosi Coin & Auth Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '1px solid var(--border-dark)', paddingLeft: '1.5rem', marginLeft: '0.5rem' }}>
+              <ThemeToggle />
+              
+              {user ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                  <span style={{ color: 'var(--text-main)', fontWeight: 600, fontFamily: 'var(--font-reading)', fontSize: '0.9rem' }}>
+                    {user.first_name}
+                  </span>
+                  <button onClick={handleLogout} className="btn-logout">
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => openModal('login')} className="btn-primary">
+                  Log In
+                </button>
+              )}
+            </div>
 
           </div>
-
+          
           <button className="mobile-toggle" onClick={toggleMenu}>
             {isMenuOpen ? '✕' : '☰'}
           </button>
