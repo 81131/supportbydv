@@ -5,7 +5,6 @@ import {
   VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle
 } from 'lucide-react';
 
-// 👇 1. Import the new Forbidden page
 import Forbidden from './Forbidden'; 
 
 const AdminDashboard: React.FC = () => {
@@ -16,7 +15,6 @@ const AdminDashboard: React.FC = () => {
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-  // 👇 2. THE SHIELD: Render the 403 page if they don't have the right role!
   if (currentUser?.role !== 'noOne' && currentUser?.role !== 'admin') {
     return <Forbidden />;
   }
@@ -30,7 +28,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const [usersRes, logsRes] = await Promise.all([
         api.get('/admin/users'),
-        api.get('/admin/audit-logs')
+        api.get('/admin/audit-logs') // Using your original endpoint
       ]);
       setUsers(usersRes.data);
       setLogs(logsRes.data);
@@ -47,7 +45,7 @@ const AdminDashboard: React.FC = () => {
     try {
       await api.put(`/admin/users/${userId}/role`, { new_role: newRole });
       setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
-      fetchData(); // Refresh logs
+      fetchData(); 
     } catch (error: any) {
       alert(error.response?.data?.detail || "Failed to update role.");
     }
@@ -60,7 +58,7 @@ const AdminDashboard: React.FC = () => {
     try {
       await api.put(`/admin/users/${userId}/suspend`, { is_suspended: !currentStatus });
       setUsers(users.map(u => u.id === userId ? { ...u, is_suspended: !currentStatus } : u));
-      fetchData(); // Refresh logs
+      fetchData(); 
     } catch (error: any) {
       alert(error.response?.data?.detail || `Failed to ${action} user.`);
     }
@@ -74,7 +72,7 @@ const AdminDashboard: React.FC = () => {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case 'noOne': return <VenetianMask size={18} color="#b39ddb" />;
+      case 'noOne': return <VenetianMask size={18} color="var(--accent-purple, #b39ddb)" />;
       case 'admin': return <Shield size={18} color="#ff9800" />;
       case 'verified': return <BadgeCheck size={18} color="#4caf50" />;
       case 'faceless': return <VenetianMask size={18} color="var(--text-muted)" />;
@@ -82,17 +80,16 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Hierarchy Helpers
   const isSuperAdmin = currentUser?.role === 'noOne';
 
   return (
-    <div style={{ padding: '3rem 2rem', maxWidth: '1200px', margin: '0 auto', color: 'var(--text-main)' }}>
+    <div className="page-container">
       
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
         <h1 className="brand-font" style={{ color: 'var(--accent-gold)', fontSize: '3rem', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
           <ShieldAlert size={36} /> The Small Council
         </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem' }}>
+        <p className="text-desc" style={{ fontSize: '1.2rem' }}>
           Oversee the scholars, manage access, and review the ledger of actions.
         </p>
       </div>
@@ -120,10 +117,10 @@ const AdminDashboard: React.FC = () => {
       ) : activeTab === 'users' ? (
         
         /* --- USERS TABLE --- */
-        <div style={{ backgroundColor: 'var(--bg-deep)', borderRadius: '8px', border: '1px solid var(--border-dark)', overflowX: 'auto' }}>
+        <div className="module-section" style={{ overflowX: 'auto', padding: '0' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderBottom: '1px solid var(--border-dark)' }}>
+              <tr style={{ backgroundColor: 'var(--bg-deep)', borderBottom: '1px solid var(--border-dark)' }}>
                 <th style={{ padding: '1.5rem 1rem', color: 'var(--accent-gold)' }}>Scholar</th>
                 <th style={{ padding: '1.5rem 1rem', color: 'var(--accent-gold)' }}>Status</th>
                 <th style={{ padding: '1.5rem 1rem', color: 'var(--accent-gold)' }}>Role</th>
@@ -144,23 +141,23 @@ const AdminDashboard: React.FC = () => {
                           <img src={u.picture} alt="profile" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid var(--border-dark)' }} />
                         ) : (
                           <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--border-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <UserIcon size={20} />
+                            <UserIcon size={20} color="var(--text-muted)" />
                           </div>
                         )}
                         <div>
-                          <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{u.first_name} {u.last_name}</div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{u.email}</div>
+                          <div className="text-title" style={{ fontSize: '1.1rem' }}>{u.first_name} {u.last_name}</div>
+                          <div className="text-desc" style={{ fontSize: '0.9rem' }}>{u.email}</div>
                         </div>
                       </div>
                     </td>
                     
                     <td style={{ padding: '1rem' }}>
                       {u.is_suspended ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', backgroundColor: '#ff4d4d20', color: '#ff4d4d', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'rgba(255, 77, 77, 0.1)', color: 'var(--accent-red)', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
                           <Lock size={14} /> Exiled
                         </span>
                       ) : (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', backgroundColor: '#4caf5020', color: '#4caf50', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'rgba(76, 175, 80, 0.1)', color: '#4caf50', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
                           <Unlock size={14} /> Active
                         </span>
                       )}
@@ -169,25 +166,24 @@ const AdminDashboard: React.FC = () => {
                     <td style={{ padding: '1rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textTransform: 'capitalize' }}>
                         {getRoleIcon(u.role)} 
-                        <span style={{ color: u.role === 'noOne' ? '#b39ddb' : 'var(--text-main)' }}>
+                        <span style={{ color: u.role === 'noOne' ? 'var(--accent-purple, #b39ddb)' : 'var(--text-main)' }}>
                           {u.role === 'noOne' ? 'No One' : u.role}
                         </span>
                       </div>
                     </td>
 
-                    <td style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    <td className="text-desc" style={{ padding: '1rem', fontSize: '0.9rem' }}>
                       {formatDate(u.last_active_at)}
                     </td>
 
                     <td style={{ padding: '1rem', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                        
-                        {/* Role Selector */}
                         <select 
                           value={u.role}
                           onChange={(e) => handleRoleChange(u.id, e.target.value)}
                           disabled={!canModify}
-                          style={{ padding: '0.5rem', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-main)', border: '1px solid var(--border-dark)', borderRadius: '4px', outline: 'none', cursor: canModify ? 'pointer' : 'not-allowed', opacity: canModify ? 1 : 0.5 }}
+                          className="auth-input"
+                          style={{ margin: 0, padding: '0.5rem', width: 'auto', cursor: canModify ? 'pointer' : 'not-allowed', opacity: canModify ? 1 : 0.5 }}
                         >
                           <option value="user">User</option>
                           <option value="faceless">Faceless</option>
@@ -196,11 +192,10 @@ const AdminDashboard: React.FC = () => {
                           {isSuperAdmin && <option value="noOne">No One</option>}
                         </select>
 
-                        {/* Suspend Toggle */}
                         <button 
                           onClick={() => handleSuspendToggle(u.id, u.is_suspended)}
                           disabled={!canModify || isTargetSuperAdmin}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', background: 'transparent', border: `1px solid ${u.is_suspended ? '#4caf50' : '#ff4d4d'}`, color: u.is_suspended ? '#4caf50' : '#ff4d4d', borderRadius: '4px', cursor: (!canModify || isTargetSuperAdmin) ? 'not-allowed' : 'pointer', opacity: (!canModify || isTargetSuperAdmin) ? 0.3 : 1 }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', background: 'transparent', border: `1px solid ${u.is_suspended ? '#4caf50' : 'var(--accent-red)'}`, color: u.is_suspended ? '#4caf50' : 'var(--accent-red)', borderRadius: '4px', cursor: (!canModify || isTargetSuperAdmin) ? 'not-allowed' : 'pointer', opacity: (!canModify || isTargetSuperAdmin) ? 0.3 : 1 }}
                           title={u.is_suspended ? "Restore Access" : "Exile User"}
                         >
                           {u.is_suspended ? <Unlock size={16} /> : <Lock size={16} />}
@@ -216,7 +211,7 @@ const AdminDashboard: React.FC = () => {
       ) : (
 
         /* --- AUDIT LOGS TABLE --- */
-        <div style={{ backgroundColor: 'var(--bg-deep)', borderRadius: '8px', border: '1px solid var(--border-dark)', padding: '1rem' }}>
+        <div className="module-section">
           {logs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
               <Activity size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
@@ -224,23 +219,23 @@ const AdminDashboard: React.FC = () => {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {logs.map((log) => (
-                <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1.5rem', borderBottom: '1px dashed var(--border-dark)' }}>
-                  <div style={{ padding: '0.5rem', backgroundColor: 'rgba(255, 215, 0, 0.1)', borderRadius: '50%' }}>
+              {logs.map((log, index) => (
+                <div key={log.id || index} style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1.5rem', borderBottom: '1px dashed var(--border-dark)' }}>
+                  <div style={{ padding: '0.5rem', backgroundColor: 'rgba(212, 175, 55, 0.1)', borderRadius: '50%' }}>
                     <AlertTriangle size={20} color="var(--accent-gold)" />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem' }}>
+                    <p className="text-title" style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem' }}>
                       <strong style={{ color: 'var(--accent-gold)' }}>{log.admin_name}</strong> performed action: <strong>{log.action}</strong>
                     </p>
                     <p style={{ margin: '0 0 0.5rem 0', color: 'var(--text-main)' }}>
                       Target: <span style={{ fontWeight: 'bold' }}>{log.target_name}</span>
                     </p>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                    <p className="text-desc" style={{ margin: 0, fontSize: '0.95rem' }}>
                       Details: {log.details}
                     </p>
                   </div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                  <div className="text-desc" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
                     {formatDate(log.timestamp)}
                   </div>
                 </div>

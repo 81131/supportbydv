@@ -18,6 +18,7 @@ const Leaderboard: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
+    // Using your original endpoint
     api.get('/leaderboard/')
       .then(res => {
         setLeaders(res.data);
@@ -47,7 +48,7 @@ const Leaderboard: React.FC = () => {
 
   const getRankStyle = (rank: number, isCurrentUser: boolean) => {
     let style: React.CSSProperties = {
-      backgroundColor: isCurrentUser ? 'rgba(255, 215, 0, 0.1)' : 'var(--bg-deep)',
+      backgroundColor: isCurrentUser ? 'rgba(212, 175, 55, 0.1)' : 'var(--bg-surface)',
       border: isCurrentUser ? '1px solid var(--accent-gold)' : '1px solid var(--border-dark)',
       borderRadius: '8px',
       padding: '1.2rem',
@@ -56,21 +57,21 @@ const Leaderboard: React.FC = () => {
       alignItems: 'center',
       gap: '1rem',
       marginBottom: '1rem',
-      transition: 'transform 0.2s ease',
+      transition: 'transform 0.2s ease, background-color 0.4s ease',
     };
 
-    if (rank === 1) style.boxShadow = '0 0 15px rgba(255, 215, 0, 0.2)';
+    if (rank === 1) style.boxShadow = '0 0 15px rgba(212, 175, 55, 0.2)';
     return style;
   };
 
   return (
-    <div style={{ padding: '4rem 1rem', maxWidth: '900px', margin: '0 auto', color: 'var(--text-main)' }}>
+    <div className="page-container" style={{ padding: '4rem 1rem', maxWidth: '900px' }}>
       
       <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
         <h1 className="brand-font" style={{ color: 'var(--accent-gold)', fontSize: '3.5rem', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
           <Crown size={40} /> The Throne Room
         </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', maxWidth: '600px', margin: '0 auto' }}>
+        <p className="text-desc" style={{ fontSize: '1.2rem', maxWidth: '600px', margin: '0 auto' }}>
           Only the sharpest minds of the Citadel earn their place here. Scores reflect the highest marks achieved across all archived scrolls.
         </p>
       </div>
@@ -80,9 +81,9 @@ const Leaderboard: React.FC = () => {
           Consulting the Grand Maesters...
         </div>
       ) : leaders.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: 'var(--bg-deep)', borderRadius: '8px', border: '1px dashed var(--border-dark)' }}>
+        <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', border: '1px dashed var(--border-dark)' }}>
           <Shield size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
-          <h3 style={{ color: 'var(--text-muted)', margin: 0 }}>The realm is quiet. No trials have been completed yet.</h3>
+          <h3 className="text-desc" style={{ margin: 0 }}>The realm is quiet. No trials have been completed yet.</h3>
         </div>
       ) : (
         <div>
@@ -113,8 +114,9 @@ const Leaderboard: React.FC = () => {
 
                 {/* Name */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: isMe ? 'var(--accent-gold)' : 'var(--text-main)' }}>
-                    {leader.name} {isMe && <span style={{ fontSize: '0.8rem', backgroundColor: 'var(--accent-gold)', color: '#000', padding: '0.1rem 0.4rem', borderRadius: '4px', marginLeft: '0.5rem', verticalAlign: 'middle' }}>YOU</span>}
+                  <div className="text-title" style={{ fontSize: '1.2rem', color: isMe ? 'var(--accent-gold)' : 'var(--text-main)' }}>
+                    {leader.name} 
+                    {isMe && <span style={{ fontSize: '0.8rem', backgroundColor: 'var(--accent-gold)', color: '#000', padding: '0.1rem 0.4rem', borderRadius: '4px', marginLeft: '0.5rem', verticalAlign: 'middle', fontWeight: 'bold' }}>YOU</span>}
                   </div>
                 </div>
 
@@ -124,7 +126,7 @@ const Leaderboard: React.FC = () => {
                 </div>
 
                 {/* Time */}
-                <div style={{ textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '1.1rem' }}>
+                <div className="text-desc" style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '1.1rem' }}>
                   {formatTime(leader.total_time)}
                 </div>
 

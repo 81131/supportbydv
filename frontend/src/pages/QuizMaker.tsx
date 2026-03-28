@@ -1,364 +1,246 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { Question, QuestionType, AnswerOption } from '../types/quiz'; 
+import { Plus, Trash2, CheckCircle2, GripVertical, AlertCircle, Clock, BookOpen, CheckSquare, FileText, Save } from 'lucide-react';
+import type { Question, QuestionType, AnswerOption } from '../types/quiz';
 import api from '../api';
-import { Trash2, PlusCircle, Save, ImagePlus, CheckCircle, FileText, Hash, CheckSquare, List, Scroll, Timer, TimerOff } from 'lucide-react';
 
-const QuizMaker: React.FC = () => {
-  const { id } = useParams(); 
+const QuizMaker = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const isEditMode = Boolean(id); 
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [moduleId, setModuleId] = useState(1); 
-  
-  // --- NEW TIMER STATE ---
-  const [isTimed, setIsTimed] = useState(false);
-  const [timeLimit, setTimeLimit] = useState<number | ''>('');
-
+  const [moduleId, setModuleId] = useState<number | ''>('');
+  const [hasTimeLimit, setHasTimeLimit] = useState(false);
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState(30);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // --- Fetch Data for Edit Mode ---
   useEffect(() => {
-    if (isEditMode) {
-      api.get(`/quizzes/${id}`)
-        .then(res => {
-          const q = res.data;
-          setTitle(q.title);
-          setDescription(q.description || '');
-          setModuleId(q.module_id);
+    if (id) {
+      api.get(`/quizzes/${id}`).then((res) => {
+        const quiz = res.data;
+        setTitle(quiz.title); 
+        setDescription(quiz.description);
+        setModuleId(quiz.module_id);
+        if (quiz.time_limit_minutes) { setHasTimeLimit(true); setTimeLimitMinutes(quiz.time_limit_minutes); }
+        
+        // Map Backend Schema -> Frontend Interface
+        const mappedQs: Question[] = quiz.questions.map((q: any) => {
+          const type = (q.type || '').toUpperCase() as QuestionType;
+          let options: AnswerOption[] | undefined = undefined;
           
-          // Load the timer settings
-          setIsTimed(q.is_timed || false);
-          setTimeLimit(q.time_limit_minutes || '');
-          
-          const loadedQuestions = (q.questions || []).map((bq: any) => ({
-            text: bq.text,
-            type: bq.type,
-            marks: bq.marks,
-            negativeMarks: bq.negative_marks,
-            imageUrl: bq.image_url,
-            correctNumber: bq.correct_number,
-            correctText: bq.correct_text,
-            options: (bq.options || []).map((bo: any) => ({
-              text: bo.text,
-              isCorrect: bo.is_correct
-            }))
-          }));
-          
-          setQuestions(loadedQuestions);
-        })
-        .catch(err => {
-          console.error("Failed to fetch quiz", err);
-          alert("Could not load the scroll.");
+          if (type === 'MCQ' || type === 'CHECKBOX') {
+            options = q.options?.map((opt: any) => ({ text: opt.text, isCorrect: opt.is_correct })) || [];
+          }
+
+          return {
+            id: q.id,
+            type,
+            text: q.text,
+            marks: q.marks || 1,
+            negativeMarks: q.negative_marks || 0,
+            options,
+            correctNumber: type === 'NUMBER' ? Number(q.correct_number) : undefined,
+            correctText: (type === 'SHORT_TEXT' || type === 'ESSAY') ? String(q.correct_text || '') : undefined
+          };
         });
+        setQuestions(mappedQs);
+      });
     }
-  }, [id, isEditMode]);
+  }, [id]);
 
   const addQuestion = (type: QuestionType) => {
     const newQuestion: Question = {
-      text: '',
-      type,
-      marks: 1.0,
-      negativeMarks: type === 'CHECKBOX' ? 0.5 : 0.0, 
-      options: type === 'MCQ' || type === 'CHECKBOX' ? [{ text: '', isCorrect: false }] : [],
+      id: Date.now(), type, text: '', marks: 1, negativeMarks: 0,
+      options: type === 'MCQ' || type === 'CHECKBOX' ? [{ text: 'Option 1', isCorrect: false }, { text: 'Option 2', isCorrect: false }] : undefined,
+      correctNumber: undefined,
+      correctText: ''
     };
     setQuestions([...questions, newQuestion]);
   };
 
-  const updateQuestion = (index: number, field: keyof Question, value: any) => {
-    const updated = [...questions];
-    updated[index] = { ...updated[index], [field]: value };
-    setQuestions(updated);
-  };
+  const saveQuiz = async () => {
+    if (!title || !moduleId || questions.length === 0) { alert('Please fill in required fields and add questions.'); return; }
+    setIsSaving(true);
 
-  const addOption = (qIndex: number) => {
-    const updated = [...questions];
-    updated[qIndex].options?.push({ text: '', isCorrect: false });
-    setQuestions(updated);
-  };
-
-  const updateOption = (qIndex: number, optIndex: number, field: keyof AnswerOption, value: any) => {
-    const updated = [...questions];
-    const question = updated[qIndex];
-
-    if (question.options) {
-      if (question.type === 'MCQ' && field === 'isCorrect' && value === true) {
-        question.options = question.options.map((opt, idx) => ({
-          ...opt,
-          isCorrect: idx === optIndex 
-        }));
-      } else {
-        question.options[optIndex] = { ...question.options[optIndex], [field]: value };
+    // 👇 THE FIX: Map Frontend Interface EXACTLY to the Backend Pydantic Schema
+    const payloadQuestions = questions.map(q => {
+      let mappedOptions = undefined;
+      
+      if (q.type === 'MCQ' || q.type === 'CHECKBOX') {
+         mappedOptions = q.options?.map(o => ({
+             text: o.text,
+             is_correct: o.isCorrect
+         }));
       }
-    }
-    setQuestions(updated);
-  };
 
-  const handleImageUpload = async (qIndex: number, file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await api.post('/files/upload-image', formData);
-      updateQuestion(qIndex, 'imageUrl', res.data.image_url);
-    } catch (error) {
-      console.error("Failed to upload image", error);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    const payload = {
-      title,
-      description,
-      module_id: moduleId,
-      is_timed: isTimed,
-      time_limit_minutes: isTimed && timeLimit ? Number(timeLimit) : null,
-      questions: questions.map(q => ({
+      return {
         text: q.text,
-        type: q.type,
+        type: q.type, // Send exact Enum string ('MCQ', 'CHECKBOX', etc)
         marks: q.marks,
-        negative_marks: q.negativeMarks,
-        image_url: q.imageUrl,
-        correct_number: q.correctNumber,
-        correct_text: q.correctText,
-        options: q.options?.map(o => ({
-          text: o.text,
-          is_correct: o.isCorrect
-        }))
-      }))
+        negative_marks: q.negativeMarks || 0,
+        options: mappedOptions,
+        correct_number: q.type === 'NUMBER' ? q.correctNumber : null,
+        correct_text: (q.type === 'SHORT_TEXT' || q.type === 'ESSAY') ? q.correctText : null
+      };
+    });
+
+    const quizData = { 
+      title, 
+      description, 
+      module_id: moduleId, 
+      is_timed: hasTimeLimit,
+      time_limit_minutes: hasTimeLimit ? timeLimitMinutes : null, 
+      questions: payloadQuestions 
     };
-
+    
     try {
-      if (isEditMode) {
-        await api.put(`/quizzes/${id}`, payload);
-        alert('Scroll Revised Successfully!');
-      } else {
-        await api.post('/quizzes/', payload);
-        alert('Scroll Forged Successfully!');
-      }
-      navigate(-1); 
-    } catch (error) {
-      console.error('Submission failed', error);
-      alert('Failed to save. Check the console.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      if (id) await api.put(`/quizzes/${id}`, quizData);
+      else await api.post('/quizzes', quizData);
+      navigate('/');
+    } catch (error: any) { 
+      console.error('Failed to save quiz', error.response?.data || error); 
+      alert("Failed to save scroll. Check the console for details.");
+    } 
+    finally { setIsSaving(false); }
   };
-
-  const inputStyle = { width: '100%', padding: '0.75rem', backgroundColor: 'rgba(15, 15, 15, 0.8)', color: 'var(--text-main)', border: '1px solid var(--border-dark)', borderRadius: '6px', marginBottom: '1rem', outline: 'none' };
-  const labelStyle = { display: 'block', color: 'var(--accent-gold)', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.9rem' };
 
   return (
-    <div style={{ padding: '3rem 1rem', maxWidth: '850px', margin: '0 auto', color: 'var(--text-primary)' }}>
-      <h1 className="brand-font" style={{ color: 'var(--accent-gold)', textAlign: 'center', marginBottom: '2rem', fontSize: '2.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem' }}>
-        <Scroll size={36} /> {isEditMode ? 'Revise the Scroll' : 'Forge a New Scroll'}
-      </h1>
-      
-      <form onSubmit={handleSubmit}>
-        
-        {/* --- 1. Basic Info Section --- */}
-        <div style={{ backgroundColor: 'var(--bg-deep)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-dark)', marginBottom: '2rem' }}>
-          <h3 className="brand-font" style={{ marginTop: 0, color: 'var(--text-main)', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
-            Scroll Details
-          </h3>
-          
-          <label style={labelStyle}>Quiz Title</label>
-          <input 
-            type="text" placeholder="e.g., Mid-Term Defenses" value={title} 
-            onChange={e => setTitle(e.target.value)} required 
-            style={inputStyle}
-          />
-          
-          <label style={labelStyle}>Description / Instructions</label>
-          <textarea 
-            placeholder="What should the students know before starting?" value={description} 
-            onChange={e => setDescription(e.target.value)} 
-            style={{ ...inputStyle, minHeight: '80px' }}
-          />
+    <div className="page-container">
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <h1 className="brand-font" style={{ textAlign: 'center', color: 'var(--accent-gold)', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <BookOpen size={32} /> {id ? 'Reforge the Scroll' : 'Forge a New Scroll'}
+        </h1>
 
-          <label style={labelStyle}>Target Module</label>
-          <select 
-            value={moduleId} 
-            onChange={e => setModuleId(parseInt(e.target.value))} 
-            style={inputStyle}
-          >
+        <div className="module-section" style={{ marginBottom: '2rem' }}>
+          <h2 className="text-title" style={{ marginBottom: '1.5rem', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem' }}>Scroll Details</h2>
+          
+          <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Quiz Title</label>
+          <input type="text" className="auth-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Mid-Term Defenses" />
+
+          <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Description / Instructions</label>
+          <textarea className="auth-input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What should the students know before starting?" style={{ minHeight: '100px', resize: 'vertical' }} />
+
+          <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Target Module</label>
+          <select className="auth-input" value={moduleId} onChange={(e) => setModuleId(Number(e.target.value))}>
+            <option value="" disabled>Select Module</option>
             <option value={1}>OSSA (Operating System & System Administration)</option>
             <option value={2}>WMT (Web and Mobile Technologies)</option>
             <option value={3}>PS (Professional Skills)</option>
           </select>
 
-          {/* --- NEW TIMER CONFIGURATION --- */}
-          <div style={{ marginTop: '1.5rem', padding: '1.5rem', backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-dark)', borderRadius: '6px' }}>
-            <h4 style={{ margin: '0 0 1rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {isTimed ? <Timer size={20} color="var(--accent-gold)" /> : <TimerOff size={20} color="var(--text-muted)" />} 
-              Time Constraints
-            </h4>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: isTimed ? '1rem' : '0' }}>
-              <input 
-                type="checkbox" 
-                id="timerToggle"
-                checked={isTimed} 
-                onChange={(e) => setIsTimed(e.target.checked)} 
-                style={{ transform: 'scale(1.5)', cursor: 'pointer', accentColor: 'var(--accent-gold)' }}
-              />
-              <label htmlFor="timerToggle" style={{ color: 'var(--text-main)', cursor: 'pointer' }}>Enforce a strict time limit for this scroll</label>
+          <div style={{ backgroundColor: 'var(--bg-deep)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-dark)', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <Clock size={20} color="var(--accent-gold)" />
+              <h3 className="text-title" style={{ margin: 0 }}>Time Constraints</h3>
             </div>
-
-            {isTimed && (
-              <div>
-                <label style={labelStyle}>Time Limit (in Minutes)</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  placeholder="e.g. 30" 
-                  value={timeLimit} 
-                  onChange={e => setTimeLimit(e.target.value !== '' ? parseInt(e.target.value) : '')} 
-                  required={isTimed}
-                  style={{...inputStyle, marginBottom: 0, maxWidth: '200px'}}
-                />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)' }}>
+              <input type="checkbox" checked={hasTimeLimit} onChange={(e) => setHasTimeLimit(e.target.checked)} style={{ accentColor: 'var(--accent-gold)', width: '18px', height: '18px' }} />
+              Enforce a strict time limit for this scroll
+            </label>
+            {hasTimeLimit && (
+              <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <input type="number" className="auth-input" style={{ width: '100px', margin: 0 }} value={timeLimitMinutes} onChange={(e) => setTimeLimitMinutes(Number(e.target.value))} min="1" />
+                <span className="text-desc">Minutes</span>
               </div>
             )}
           </div>
-
         </div>
 
-        {/* --- 2. Dynamic Questions List --- */}
+        <div className="module-section" style={{ borderStyle: 'dashed', textAlign: 'center', marginBottom: '2rem' }}>
+          <p className="text-title" style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>Add a Question</p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => addQuestion('MCQ')} className="btn-ghost-gold"><CheckCircle2 size={18} /> MCQ</button>
+            <button onClick={() => addQuestion('CHECKBOX')} className="btn-ghost-gold"><CheckSquare size={18} /> Checkbox</button>
+            <button onClick={() => addQuestion('NUMBER')} className="btn-ghost-gold"><AlertCircle size={18} /> Number</button>
+            <button onClick={() => addQuestion('SHORT_TEXT')} className="btn-ghost-gold"><BookOpen size={18} /> Short Text</button>
+            <button onClick={() => addQuestion('ESSAY')} className="btn-ghost-gold"><FileText size={18} /> Essay</button>
+          </div>
+        </div>
+
         {questions.map((q, qIndex) => (
-          <div key={qIndex} style={{ backgroundColor: 'var(--bg-deep)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--accent-gold)', marginBottom: '2rem', position: 'relative' }}>
+          <div key={q.id} className="module-section" style={{ position: 'relative', marginBottom: '2rem' }}>
+            <div style={{ position: 'absolute', left: '-10px', top: '20px', color: 'var(--text-muted)', cursor: 'grab' }}><GripVertical /></div>
             
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-dark)', paddingBottom: '1rem' }}>
-                <h4 style={{ margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ backgroundColor: 'var(--accent-gold)', color: '#000', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.9rem' }}>Q{qIndex + 1}</span> 
-                  {q.type.replace('_', ' ')}
-                </h4>
-                <button type="button" onClick={() => setQuestions(questions.filter((_, i) => i !== qIndex))} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <Trash2 size={18} /> Remove
-                </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <span className="text-stat" style={{ padding: '0.2rem 0.8rem', backgroundColor: 'var(--bg-deep)', borderRadius: '12px', border: '1px solid var(--border-dark)' }}>
+                Question {qIndex + 1} ({q.type})
+              </span>
+              <button onClick={() => setQuestions(questions.filter((_, i) => i !== qIndex))} className="btn-ghost-danger"><Trash2 size={16} /></button>
             </div>
 
-            <label style={labelStyle}>Question Text</label>
-            <textarea 
-              placeholder="Enter the question here..." value={q.text} 
-              onChange={e => updateQuestion(qIndex, 'text', e.target.value)} required
-              style={{ ...inputStyle, minHeight: '100px' }}
-            />
+            <textarea className="auth-input" value={q.text} onChange={(e) => {
+                const newQs = [...questions]; newQs[qIndex].text = e.target.value; setQuestions(newQs);
+              }} placeholder="Enter question text here..." style={{ minHeight: '80px', fontSize: '1.1rem' }} />
 
-            <div style={{ marginBottom: '1.5rem' }}>
-                <label style={labelStyle}>Reference Image (Optional)</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', backgroundColor: 'var(--border-dark)', padding: '0.5rem 1rem', borderRadius: '4px', color: 'var(--text-main)', fontSize: '0.9rem' }}>
-                    <ImagePlus size={18} />
-                    <span>Upload Image</span>
-                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
-                        if (e.target.files?.[0]) handleImageUpload(qIndex, e.target.files[0]);
-                    }} />
-                  </label>
-                  {q.imageUrl && <span style={{ color: '#4caf50', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><CheckCircle size={16}/> Uploaded</span>}
-                </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem', backgroundColor: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '6px' }}>
-                <div>
-                  <label style={labelStyle}>Marks Awarded</label>
-                  <input type="number" step="0.1" value={q.marks} onChange={e => updateQuestion(qIndex, 'marks', parseFloat(e.target.value))} style={{...inputStyle, marginBottom: 0}} />
-                </div>
-                {q.type === 'CHECKBOX' && (
-                    <div>
-                      <label style={labelStyle}>Negative Marks (Per wrong tick)</label>
-                      <input type="number" step="0.1" value={q.negativeMarks} onChange={e => updateQuestion(qIndex, 'negativeMarks', parseFloat(e.target.value))} style={{...inputStyle, marginBottom: 0}} />
-                    </div>
-                )}
-            </div>
-            
             {(q.type === 'MCQ' || q.type === 'CHECKBOX') && (
-              <div>
-                <label style={labelStyle}>Answer Options (Tick the correct ones)</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginTop: '1rem' }}>
                 {q.options?.map((opt, oIndex) => (
-                  <div key={oIndex} style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <input 
-                      type={q.type === 'MCQ' ? 'radio' : 'checkbox'} 
-                      checked={opt.isCorrect} 
-                      name={`q-${qIndex}-correct`} 
-                      onChange={e => updateOption(qIndex, oIndex, 'isCorrect', e.target.checked)} 
-                      style={{ transform: 'scale(1.5)', cursor: 'pointer', accentColor: 'var(--accent-gold)' }}
-                    />
-                    <input 
-                      type="text" placeholder={`Option ${oIndex + 1}`} value={opt.text} 
-                      onChange={e => updateOption(qIndex, oIndex, 'text', e.target.value)} required 
-                      style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
-                    />
+                  <div key={oIndex} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--bg-deep)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-dark)' }}>
+                    <input type={q.type === 'MCQ' ? 'radio' : 'checkbox'} name={`q-${q.id}`} 
+                      checked={opt.isCorrect}
+                      onChange={(e) => {
+                        const newQs = [...questions];
+                        if (q.type === 'MCQ') {
+                          newQs[qIndex].options?.forEach((o, i) => o.isCorrect = i === oIndex);
+                        } else {
+                          newQs[qIndex].options![oIndex].isCorrect = e.target.checked;
+                        }
+                        setQuestions(newQs);
+                      }} style={{ accentColor: 'var(--accent-gold)', width: '18px', height: '18px' }} />
+                    <input type="text" className="auth-input" style={{ margin: 0, padding: '0.5rem', flex: 1, background: 'transparent', border: 'none' }} value={opt.text} onChange={(e) => {
+                        const newQs = [...questions];
+                        newQs[qIndex].options![oIndex].text = e.target.value;
+                        setQuestions(newQs);
+                      }} />
+                    <button onClick={() => {
+                        const newQs = [...questions];
+                        newQs[qIndex].options = newQs[qIndex].options?.filter((_, i) => i !== oIndex);
+                        setQuestions(newQs);
+                      }} className="btn-ghost" style={{ padding: '0.3rem' }}><Trash2 size={16} /></button>
                   </div>
                 ))}
-                <button type="button" onClick={() => addOption(qIndex)} style={{ marginTop: '0.5rem', background: 'none', border: '1px dashed var(--accent-gold)', color: 'var(--accent-gold)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center' }}>
-                  <PlusCircle size={18} /> Add Another Option
-                </button>
+                <button onClick={() => {
+                    const newQs = [...questions];
+                    newQs[qIndex].options?.push({ text: `Option ${newQs[qIndex].options!.length + 1}`, isCorrect: false });
+                    setQuestions(newQs);
+                  }} className="btn-ghost" style={{ alignSelf: 'flex-start' }}><Plus size={16} /> Add Option</button>
               </div>
             )}
 
-            {q.type === 'NUMBER' && (
-              <div>
-                <label style={labelStyle}>Exact Numeric Answer (Decimals allowed)</label>
-                <input 
-                  type="number" step="0.001" placeholder="e.g. 3.142" value={q.correctNumber || ''} 
-                  onChange={e => updateQuestion(qIndex, 'correctNumber', parseFloat(e.target.value))} required 
-                  style={inputStyle}
-                />
+            {(q.type === 'NUMBER' || q.type === 'SHORT_TEXT') && (
+              <div style={{ marginTop: '1rem' }}>
+                <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Correct Answer (Required for Auto-Marking)</label>
+                <input type={q.type === 'NUMBER' ? 'number' : 'text'} className="auth-input" value={q.type === 'NUMBER' ? (q.correctNumber || '') : (q.correctText || '')} onChange={(e) => {
+                    const newQs = [...questions];
+                    if (q.type === 'NUMBER') newQs[qIndex].correctNumber = Number(e.target.value);
+                    else newQs[qIndex].correctText = e.target.value;
+                    setQuestions(newQs);
+                  }} placeholder="Enter the exact correct answer..." />
               </div>
             )}
 
-            {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
-              <div>
-                <label style={labelStyle}>{q.type === 'SHORT_TEXT' ? 'Exact Expected Text' : 'Grading Rubric / Example Answer'}</label>
-                <textarea 
-                  placeholder={q.type === 'SHORT_TEXT' ? "e.g., Motherboard" : "Outline the key points the student must cover..."} 
-                  value={q.correctText || ''} 
-                  onChange={e => updateQuestion(qIndex, 'correctText', e.target.value)} required 
-                  style={{ ...inputStyle, minHeight: q.type === 'ESSAY' ? '120px' : '60px' }}
-                />
+            <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1.5rem', padding: '1rem', backgroundColor: 'var(--bg-deep)', borderRadius: '8px', border: '1px solid var(--border-dark)' }}>
+              <div style={{ flex: 1 }}>
+                <label className="text-desc" style={{ color: '#4caf50', fontWeight: 'bold' }}>Points Earned</label>
+                <input type="number" className="auth-input" value={q.marks} onChange={(e) => {
+                    const newQs = [...questions]; newQs[qIndex].marks = Number(e.target.value); setQuestions(newQs);
+                  }} min="0" step="0.5" style={{ marginTop: '0.5rem', marginBottom: 0 }} />
               </div>
-            )}
-
+              <div style={{ flex: 1 }}>
+                <label className="text-desc" style={{ color: 'var(--accent-red)', fontWeight: 'bold' }}>Negative Penalty</label>
+                <input type="number" className="auth-input" value={q.negativeMarks || 0} onChange={(e) => {
+                    const newQs = [...questions]; newQs[qIndex].negativeMarks = Number(e.target.value); setQuestions(newQs);
+                  }} min="0" step="0.5" style={{ marginTop: '0.5rem', marginBottom: 0 }} placeholder="e.g. 0.25" />
+              </div>
+            </div>
           </div>
         ))}
 
-        {/* --- 3. Add Question Controls --- */}
-        <div style={{ backgroundColor: 'var(--bg-deep)', padding: '2rem', borderRadius: '8px', border: '1px dashed var(--border-dark)', marginBottom: '3rem', textAlign: 'center' }}>
-          <h4 style={{ color: 'var(--text-muted)', margin: '0 0 1.5rem 0' }}>Add a Question</h4>
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            
-            <button type="button" className="btn-primary" onClick={() => addQuestion('MCQ')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--accent-gold)' }}>
-              <CheckCircle size={18} /> MCQ
-            </button>
-            <button type="button" className="btn-primary" onClick={() => addQuestion('CHECKBOX')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--accent-gold)' }}>
-              <CheckSquare size={18} /> Checkbox
-            </button>
-            <button type="button" className="btn-primary" onClick={() => addQuestion('NUMBER')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--accent-gold)' }}>
-              <Hash size={18} /> Number
-            </button>
-            <button type="button" className="btn-primary" onClick={() => addQuestion('SHORT_TEXT')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--accent-gold)' }}>
-              <List size={18} /> Short Text
-            </button>
-            <button type="button" className="btn-primary" onClick={() => addQuestion('ESSAY')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--accent-gold)' }}>
-              <FileText size={18} /> Essay
-            </button>
-
-          </div>
-        </div>
-
-        {/* --- 4. Final Submit --- */}
-        <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', opacity: isSubmitting ? 0.7 : 1 }}>
-          <Save size={24} />
-          {isSubmitting ? 'Updating...' : (isEditMode ? 'Update Scroll' : 'Save & Publish Scroll')}
+        <button onClick={saveQuiz} disabled={isSaving || questions.length === 0} className="btn-solid-gold" style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem', justifyContent: 'center', opacity: (isSaving || questions.length === 0) ? 0.5 : 1 }}>
+          <Save size={24} /> {isSaving ? 'Forging...' : 'Save & Publish Scroll'}
         </button>
-
-      </form>
+      </div>
     </div>
   );
 };

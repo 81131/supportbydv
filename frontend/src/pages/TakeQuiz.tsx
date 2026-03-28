@@ -15,13 +15,12 @@ const TakeQuiz: React.FC = () => {
   const [results, setResults] = useState<any>(null); 
   const [startTime] = useState<number>(Date.now()); 
 
-  // 1. Fetch the safe quiz
   useEffect(() => {
     api.get(`/quizzes/${id}/take`)
       .then(res => {
         setQuiz(res.data);
         if (res.data.is_timed && res.data.time_limit_minutes) {
-          setTimeLeft(res.data.time_limit_minutes * 60); // Convert to seconds
+          setTimeLeft(res.data.time_limit_minutes * 60); 
         }
       })
       .catch(err => {
@@ -30,7 +29,6 @@ const TakeQuiz: React.FC = () => {
       });
   }, [id]);
 
-  // 2. Timer Logic
   useEffect(() => {
     if (timeLeft === null || timeLeft <= 0 || results) return;
 
@@ -38,7 +36,7 @@ const TakeQuiz: React.FC = () => {
       setTimeLeft(prev => {
         if (prev && prev <= 1) {
           clearInterval(timer);
-          handleSubmit(); // Auto-submit when time is up
+          handleSubmit(); 
           return 0;
         }
         return prev ? prev - 1 : 0;
@@ -54,7 +52,6 @@ const TakeQuiz: React.FC = () => {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // 3. Handle Input Changes
   const handleOptionChange = (qId: number, optId: number, type: string) => {
     setAnswers(prev => {
       if (type === 'MCQ') return { ...prev, [qId]: { selected_options: [optId] } };
@@ -76,13 +73,12 @@ const TakeQuiz: React.FC = () => {
     setAnswers(prev => ({ ...prev, [qId]: { numeric_answer: num } }));
   };
 
-  // 4. Submit to Backend Grading Engine
-const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (results) return; 
     setIsSubmitting(true);
 
-    const timeConsumedSeconds = Math.floor((Date.now() - startTime) / 1000); // 👈 Calculate elapsed time
+    const timeConsumedSeconds = Math.floor((Date.now() - startTime) / 1000);
 
     const formattedAnswers = Object.keys(answers).map(qId => ({
       question_id: parseInt(qId),
@@ -90,7 +86,6 @@ const handleSubmit = async (e?: React.FormEvent) => {
     }));
 
     try {
-      // 👈 Add timeConsumedSeconds to payload
       const res = await api.post(`/quizzes/${id}/submit`, { 
         answers: formattedAnswers,
         time_consumed_seconds: timeConsumedSeconds 
@@ -105,7 +100,6 @@ const handleSubmit = async (e?: React.FormEvent) => {
     }
   };
 
-  
   const handleRetry = () => {
     setResults(null);
     setAnswers({});
@@ -113,7 +107,7 @@ const handleSubmit = async (e?: React.FormEvent) => {
     window.scrollTo(0, 0);
   };
 
-  if (!quiz) return <div style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Unrolling the scroll...</div>;
+  if (!quiz) return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Unrolling the scroll...</div>;
 
   // --- VIEW 1: RESULTS & REVIEW MODE ---
   if (results) {
@@ -121,37 +115,37 @@ const handleSubmit = async (e?: React.FormEvent) => {
     const passed = results.score >= (results.max_score / 2);
 
     return (
-      <div style={{ padding: '3rem 1rem', maxWidth: '800px', margin: '0 auto', color: 'var(--text-main)' }}>
-        <div style={{ backgroundColor: 'var(--bg-deep)', padding: '3rem', borderRadius: '8px', border: `2px solid ${passed ? '#4caf50' : '#ff4d4d'}`, textAlign: 'center', marginBottom: '3rem' }}>
-          {passed ? <CheckCircle size={64} color="#4caf50" style={{ margin: '0 auto 1rem' }}/> : <XCircle size={64} color="#ff4d4d" style={{ margin: '0 auto 1rem' }}/>}
+      <div className="page-container">
+        <div className="module-section" style={{ border: `2px solid ${passed ? '#4caf50' : 'var(--accent-red)'}`, textAlign: 'center', marginBottom: '3rem' }}>
+          {passed ? <CheckCircle size={64} color="#4caf50" style={{ margin: '0 auto 1rem' }}/> : <XCircle size={64} color="var(--accent-red)" style={{ margin: '0 auto 1rem' }}/>}
           <h1 className="brand-font" style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0' }}>Trial Complete</h1>
-          <h2 style={{ fontSize: '3rem', margin: '0 0 0.5rem 0', color: passed ? '#4caf50' : '#ff4d4d' }}>{results.score} / {results.max_score}</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem' }}>Accuracy: {percentage}%</p>
+          <h2 style={{ fontSize: '3rem', margin: '0 0 0.5rem 0', color: passed ? '#4caf50' : 'var(--accent-red)' }}>{results.score} / {results.max_score}</h2>
+          <p className="text-desc" style={{ fontSize: '1.2rem' }}>Accuracy: {percentage}%</p>
         </div>
 
         <h3 className="brand-font" style={{ color: 'var(--accent-gold)', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem', marginBottom: '2rem' }}>Performance Review</h3>
         
         {results.review.map((rev: any, i: number) => (
-          <div key={i} style={{ backgroundColor: 'var(--bg-deep)', padding: '2rem', borderRadius: '8px', borderLeft: `4px solid ${rev.is_correct ? '#4caf50' : (rev.type === 'ESSAY' ? 'var(--accent-gold)' : '#ff4d4d')}`, marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '1.1rem', marginBottom: '1rem', fontWeight: 'bold' }}>Q{i + 1}: {rev.question_text}</p>
+          <div key={i} className="module-section" style={{ borderLeft: `4px solid ${rev.is_correct ? '#4caf50' : (rev.type === 'ESSAY' ? 'var(--accent-gold)' : 'var(--accent-red)')}`, marginBottom: '1.5rem', padding: '1.5rem' }}>
+            <p className="text-title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Q{i + 1}: {rev.question_text}</p>
             
-            <div style={{ display: 'grid', gap: '0.5rem', backgroundColor: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '4px' }}>
-              <p style={{ margin: 0 }}><strong>Your Answer:</strong> <span style={{ color: rev.is_correct ? '#4caf50' : 'var(--text-main)' }}>{rev.user_answer}</span></p>
+            <div style={{ display: 'grid', gap: '0.5rem', backgroundColor: 'var(--bg-deep)', padding: '1rem', borderRadius: '4px', border: '1px solid var(--border-dark)' }}>
+              <p className="text-desc" style={{ margin: 0 }}><strong>Your Answer:</strong> <span style={{ color: rev.is_correct ? '#4caf50' : 'var(--text-main)' }}>{rev.user_answer}</span></p>
               {(!rev.is_correct && rev.type !== 'ESSAY') && (
-                <p style={{ margin: 0, color: '#4caf50' }}><strong>Correct Answer:</strong> {rev.correct_answer}</p>
+                <p className="text-desc" style={{ margin: 0, color: '#4caf50' }}><strong>Correct Answer:</strong> {rev.correct_answer}</p>
               )}
               {rev.type === 'ESSAY' && (
-                <p style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><AlertCircle size={16}/> Pending Maester Review</p>
+                <p className="text-desc" style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><AlertCircle size={16}/> Pending Maester Review</p>
               )}
-              <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-dark)', textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                Marks Awarded: <span style={{ color: rev.marks_awarded > 0 ? '#4caf50' : (rev.marks_awarded < 0 ? '#ff4d4d' : 'var(--text-muted)')}}>{rev.marks_awarded}</span> / {rev.max_marks}
+              <div className="text-desc" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-dark)', textAlign: 'right', fontSize: '0.9rem' }}>
+                Marks Awarded: <span style={{ fontWeight: 'bold', color: rev.marks_awarded > 0 ? '#4caf50' : (rev.marks_awarded < 0 ? 'var(--accent-red)' : 'var(--text-muted)')}}>{rev.marks_awarded}</span> / {rev.max_marks}
               </div>
             </div>
           </div>
         ))}
 
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '3rem' }}>
-          <button onClick={() => navigate(-1)} style={{ padding: '1rem 2rem', background: 'transparent', border: '1px solid var(--border-dark)', color: 'var(--text-main)', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button onClick={() => navigate(-1)} className="btn-ghost">
             <ArrowLeft size={20} /> Return to Archives
           </button>
           <button onClick={handleRetry} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -164,18 +158,18 @@ const handleSubmit = async (e?: React.FormEvent) => {
 
   // --- VIEW 2: TAKING THE QUIZ ---
   return (
-    <div style={{ padding: '3rem 1rem', maxWidth: '850px', margin: '0 auto', color: 'var(--text-main)' }}>
+    <div className="page-container">
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', backgroundColor: 'var(--bg-deep)', padding: '1.5rem 2rem', borderRadius: '8px', borderBottom: '2px solid var(--accent-gold)' }}>
+      <div className="module-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', padding: '1.5rem 2rem', borderBottom: '2px solid var(--accent-gold)' }}>
         <div>
           <h1 className="brand-font" style={{ color: 'var(--accent-gold)', margin: '0 0 0.5rem 0' }}>{quiz.title}</h1>
-          <p style={{ color: 'var(--text-muted)', margin: 0 }}>{quiz.description}</p>
+          <p className="text-desc" style={{ margin: 0 }}>{quiz.description}</p>
         </div>
         
         {timeLeft !== null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', backgroundColor: timeLeft < 60 ? '#ff4d4d20' : 'rgba(0,0,0,0.5)', padding: '1rem 1.5rem', borderRadius: '6px', border: `1px solid ${timeLeft < 60 ? '#ff4d4d' : 'var(--border-dark)'}` }}>
-            <TimerIcon size={28} color={timeLeft < 60 ? '#ff4d4d' : 'var(--accent-gold)'} />
-            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: timeLeft < 60 ? '#ff4d4d' : 'var(--text-main)', fontFamily: 'monospace' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', backgroundColor: timeLeft < 60 ? 'rgba(255, 77, 77, 0.1)' : 'var(--bg-deep)', padding: '1rem 1.5rem', borderRadius: '6px', border: `1px solid ${timeLeft < 60 ? 'var(--accent-red)' : 'var(--border-dark)'}` }}>
+            <TimerIcon size={28} color={timeLeft < 60 ? 'var(--accent-red)' : 'var(--accent-gold)'} />
+            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: timeLeft < 60 ? 'var(--accent-red)' : 'var(--text-main)', fontFamily: 'monospace' }}>
               {formatTime(timeLeft)}
             </span>
           </div>
@@ -184,13 +178,13 @@ const handleSubmit = async (e?: React.FormEvent) => {
 
       <form onSubmit={handleSubmit}>
         {quiz.questions.map((q: any, i: number) => (
-          <div key={q.id} style={{ backgroundColor: 'var(--bg-deep)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-dark)', marginBottom: '2rem' }}>
+          <div key={q.id} className="module-section" style={{ marginBottom: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', lineHeight: '1.5' }}>
+              <h3 className="text-title" style={{ margin: 0, fontSize: '1.2rem', lineHeight: '1.5' }}>
                 <span style={{ color: 'var(--accent-gold)', marginRight: '0.5rem' }}>{i + 1}.</span> 
                 {q.text}
               </h3>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', whiteSpace: 'nowrap', marginLeft: '1rem' }}>[{q.marks} Marks]</span>
+              <span className="text-desc" style={{ whiteSpace: 'nowrap', marginLeft: '1rem' }}>[{q.marks} Marks]</span>
             </div>
 
             {q.image_url && (
@@ -201,7 +195,7 @@ const handleSubmit = async (e?: React.FormEvent) => {
 
             <div style={{ display: 'grid', gap: '0.75rem' }}>
               {(q.type === 'MCQ' || q.type === 'CHECKBOX') && q.options.map((opt: any) => (
-                <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-dark)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s' }}>
+                <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', backgroundColor: 'var(--bg-deep)', border: '1px solid var(--border-dark)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.2s' }}>
                   <input 
                     type={q.type === 'MCQ' ? 'radio' : 'checkbox'}
                     name={`q-${q.id}`}
@@ -209,23 +203,25 @@ const handleSubmit = async (e?: React.FormEvent) => {
                     onChange={() => handleOptionChange(q.id, opt.id, q.type)}
                     style={{ transform: 'scale(1.5)', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '1.1rem' }}>{opt.text}</span>
+                  <span className="text-main" style={{ fontSize: '1.1rem' }}>{opt.text}</span>
                 </label>
               ))}
 
               {q.type === 'NUMBER' && (
                 <input 
                   type="number" step="0.001" placeholder="Enter numeric answer..." required
+                  className="auth-input"
                   onChange={(e) => handleNumberChange(q.id, parseFloat(e.target.value))}
-                  style={{ width: '100%', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--text-main)', border: '1px solid var(--border-dark)', borderRadius: '6px', fontSize: '1.1rem', outline: 'none' }}
+                  style={{ width: '100%', fontSize: '1.1rem' }}
                 />
               )}
 
               {(q.type === 'SHORT_TEXT' || q.type === 'ESSAY') && (
                 <textarea 
                   placeholder="Draft your response..." required
+                  className="auth-input"
                   onChange={(e) => handleTextChange(q.id, e.target.value)}
-                  style={{ width: '100%', padding: '1rem', minHeight: q.type === 'ESSAY' ? '150px' : '60px', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--text-main)', border: '1px solid var(--border-dark)', borderRadius: '6px', fontSize: '1.1rem', outline: 'none', resize: 'vertical' }}
+                  style={{ width: '100%', minHeight: q.type === 'ESSAY' ? '150px' : '60px', fontSize: '1.1rem', resize: 'vertical' }}
                 />
               )}
             </div>

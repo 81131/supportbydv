@@ -428,3 +428,105 @@ body.light-theme .module-card h2, body.light-theme .module-card p {
   /* Lightens slightly on hover *relative* to its base opacity */
   background: rgba(0,0,0,0.1) !important;
 }
+
+
+/* --- COMPONENT LAYOUTS & CARDS --- */
+.control-bar {
+  display: flex; gap: 1.5rem; flex-wrap: wrap; 
+  background-color: var(--bg-surface); 
+  padding: 1rem; border-radius: 8px; 
+  border: 1px solid var(--border-dark); 
+  margin-bottom: 2rem; align-items: center;
+  transition: background-color 0.4s ease, border-color 0.4s ease;
+}
+
+.grid-view {
+  display: grid; gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.list-view {
+  display: grid; gap: 1rem;
+}
+
+.item-card {
+  border: 1px solid var(--border-dark);
+  padding: 1.5rem; border-radius: 8px;
+  background-color: var(--bg-surface);
+  display: flex;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, background-color 0.4s ease;
+}
+
+.item-card.column { flex-direction: column; }
+.item-card.row { justify-content: space-between; align-items: center; }
+
+.item-card.special {
+  border-color: var(--accent-red);
+  background-color: rgba(255, 77, 77, 0.05);
+  box-shadow: 0 0 15px rgba(255, 77, 77, 0.1);
+}
+
+.item-card.recommended {
+  border-color: var(--accent-gold);
+  background-color: rgba(212, 175, 55, 0.05); /* Gold tint */
+}
+
+.item-card.pinned {
+  border-color: var(--accent-gold);
+}
+
+/* --- THEME-AWARE BUTTONS --- */
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border-dark);
+  color: var(--text-muted); padding: 0.5rem 0.8rem; border-radius: 4px;
+  cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+.btn-ghost:hover { border-color: var(--text-main); color: var(--text-main); }
+
+.btn-ghost-gold {
+  background: transparent; border: 1px solid var(--accent-gold);
+  color: var(--accent-gold); padding: 0.5rem 0.8rem; border-radius: 4px;
+  cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
+}
+
+.btn-ghost-danger {
+  background: transparent; border: 1px solid var(--accent-red);
+  color: var(--accent-red); padding: 0.5rem 0.8rem; border-radius: 4px;
+  cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
+}
+
+.btn-solid-gold {
+  background-color: var(--accent-gold); color: #000; /* Dark text for contrast on gold */
+  border: none; padding: 0.6rem 1.2rem; border-radius: 4px;
+  cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 0.4rem;
+}
+
+/* Modal Internal Elements */
+.modal-box {
+  background-color: var(--bg-surface); border: 1px solid var(--border-dark);
+  border-radius: 8px; padding: 2rem; width: 100%; maxWidth: 400px; position: relative;
+  transition: background-color 0.4s ease;
+}
+.modal-item-btn {
+  padding: 1rem; background-color: var(--bg-deep); border: 1px solid var(--border-dark); 
+  color: var(--text-main); border-radius: 4px; cursor: pointer; display: flex; 
+  justify-content: space-between; align-items: center; width: 100%; transition: background-color 0.2s;
+}
+.modal-item-btn:hover { border-color: var(--accent-gold); }
+
+/* Typography Standardizers */
+.text-title { color: var(--text-main); margin: 0; font-size: 1.2rem; font-family: var(--font-reading); font-weight: 600; }
+.text-desc { color: var(--text-muted); margin: 0; font-size: 0.9rem; font-family: var(--font-reading); }
+.text-stat { fontSize: 0.85rem; color: var(--accent-gold); font-weight: bold; }
+
+/* --- LIGHT MODE FIX: White Gradient Overlay for Image Cards --- */
+body.light-theme .module-card::before {
+  /* Applies a frosty white gradient that fades downward */
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), rgba(244, 244, 245, 0.95)) !important;
+}
+
+body.light-theme .module-card:hover::before {
+  /* Makes the white gradient slightly stronger on hover so it pops */
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(244, 244, 245, 1)) !important;
+}

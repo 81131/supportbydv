@@ -1,17 +1,13 @@
-import type { ReactNode } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 
 interface ProtectedRouteProps {
   user: any;
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-const ProtectedRoute = ({ user, children }: ProtectedRouteProps) => {
-  // If no user is logged in, redirect them to the home page
-  if (!user) {
-    return <Navigate to="/" replace />;
-  }
-
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ user, children }) => {
+  if (!user) return <Navigate to="/forbidden" replace />;
   return <>{children}</>;
 };
 

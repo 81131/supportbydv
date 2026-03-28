@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus} from 'lucide-react';
+import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus } from 'lucide-react';
 import api from '../api';
 
 interface NoteDisplayerProps {
@@ -17,10 +17,8 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const [filterRecommended, setFilterRecommended] = useState(false);
   const [filterNoOne, setFilterNoOne] = useState(false);
 
-  // --- ✨ NEW: BULK SELECTION STATE ---
   const [selectedNotes, setSelectedNotes] = useState<number[]>([]);
 
-  // --- COLLECTION MODAL STATE ---
   const [activeNoteForCollection, setActiveNoteForCollection] = useState<number | null>(null);
   const [myCollections, setMyCollections] = useState<any[]>([]);
   const [newColTitle, setNewColTitle] = useState('');
@@ -46,7 +44,6 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     } catch (error) { console.error(error); }
   };
 
-  // --- ✨ NEW: BULK TOGGLE LOGIC ---
   const toggleNoteSelection = (noteId: number) => {
     setSelectedNotes(prev => 
       prev.includes(noteId) ? prev.filter(id => id !== noteId) : [...prev, noteId]
@@ -54,7 +51,6 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   };
 
   const openCollectionModal = async (noteId: number | null = null) => {
-    // If noteId is null, it means we are doing a bulk add from the top button!
     setActiveNoteForCollection(noteId);
     try {
       const res = await api.get('/library/collections/me');
@@ -62,20 +58,15 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     } catch (err) { console.error(err); }
   };
 
-  // --- ✨ NEW: BATCH UPLOAD LOGIC ---
   const handleAddToCollection = async (collectionId: number) => {
     try {
-      // Determine if we are saving one specific note, or the whole bulk array
       const notesToSave = activeNoteForCollection ? [activeNoteForCollection] : selectedNotes;
-      
-      // Execute all saves concurrently
       await Promise.all(notesToSave.map(id => 
         api.post(`/library/collections/${collectionId}/notes/${id}`)
       ));
-
       alert(`Successfully added ${notesToSave.length} scroll(s) to the archive!`);
       setActiveNoteForCollection(null); 
-      setSelectedNotes([]); // Clear selections after success
+      setSelectedNotes([]); 
     } catch (err) { alert("Failed to add some scrolls."); }
   };
 
@@ -89,7 +80,6 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     } catch (err) { alert("Failed to forge archive."); }
   };
 
-  // Governance & Utils...
   const handlePinToggle = async (noteId: number, currentStatus: boolean) => {
     try {
       await api.put(`/library/notes/${noteId}/governance`, { is_pinned: !currentStatus });
@@ -142,14 +132,12 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   }).sort((a, b) => Number(b.is_pinned || false) - Number(a.is_pinned || false)); 
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto', width: '100%', position: 'relative' }}>
+    <div className="page-container" style={{ position: 'relative' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
-        
-        {/* ✨ NEW: BULK ACTION BUTTON */}
         <div>
           {selectedNotes.length > 0 && (
-            <button onClick={() => openCollectionModal(null)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-gold)', color: '#000', border: 'none', padding: '0.6rem 1.2rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <button onClick={() => openCollectionModal(null)} className="btn-solid-gold">
               <FolderPlus size={18} /> Save {selectedNotes.length} Selected to Archive
             </button>
           )}
@@ -160,7 +148,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', backgroundColor: 'rgba(0,0,0,0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-dark)', marginBottom: '2rem', alignItems: 'center' }}>
+      <div className="control-bar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)' }}>
           <Filter size={20} /> <strong style={{ marginRight: '1rem' }}>Filter Archives</strong>
         </div>
@@ -180,7 +168,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.9rem' }}>
             <input type="checkbox" checked={filterNoOne} onChange={e => setFilterNoOne(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
-            <VenetianMask size={16} color="#b39ddb" /> By No One
+            <VenetianMask size={16} color="var(--accent-purple, #b39ddb)" /> By No One
           </label>
         </div>
       </div>
@@ -188,12 +176,12 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       {isLoading ? (
         <p style={{ color: 'var(--accent-gold)' }}>Searching the library...</p>
       ) : processedNotes.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
+        <div className="module-section" style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
           <FileText size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
-          <p style={{ color: 'var(--text-muted)' }}>No scrolls match your current filters.</p>
+          <p className="text-desc">No scrolls match your current filters.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '1rem' }}>
+        <div className="list-view">
           {processedNotes.map((note) => {
             const role = String(note.creator_role).replace('UserRole.', '');
             const isNoOne = role === 'noOne' || role === 'NO_ONE';
@@ -201,15 +189,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
             const canDelete = currentUser?.id === note.uploader_id || currentUser?.role === 'admin' || currentUser?.role === 'noOne';
 
             return (
-              <div key={note.id} style={{ 
-                border: note.is_pinned ? '1px solid var(--accent-gold)' : (note.is_recommended ? '1px solid var(--accent-gold)' : '1px solid var(--border-dark)'), 
-                padding: '1.5rem', borderRadius: '8px', 
-                backgroundColor: note.is_recommended ? 'rgba(255, 215, 0, 0.05)' : 'var(--bg-surface)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-              }}>
+              <div key={note.id} className={`item-card row ${note.is_recommended ? 'recommended' : ''} ${note.is_pinned && !note.is_recommended ? 'pinned' : ''}`}>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                   
-                  {/* ✨ NEW: THE CHECKBOX */}
                   <input 
                     type="checkbox" 
                     checked={selectedNotes.includes(note.id)}
@@ -220,15 +202,15 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
                       <FileText size={20} color="var(--accent-gold)" />
-                      <h4 style={{ color: 'var(--text-main)', margin: 0, fontSize: '1.2rem', fontFamily: 'var(--font-reading)' }}>{note.title}</h4>
+                      <h4 className="text-title">{note.title}</h4>
                       <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                         {note.is_recommended && <span title="Recommended"><Award size={18} color="var(--accent-gold)" /></span>}
-                        {isNoOne && <span title="Forged by No One"><VenetianMask size={18} color="#b39ddb" /></span>}
+                        {isNoOne && <span title="Forged by No One"><VenetianMask size={18} color="var(--accent-purple, #b39ddb)" /></span>}
                         {isVerified && <span title="Verified Scholar"><BadgeCheck size={18} color="#4caf50" /></span>}
-                        {note.is_pinned && <span title="Pinned"><Pin size={18} color="#ff4d4d" fill="#ff4d4d" style={{ transform: 'rotate(45deg)' }} /></span>}
+                        {note.is_pinned && <span title="Pinned"><Pin size={18} color="var(--accent-red)" fill="var(--accent-red)" style={{ transform: 'rotate(45deg)' }} /></span>}
                       </div>
                     </div>
-                    <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem', fontFamily: 'var(--font-reading)' }}>{note.description}</p>
+                    <p className="text-desc">{note.description}</p>
                   </div>
                 </div>
                 
@@ -236,28 +218,26 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                   
                   {currentUser?.role === 'noOne' && (
                     <div style={{ display: 'flex', gap: '0.5rem', borderRight: '1px solid var(--border-dark)', paddingRight: '0.8rem' }}>
-                      <button onClick={() => handleRecommendToggle(note.id, note.is_recommended)} style={{ background: 'transparent', border: `1px solid ${note.is_recommended ? 'var(--accent-gold)' : 'var(--text-muted)'}`, color: note.is_recommended ? 'var(--accent-gold)' : 'var(--text-muted)', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <button onClick={() => handleRecommendToggle(note.id, note.is_recommended)} className="btn-ghost" style={{ borderColor: note.is_recommended ? 'var(--accent-gold)' : '', color: note.is_recommended ? 'var(--accent-gold)' : '' }}>
                         <Award size={16} /> {note.is_recommended ? 'Revoke' : 'Recommend'}
                       </button>
-                      <button onClick={() => handlePinToggle(note.id, note.is_pinned)} style={{ background: 'transparent', border: `1px solid ${note.is_pinned ? '#ff4d4d' : 'var(--text-muted)'}`, color: note.is_pinned ? '#ff4d4d' : 'var(--text-muted)', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <button onClick={() => handlePinToggle(note.id, note.is_pinned)} className="btn-ghost" style={{ borderColor: note.is_pinned ? 'var(--accent-red)' : '', color: note.is_pinned ? 'var(--accent-red)' : '' }}>
                         <Pin size={16} style={{ transform: note.is_pinned ? 'rotate(45deg)' : 'none' }} /> {note.is_pinned ? 'Unpin' : 'Pin'}
                       </button>
                     </div>
                   )}
 
                   {canDelete && (
-                    <button onClick={() => handleDelete(note.id)} title="Burn Scroll" style={{ background: 'transparent', border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '0.5rem', borderRadius: '4px', cursor: 'pointer' }}><Trash2 size={18} /></button>
+                    <button onClick={() => handleDelete(note.id)} title="Burn Scroll" className="btn-ghost-danger"><Trash2 size={18} /></button>
                   )}
                   
-                  <button onClick={() => handleFavoriteToggle(note.id)} title={note.is_favorited ? "Remove from Favorites" : "Favorite"} style={{ background: 'transparent', border: '1px solid var(--border-dark)', color: note.is_favorited ? '#ff4d4d' : 'var(--text-muted)', padding: '0.5rem', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' }}>
-                    <Heart size={18} fill={note.is_favorited ? "#ff4d4d" : "transparent"} />
+                  <button onClick={() => handleFavoriteToggle(note.id)} title={note.is_favorited ? "Remove from Favorites" : "Favorite"} className="btn-ghost" style={{ borderColor: note.is_favorited ? 'var(--accent-red)' : '', color: note.is_favorited ? 'var(--accent-red)' : '' }}>
+                    <Heart size={18} fill={note.is_favorited ? "var(--accent-red)" : "transparent"} />
                   </button>
                   
-                  <button onClick={() => openCollectionModal(note.id)} title="Add to Archive" style={{ background: 'transparent', border: '1px solid var(--border-dark)', color: 'var(--text-muted)', padding: '0.5rem', borderRadius: '4px', cursor: 'pointer' }}>
-                    <FolderPlus size={18} />
-                  </button>
+                  <button onClick={() => openCollectionModal(note.id)} title="Add to Archive" className="btn-ghost"><FolderPlus size={18} /></button>
                   
-                  <button onClick={() => handleDownload(note.id, note.title, note.file_type)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold">
                     <Download size={18} /> Download
                   </button>
                 </div>
@@ -268,11 +248,11 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       )}
 
       {/* --- 📁 THE "SAVE TO ARCHIVE" MODAL OVERLAY --- */}
-      {(activeNoteForCollection !== null || selectedNotes.length > 0 && activeNoteForCollection === null) && myCollections && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-dark)', borderRadius: '8px', padding: '2rem', width: '100%', maxWidth: '400px', position: 'relative' }}>
+      {(activeNoteForCollection !== null || (selectedNotes.length > 0 && activeNoteForCollection === null)) && myCollections && (
+        <div className="modal-overlay" style={{ backdropFilter: 'blur(4px)' }}>
+          <div className="modal-box">
             
-            <button onClick={() => { setActiveNoteForCollection(null); setIsCreatingCol(false); }} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <button onClick={() => { setActiveNoteForCollection(null); setIsCreatingCol(false); }} className="close-btn">
               <X size={24} />
             </button>
 
@@ -283,34 +263,34 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
             {myCollections.length > 0 && !isCreatingCol && (
               <div style={{ display: 'grid', gap: '0.8rem', marginBottom: '1.5rem', maxHeight: '200px', overflowY: 'auto' }}>
                 {myCollections.map(col => (
-                  <button key={col.id} onClick={() => handleAddToCollection(col.id)} style={{ padding: '1rem', background: 'rgba(0,0,0,0.05)', border: '1px solid var(--border-dark)', color: 'var(--text-main)', borderRadius: '4px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button key={col.id} onClick={() => handleAddToCollection(col.id)} className="modal-item-btn">
                     <span>{col.title}</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.2rem 0.5rem', border: '1px solid var(--border-dark)', borderRadius: '12px' }}>{col.visibility}</span>
+                    <span className="text-desc" style={{ padding: '0.2rem 0.5rem', border: '1px solid var(--border-dark)', borderRadius: '12px' }}>{col.visibility}</span>
                   </button>
                 ))}
               </div>
             )}
 
             {!isCreatingCol ? (
-              <button onClick={() => setIsCreatingCol(true)} style={{ width: '100%', padding: '1rem', background: 'transparent', border: '1px dashed var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+              <button onClick={() => setIsCreatingCol(true)} className="btn-ghost-gold" style={{ width: '100%', justifyContent: 'center' }}>
                 <Plus size={18} /> Forge a New Archive
               </button>
             ) : (
               <div style={{ display: 'grid', gap: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Archive Name</label>
+                  <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Archive Name</label>
                   <input type="text" value={newColTitle} onChange={e => setNewColTitle(e.target.value)} className="auth-input" placeholder="e.g., Exam Prep" autoFocus />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Visibility</label>
+                  <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Visibility</label>
                   <select value={newColVis} onChange={e => setNewColVis(e.target.value)} className="auth-input" style={{ width: '100%' }}>
                     <option value="private">Private (Only you)</option>
                     <option value="public">Public (Shared with the realm)</option>
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                  <button onClick={() => setIsCreatingCol(false)} style={{ flex: 1, padding: '0.8rem', background: 'transparent', border: '1px solid var(--border-dark)', color: 'var(--text-main)', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-                  <button onClick={handleCreateCollection} disabled={!newColTitle} style={{ flex: 1, padding: '0.8rem', background: 'var(--accent-gold)', border: 'none', color: '#000', borderRadius: '4px', cursor: !newColTitle ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>Forge & Save</button>
+                  <button onClick={() => setIsCreatingCol(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+                  <button onClick={handleCreateCollection} disabled={!newColTitle} className="btn-solid-gold" style={{ flex: 1, justifyContent: 'center', opacity: !newColTitle ? 0.5 : 1 }}>Forge & Save</button>
                 </div>
               </div>
             )}
