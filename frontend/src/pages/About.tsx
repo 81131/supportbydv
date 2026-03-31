@@ -41,7 +41,7 @@ const About: React.FC = () => {
           <h2 className="brand-font" style={{ color: 'var(--accent-gold)', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
             <Swords size={28} /> Features & Arsenal
           </h2>
-          
+
           <div className="grid-view">
             <div className="item-card column">
               <ScrollText color="var(--accent-gold)" size={32} style={{ marginBottom: '1rem' }} />

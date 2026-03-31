@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 RUN npm install axios
-RUN npm install lucide-react
+RUN npm install lucide-react@0.399.0
 RUN npm install react-easy-crop jspdf
 # Copy the source code
 COPY . .
