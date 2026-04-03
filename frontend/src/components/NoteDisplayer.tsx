@@ -23,6 +23,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const [myCollections, setMyCollections] = useState<any[]>([]);
   const [newColTitle, setNewColTitle] = useState('');
   const [newColVis, setNewColVis] = useState('private');
+  const [newColYear, setNewColYear] = useState(2);
+  const [newColSem, setNewColSem] = useState(2);
+  const [newColMod, setNewColMod] = useState<number | ''>(moduleId);
   const [isCreatingCol, setIsCreatingCol] = useState(false);
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -73,7 +76,13 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const handleCreateCollection = async () => {
     if (!newColTitle) return;
     try {
-      const res = await api.post('/library/collections', { title: newColTitle, visibility: newColVis });
+      const res = await api.post('/library/collections', { 
+        title: newColTitle, 
+        visibility: newColVis,
+        year: newColYear,
+        semester: newColSem,
+        module_id: newColMod ? Number(newColMod) : null
+      });
       await handleAddToCollection(res.data.id);
       setNewColTitle('');
       setIsCreatingCol(false);
@@ -286,6 +295,25 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                   <select value={newColVis} onChange={e => setNewColVis(e.target.value)} className="auth-input" style={{ width: '100%' }}>
                     <option value="private">Private (Only you)</option>
                     <option value="public">Public (Shared with the realm)</option>
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div>
+                    <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Year</label>
+                    <input type="number" value={newColYear} onChange={e => setNewColYear(Number(e.target.value))} className="auth-input" min={1} />
+                  </div>
+                  <div>
+                    <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Semester</label>
+                    <input type="number" value={newColSem} onChange={e => setNewColSem(Number(e.target.value))} className="auth-input" min={1} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Module mapping</label>
+                  <select value={newColMod} onChange={e => setNewColMod(e.target.value ? Number(e.target.value) : '')} className="auth-input" style={{ width: '100%' }}>
+                    <option value="">Across all modules</option>
+                    <option value={1}>OSSA</option>
+                    <option value={2}>WMT</option>
+                    <option value={3}>PS</option>
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>

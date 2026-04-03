@@ -1,6 +1,6 @@
 # backend/models/attempts.py
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from . import Base # Adjust import if needed
@@ -16,6 +16,7 @@ class QuizAttempt(Base):
     total_marks = Column(Float, default=0.0)
     time_consumed_seconds = Column(Integer, default=0)
     attempt_number = Column(Integer, default=1)
+    quiz_version = Column(Integer, default=1)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -34,6 +35,7 @@ class QuestionAttempt(Base):
     # Granular Analytics
     marks_awarded = Column(Float, default=0.0)
     time_spent_seconds = Column(Integer, default=0) # 👈 Individual question time!
+    needs_manual_review = Column(Boolean, default=False)
     
     # What the user actually submitted (Store as String or JSON)
     user_answer = Column(String, nullable=True) 

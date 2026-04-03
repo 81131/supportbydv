@@ -6,6 +6,16 @@ from models.user import UserRole
 class TokenPayload(BaseModel):
     token: str
 
+class UserRegister(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
 class UserResponse(BaseModel):
     id: int
     email: str

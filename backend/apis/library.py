@@ -174,10 +174,17 @@ def get_all_collections(db: Session = Depends(get_db), current_user: User = Depe
     }]
 
     # 2. Fetch Public + User's Private Collections
-    cols = db.query(Collection).filter(
+    is_admin = current_user.role.value in ["admin", "noOne"]
+    
+    query = db.query(Collection).filter(
         (Collection.visibility == VisibilityEnum.PUBLIC) | 
         (Collection.creator_id == current_user.id)
-    ).all()
+    )
+    
+    if not is_admin:
+        query = query.filter(Collection.is_hidden == False)
+        
+    cols = query.all()
 
     for c in cols:
         creator = db.query(User).filter(User.id == c.creator_id).first()
@@ -192,6 +199,7 @@ def get_all_collections(db: Session = Depends(get_db), current_user: User = Depe
             "visibility": c.visibility.value,
             "is_special": False,
             "is_recommended": c.is_recommended, "is_pinned": c.is_pinned,
+            "is_hidden": c.is_hidden,
             "note_count": note_count
         })
     return result
@@ -231,6 +239,9 @@ class CollectionCreate(BaseModel):
     title: str
     description: str = None
     visibility: str = "private" # "public" or "private"
+    year: int
+    semester: int
+    module_id: int = None
 
 @router.post("/notes/{note_id}/favorite")
 def toggle_favorite(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -256,7 +267,15 @@ def get_my_collections(db: Session = Depends(get_db), current_user: User = Depen
 def create_collection(data: CollectionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Forges a new archive."""
     vis = VisibilityEnum.PUBLIC if data.visibility == "public" else VisibilityEnum.PRIVATE
-    new_col = Collection(title=data.title, description=data.description, visibility=vis, creator_id=current_user.id)
+    new_col = Collection(
+        title=data.title, 
+        description=data.description, 
+        visibility=vis, 
+        creator_id=current_user.id,
+        year=data.year,
+        semester=data.semester,
+        module_id=data.module_id
+    )
     db.add(new_col)
     db.commit()
     db.refresh(new_col)
@@ -371,3 +390,18 @@ def update_collection_visibility(
     col.visibility = VisibilityEnum.PUBLIC if data.visibility == 'public' else VisibilityEnum.PRIVATE
     db.commit()
     return {"message": "Visibility updated."}
+
+@router.put("/collections/{collection_id}/hide")
+def toggle_collection_hidden(
+    collection_id: int, 
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value not in ["admin", "noOne"]:
+        raise HTTPException(status_code=403, detail="Only Admins can hide archives.")
+    
+    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not col: raise HTTPException(status_code=404, detail="Archive not found.")
+    
+    col.is_hidden = not col.is_hidden
+    db.commit()
+    return {"message": "Archive hidden status toggled."}

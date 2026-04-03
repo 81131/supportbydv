@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Library, DownloadCloud, Pin, Award, VenetianMask, BadgeCheck, Filter, Heart, Lock, Globe } from 'lucide-react';
+import { Library, DownloadCloud, Pin, Award, VenetianMask, BadgeCheck, Filter, Heart, Lock, Globe, EyeOff } from 'lucide-react';
 import api from '../api';
 
 const CollectionDisplayer: React.FC = () => {
@@ -45,6 +45,13 @@ const CollectionDisplayer: React.FC = () => {
       await api.put(`/library/collections/${collectionId}/visibility`, { visibility: newVis });
       setCollections(collections.map(c => c.id === collectionId ? { ...c, visibility: newVis } : c));
     } catch (error) { alert("Failed to update visibility."); }
+  };
+
+  const handleHideToggle = async (collectionId: number, currentStatus: boolean) => {
+    try {
+      await api.put(`/library/collections/${collectionId}/hide`);
+      setCollections(collections.map(c => c.id === collectionId ? { ...c, is_hidden: !currentStatus } : c));
+    } catch (error) { alert("Only Admins can hide an archive."); }
   };
 
   const handlePinToggle = async (collectionId: number, currentStatus: boolean) => {
@@ -146,6 +153,7 @@ const CollectionDisplayer: React.FC = () => {
                     {isNoOne && <span title="Forged by No One"><VenetianMask size={16} color="var(--accent-purple, #b39ddb)" /></span>}
                     {isVerified && <span title="Verified Scholar"><BadgeCheck size={16} color="#4caf50" /></span>}
                     {col.is_pinned && <span title="Pinned"><Pin size={16} color="var(--accent-red)" fill="var(--accent-red)" style={{ transform: 'rotate(45deg)' }} /></span>}
+                    {col.is_hidden && <span title="Hidden"><EyeOff size={16} color="var(--text-muted)" /></span>}
                   </div>
                 )}
                 
@@ -167,13 +175,21 @@ const CollectionDisplayer: React.FC = () => {
                   </div>
                 )}
 
-                {currentUser?.role === 'noOne' && !col.is_special && (
+                {(currentUser?.role === 'noOne' || currentUser?.role === 'admin' || currentUser?.role === 'ADMIN') && !col.is_special && (
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', borderTop: '1px solid var(--border-dark)', paddingTop: '1rem' }}>
-                    <button onClick={() => handleRecommendToggle(col.id, col.is_recommended)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', borderColor: col.is_recommended ? 'var(--accent-gold)' : '', color: col.is_recommended ? 'var(--accent-gold)' : '' }}>
-                      <Award size={14} /> {col.is_recommended ? 'Revoke' : 'Recommend'}
-                    </button>
-                    <button onClick={() => handlePinToggle(col.id, col.is_pinned)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', borderColor: col.is_pinned ? 'var(--accent-red)' : '', color: col.is_pinned ? 'var(--accent-red)' : '' }}>
-                      <Pin size={14} style={{ transform: col.is_pinned ? 'rotate(45deg)' : 'none' }} /> {col.is_pinned ? 'Unpin' : 'Pin'}
+                    {(currentUser?.role === 'noOne') && (
+                      <>
+                        <button onClick={() => handleRecommendToggle(col.id, col.is_recommended)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', borderColor: col.is_recommended ? 'var(--accent-gold)' : '', color: col.is_recommended ? 'var(--accent-gold)' : '' }}>
+                          <Award size={14} /> {col.is_recommended ? 'Revoke' : 'Recommend'}
+                        </button>
+                        <button onClick={() => handlePinToggle(col.id, col.is_pinned)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', borderColor: col.is_pinned ? 'var(--accent-red)' : '', color: col.is_pinned ? 'var(--accent-red)' : '' }}>
+                          <Pin size={14} style={{ transform: col.is_pinned ? 'rotate(45deg)' : 'none' }} /> {col.is_pinned ? 'Unpin' : 'Pin'}
+                        </button>
+                      </>
+                    )}
+                    
+                    <button onClick={() => handleHideToggle(col.id, col.is_hidden)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', borderColor: col.is_hidden ? 'var(--text-muted)' : '', color: col.is_hidden ? 'var(--text-muted)' : '' }}>
+                      <EyeOff size={14} /> {col.is_hidden ? 'Unhide' : 'Hide'}
                     </button>
                   </div>
                 )}

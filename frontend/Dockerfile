@@ -6,15 +6,14 @@ WORKDIR /app
 # Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
-RUN npm install axios
-RUN npm install lucide-react@0.399.0
-RUN npm install react-easy-crop jspdf
 # Copy the source code
 COPY . .
 
 # Accept the build argument and set it as an environment variable for Vite
 ARG VITE_GOOGLE_CLIENT_ID
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Build the application
 RUN npm run build

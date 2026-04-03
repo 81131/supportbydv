@@ -326,7 +326,7 @@ body.light-theme .auth-input[style*="min-height"] {
   gap: 2rem;
 }
 
-@media (min-width: 768px) { grid-template-columns: 1fr 1fr; }
+@media (min-width: 768px) { .modules-grid { grid-template-columns: 1fr 1fr; } }
 
 @media (min-width: 1024px) {
   .modules-grid {
@@ -505,7 +505,7 @@ body.light-theme .module-card h2, body.light-theme .module-card p {
 /* Modal Internal Elements */
 .modal-box {
   background-color: var(--bg-surface); border: 1px solid var(--border-dark);
-  border-radius: 8px; padding: 2rem; width: 100%; maxWidth: 400px; position: relative;
+  border-radius: 8px; padding: 2rem; width: 100%; max-width: 400px; position: relative;
   transition: background-color 0.4s ease;
 }
 .modal-item-btn {
@@ -518,7 +518,7 @@ body.light-theme .module-card h2, body.light-theme .module-card p {
 /* Typography Standardizers */
 .text-title { color: var(--text-main); margin: 0; font-size: 1.2rem; font-family: var(--font-reading); font-weight: 600; }
 .text-desc { color: var(--text-muted); margin: 0; font-size: 0.9rem; font-family: var(--font-reading); }
-.text-stat { fontSize: 0.85rem; color: var(--accent-gold); font-weight: bold; }
+.text-stat { font-size: 0.85rem; color: var(--accent-gold); font-weight: bold; }
 
 /* --- LIGHT MODE FIX: White Gradient Overlay for Image Cards --- */
 body.light-theme .module-card::before {
@@ -529,4 +529,15 @@ body.light-theme .module-card::before {
 body.light-theme .module-card:hover::before {
   /* Makes the white gradient slightly stronger on hover so it pops */
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(244, 244, 245, 1)) !important;
+}
+
+.notifications-dropdown {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+body.light-theme .notifications-dropdown {
+  background-color: white !important;
+  border: 1px solid var(--border-dark);
 }

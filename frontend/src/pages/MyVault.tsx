@@ -1,23 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Library, Lock, Globe, Heart, FileText, Download, ArrowLeft, Filter } from 'lucide-react';
+import { Library, Lock, Globe, Heart, FileText, Download, ArrowLeft, Filter, Swords, Edit3, ClipboardCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api';
 
 const MyVault: React.FC = () => {
   const [collections, setCollections] = useState<any[]>([]);
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'library' | 'trials'>('library');
   const [isLoading, setIsLoading] = useState(true);
   const [activeCollection, setActiveCollection] = useState<any | null>(null);
   const [collectionNotes, setCollectionNotes] = useState<any[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
 
-  useEffect(() => { fetchMyCollections(); }, []);
+  const navigate = useNavigate();
+
+  useEffect(() => { 
+    const fetchData = async () => {
+        setIsLoading(true);
+        await Promise.all([fetchMyCollections(), fetchMyQuizzes()]);
+        setIsLoading(false);
+    };
+    fetchData();
+  }, []);
 
   const fetchMyCollections = async () => {
     try {
       const res = await api.get('/library/collections/me');
       setCollections(res.data);
     } catch (error) { console.error(error); } 
-    finally { setIsLoading(false); }
+  };
+
+  const fetchMyQuizzes = async () => {
+    try {
+      const res = await api.get('/quizzes/me');
+      setQuizzes(res.data);
+    } catch (error) { console.error(error); }
   };
 
   const openCollection = async (col: any) => {
@@ -54,7 +72,7 @@ const MyVault: React.FC = () => {
         <div style={{ borderBottom: '1px solid var(--border-dark)', paddingBottom: '1rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 className="brand-font" style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '2.5rem' }}>My Vault</h1>
-            <p className="text-desc" style={{ marginTop: '0.5rem' }}>Manage your personal archives and favorited scrolls.</p>
+            <p className="text-desc" style={{ marginTop: '0.5rem' }}>Manage your personal archives and forged trials.</p>
           </div>
           {activeCollection && (
             <button onClick={() => setActiveCollection(null)} className="btn-ghost">
@@ -63,22 +81,40 @@ const MyVault: React.FC = () => {
           )}
         </div>
 
-        {!activeCollection ? (
-          <>
-            <div className="control-bar">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)', marginRight: '1rem' }}>
-                <Filter size={20} /> <strong>Filter Vault</strong>
-              </div>
-              <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value as any)} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0 }}>
-                <option value="all">All Archives</option>
-                <option value="private">Private Only</option>
-                <option value="public">Public Only</option>
-              </select>
-            </div>
+        {!activeCollection && (
+          <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-dark)', marginBottom: '2rem' }}>
+            <button 
+              onClick={() => setActiveTab('library')}
+              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'library' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'library' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+            >
+              <Library size={20} /> Scrolls Library
+            </button>
+            <button 
+              onClick={() => setActiveTab('trials')}
+              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'trials' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'trials' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+            >
+              <Swords size={20} /> Forged Trials
+            </button>
+          </div>
+        )}
 
-            {isLoading ? (
-              <p style={{ color: 'var(--accent-gold)' }}>Unlocking the vaults...</p>
-            ) : (
+        {isLoading ? (
+          <p style={{ color: 'var(--accent-gold)' }}>Unlocking the vaults...</p>
+        ) : activeTab === 'library' ? (
+          /* --- LIBRARY VIEW --- */
+          !activeCollection ? (
+            <>
+              <div className="control-bar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)', marginRight: '1rem' }}>
+                  <Filter size={20} /> <strong>Filter Vault</strong>
+                </div>
+                <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value as any)} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0 }}>
+                  <option value="all">All Archives</option>
+                  <option value="private">Private Only</option>
+                  <option value="public">Public Only</option>
+                </select>
+              </div>
+
               <div className="grid-view">
                 {processedCollections.map(col => (
                   <div key={col.id} onClick={() => openCollection(col)} className={`item-card column ${col.is_special ? 'special' : ''}`} style={{ cursor: 'pointer' }}>
@@ -98,39 +134,72 @@ const MyVault: React.FC = () => {
                   </div>
                 ))}
               </div>
-            )}
-          </>
-        ) : (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-              {activeCollection.is_special ? <Heart size={32} color="var(--accent-red)" fill="var(--accent-red)" /> : <Library size={32} color="var(--accent-gold)" />}
-              <h2 className="text-title" style={{ fontSize: '1.8rem' }}>{activeCollection.title}</h2>
-            </div>
+            </>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                {activeCollection.is_special ? <Heart size={32} color="var(--accent-red)" fill="var(--accent-red)" /> : <Library size={32} color="var(--accent-gold)" />}
+                <h2 className="text-title" style={{ fontSize: '1.8rem' }}>{activeCollection.title}</h2>
+              </div>
 
-            {isLoadingNotes ? (
-              <p style={{ color: 'var(--accent-gold)' }}>Retrieving scrolls...</p>
-            ) : collectionNotes.length === 0 ? (
+              {isLoadingNotes ? (
+                <p style={{ color: 'var(--accent-gold)' }}>Retrieving scrolls...</p>
+              ) : collectionNotes.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
+                  <FileText size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
+                  <p className="text-desc">This archive is currently empty.</p>
+                </div>
+              ) : (
+                <div className="list-view">
+                  {collectionNotes.map(note => (
+                    <div key={note.id} className="item-card row">
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
+                          <FileText size={20} color="var(--accent-gold)" />
+                          <h4 className="text-title">{note.title}</h4>
+                        </div>
+                        <p className="text-desc">{note.description || "No description provided."}</p>
+                      </div>
+                      <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold">
+                        <Download size={18} /> Download
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          /* --- TRIALS VIEW --- */
+          <div className="list-view">
+            {quizzes.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
-                <FileText size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
-                <p className="text-desc">This archive is currently empty.</p>
+                <Swords size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
+                <p className="text-desc">You have not forged any trials yet.</p>
               </div>
             ) : (
-              <div className="list-view">
-                {collectionNotes.map(note => (
-                  <div key={note.id} className="item-card row">
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
-                        <FileText size={20} color="var(--accent-gold)" />
-                        <h4 className="text-title">{note.title}</h4>
-                      </div>
-                      <p className="text-desc">{note.description || "No description provided."}</p>
+              quizzes.map(quiz => (
+                <div key={quiz.id} className="item-card row">
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
+                      <Swords size={20} color="var(--accent-gold)" />
+                      <h4 className="text-title">{quiz.title}</h4>
                     </div>
-                    <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold">
-                      <Download size={18} /> Download
+                    <p className="text-desc">{quiz.description}</p>
+                    <div className="text-desc" style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-gold)' }}>
+                      {quiz.question_count} Questions • {quiz.attempt_count} Attempts
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button onClick={() => navigate(`/edit-quiz/${quiz.id}`)} className="btn-ghost">
+                      <Edit3 size={18} /> Edit
+                    </button>
+                    <button onClick={() => navigate(`/review-essays/${quiz.id}`)} className="btn-solid-gold">
+                      <ClipboardCheck size={18} /> Review Essays
                     </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
             )}
           </div>
         )}

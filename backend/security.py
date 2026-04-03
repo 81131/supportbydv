@@ -4,12 +4,21 @@ from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 from database import get_db
 from models.user import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback_secret_if_not_found")
+SECRET_KEY = os.environ["SECRET_KEY"] # Throw error if missing
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 # This tells FastAPI where clients should look to authenticate
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")

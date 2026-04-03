@@ -21,6 +21,8 @@ class User(Base):
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     picture = Column(String, nullable=True) 
+    hashed_password = Column(String, nullable=True)
+    auth_provider = Column(String, default="local")
 
     # --- Governance & Tracking ---
     role = Column(Enum(UserRole), default=UserRole.USER)

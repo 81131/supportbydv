@@ -10,8 +10,15 @@ import Forbidden from './Forbidden';
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'users' | 'logs'>('users');
+  const [modules, setModules] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'modules'>('users');
   const [isLoading, setIsLoading] = useState(true);
+
+  // New Module Form State
+  const [newModuleName, setNewModuleName] = useState('');
+  const [newModuleCode, setNewModuleCode] = useState('');
+  const [newModuleYear, setNewModuleYear] = useState(1);
+  const [newModuleSemester, setNewModuleSemester] = useState(1);
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -26,16 +33,36 @@ const AdminDashboard: React.FC = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [usersRes, logsRes] = await Promise.all([
+      const [usersRes, logsRes, modulesRes] = await Promise.all([
         api.get('/admin/users'),
-        api.get('/admin/audit-logs') // Using your original endpoint
+        api.get('/admin/audit-logs'),
+        api.get('/modules')
       ]);
       setUsers(usersRes.data);
       setLogs(logsRes.data);
+      setModules(modulesRes.data);
     } catch (error) {
       console.error("Failed to fetch admin data", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCreateModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/modules', {
+        name: newModuleName,
+        code: newModuleCode,
+        year: newModuleYear,
+        semester: newModuleSemester
+      });
+      alert("New module forged in the archives!");
+      setNewModuleName('');
+      setNewModuleCode('');
+      fetchData();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || "Failed to create module.");
     }
   };
 
@@ -95,18 +122,24 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-dark)', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-dark)', marginBottom: '2rem', flexWrap: 'wrap' }}>
         <button 
           onClick={() => setActiveTab('users')}
-          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'users' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'users' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'users' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'users' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
         >
-          <Users size={20} /> Scholars Management
+          <Users size={20} /> Scholars
+        </button>
+        <button 
+          onClick={() => setActiveTab('modules')}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'modules' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'modules' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+        >
+          <ScrollText size={20} /> Modules
         </button>
         <button 
           onClick={() => setActiveTab('logs')}
-          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'logs' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'logs' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'logs' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'logs' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
         >
-          <ScrollText size={20} /> Audit Ledger
+          <Activity size={20} /> Audit Ledger
         </button>
       </div>
 
@@ -208,6 +241,55 @@ const AdminDashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
+      ) : activeTab === 'modules' ? (
+        
+        /* --- MODULES MANAGEMENT --- */
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 2fr', gap: '2rem' }}>
+          {/* Create Module Form */}
+          <div className="module-section">
+            <h3 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem' }}>Forge New Module</h3>
+            <form onSubmit={handleCreateModule} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label className="text-desc">Module Name</label>
+                <input type="text" className="auth-input" value={newModuleName} onChange={(e) => setNewModuleName(e.target.value)} placeholder="e.g. Logic and Reasoning" required />
+              </div>
+              <div>
+                <label className="text-desc">Module Code</label>
+                <input type="text" className="auth-input" value={newModuleCode} onChange={(e) => setNewModuleCode(e.target.value)} placeholder="e.g. LOG101" required />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label className="text-desc">Year</label>
+                  <input type="number" className="auth-input" value={newModuleYear} onChange={(e) => setNewModuleYear(parseInt(e.target.value))} min={1} max={4} required />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="text-desc">Semester</label>
+                  <input type="number" className="auth-input" value={newModuleSemester} onChange={(e) => setNewModuleSemester(parseInt(e.target.value))} min={1} max={2} required />
+                </div>
+              </div>
+              <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }}>Forge Module</button>
+            </form>
+          </div>
+
+          {/* Modules List */}
+          <div className="module-section">
+            <h3 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem' }}>Existing Modules</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              {modules.map(mod => (
+                <div key={mod.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--bg-deep)', borderRadius: '4px', border: '1px solid var(--border-dark)' }}>
+                  <div>
+                    <div className="text-title" style={{ fontSize: '1rem' }}>{mod.name}</div>
+                    <div className="text-desc" style={{ fontSize: '0.8rem' }}>{mod.code} • Year {mod.year} Semester {mod.semester}</div>
+                  </div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                    Y{mod.year}S{mod.semester}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
       ) : (
 
         /* --- AUDIT LOGS TABLE --- */
@@ -219,7 +301,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {logs.map((log, index) => (
+              {logs.slice(0, 50).map((log, index) => (
                 <div key={log.id || index} style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1.5rem', borderBottom: '1px dashed var(--border-dark)' }}>
                   <div style={{ padding: '0.5rem', backgroundColor: 'rgba(212, 175, 55, 0.1)', borderRadius: '50%' }}>
                     <AlertTriangle size={20} color="var(--accent-gold)" />

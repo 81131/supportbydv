@@ -52,7 +52,7 @@ const QuizMaker = () => {
   const addQuestion = (type: QuestionType) => {
     const newQuestion: Question = {
       id: Date.now(), type, text: '', marks: 1, negativeMarks: 0,
-      options: type === 'MCQ' || type === 'CHECKBOX' ? [{ text: 'Option 1', isCorrect: false }, { text: 'Option 2', isCorrect: false }] : undefined,
+      options: type === 'MCQ' || type === 'CHECKBOX' ? [{ text: '', isCorrect: false }, { text: '', isCorrect: false }] : undefined,
       correctNumber: undefined,
       correctText: ''
     };
@@ -61,6 +61,19 @@ const QuizMaker = () => {
 
   const saveQuiz = async () => {
     if (!title || !moduleId || questions.length === 0) { alert('Please fill in required fields and add questions.'); return; }
+
+    // Validation rules
+    for (let i = 0; i < questions.length; i++) {
+       const q = questions[i];
+       if (!q.text.trim()) { alert(`Question ${i + 1} needs text.`); return; }
+       if (q.type === 'MCQ' || q.type === 'CHECKBOX') {
+           if (!q.options?.some(o => o.isCorrect)) { alert(`Question ${i + 1} needs at least one correct option.`); return; }
+           if (q.options?.some(o => !o.text.trim())) { alert(`Question ${i + 1} has empty action items.`); return; }
+       }
+       if (q.type === 'NUMBER' && q.correctNumber === undefined) { alert(`Question ${i + 1} needs a required numeric answer.`); return; }
+       if (q.type === 'SHORT_TEXT' && !q.correctText?.trim()) { alert(`Question ${i + 1} needs a strict correct string to match.`); return; }
+    }
+
     setIsSaving(true);
 
     // 👇 THE FIX: Map Frontend Interface EXACTLY to the Backend Pydantic Schema
@@ -188,7 +201,7 @@ const QuizMaker = () => {
                         }
                         setQuestions(newQs);
                       }} style={{ accentColor: 'var(--accent-gold)', width: '18px', height: '18px' }} />
-                    <input type="text" className="auth-input" style={{ margin: 0, padding: '0.5rem', flex: 1, background: 'transparent', border: 'none' }} value={opt.text} onChange={(e) => {
+                    <input type="text" className="auth-input" style={{ margin: 0, padding: '0.5rem', flex: 1, background: 'transparent', border: 'none' }} value={opt.text} placeholder={`Option ${oIndex + 1}`} onChange={(e) => {
                         const newQs = [...questions];
                         newQs[qIndex].options![oIndex].text = e.target.value;
                         setQuestions(newQs);
@@ -202,7 +215,7 @@ const QuizMaker = () => {
                 ))}
                 <button onClick={() => {
                     const newQs = [...questions];
-                    newQs[qIndex].options?.push({ text: `Option ${newQs[qIndex].options!.length + 1}`, isCorrect: false });
+                    newQs[qIndex].options?.push({ text: '', isCorrect: false });
                     setQuestions(newQs);
                   }} className="btn-ghost" style={{ alignSelf: 'flex-start' }}><Plus size={16} /> Add Option</button>
               </div>

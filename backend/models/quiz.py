@@ -21,6 +21,7 @@ class Module(Base):
     code = Column(String, unique=True, index=True)
     year = Column(Integer)
     semester = Column(Integer)
+    image_url = Column(String, nullable=True)
     
     quizzes = relationship("Quiz", back_populates="module")
 
@@ -43,6 +44,7 @@ class Quiz(Base):
     # NEW: The Award Flag
     is_recommended = Column(Boolean, default=False)
     is_pinned = Column(Boolean, default=False) # 👈 Add this line!
+    version = Column(Integer, default=1) # 👈 Added for tracking history cleanly
     module = relationship("Module", back_populates="quizzes")
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
     
@@ -61,6 +63,7 @@ class Question(Base):
     # New Grading Fields
     marks = Column(Float, default=1.0)
     negative_marks = Column(Float, default=0.0) # Used for CHECKBOX
+    version = Column(Integer, default=1) # 👈 Track which version of the quiz this question belongs to
     
     correct_number = Column(Float, nullable=True) 
     correct_text = Column(String, nullable=True)  

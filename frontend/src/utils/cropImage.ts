@@ -10,6 +10,16 @@ export function getRadianAngle(degreeValue: number) {
   return (degreeValue * Math.PI) / 180;
 }
 
+export function rotateSize(width: number, height: number, rotation: number) {
+  const rotRad = getRadianAngle(rotation);
+  return {
+    width:
+      Math.abs(Math.cos(rotRad) * width) + Math.abs(Math.sin(rotRad) * height),
+    height:
+      Math.abs(Math.sin(rotRad) * width) + Math.abs(Math.cos(rotRad) * height),
+  };
+}
+
 export default async function getCroppedImg(
   imageSrc: string,
   pixelCrop: any,
@@ -21,37 +31,51 @@ export default async function getCroppedImg(
 
   if (!ctx) return '';
 
-  // 1. Set the canvas to the EXACT size of the crop box requested by the UI
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  const rotRad = getRadianAngle(rotation);
+  const { width: bBoxWidth, height: bBoxHeight } = rotateSize(
+    image.width,
+    image.height,
+    rotation
+  );
 
-  // 2. Paint the entire background solid white (This acts as the blank A4 paper!)
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // set canvas size to match the bounding box
+  canvas.width = bBoxWidth;
+  canvas.height = bBoxHeight;
 
-  // 3. Create a massive temporary canvas to handle the safe rotation without clipping corners
-  const maxSize = Math.max(image.width, image.height);
-  const safeArea = 2 * ((maxSize / 2) * Math.sqrt(2));
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = safeArea;
-  tempCanvas.height = safeArea;
-  const tempCtx = tempCanvas.getContext('2d');
+  // translate canvas context to a central location to allow rotating
+  ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
+  ctx.rotate(rotRad);
+  ctx.translate(-image.width / 2, -image.height / 2);
 
-  if (tempCtx) {
-    tempCtx.translate(safeArea / 2, safeArea / 2);
-    tempCtx.rotate(getRadianAngle(rotation));
-    tempCtx.translate(-safeArea / 2, -safeArea / 2);
-    // Draw the uncropped image perfectly centered in the temp canvas
-    tempCtx.drawImage(image, safeArea / 2 - image.width / 2, safeArea / 2 - image.height / 2);
-  }
+  // draw rotated image
+  ctx.drawImage(image, 0, 0);
 
-  // 4. Calculate the precise mathematical offset to align the rotated image inside the final crop box
-  // (This perfectly handles negative coordinates when the user zooms way out!)
-  const offsetX = -pixelCrop.x + (safeArea / 2 - image.width / 2);
-  const offsetY = -pixelCrop.y + (safeArea / 2 - image.height / 2);
+  // extracted crop canvas
+  const croppedCanvas = document.createElement('canvas');
+  const croppedCtx = croppedCanvas.getContext('2d');
 
-  // 5. Draw the rotated image over the white background
-  ctx.drawImage(tempCanvas, Math.round(offsetX), Math.round(offsetY));
+  if (!croppedCtx) return '';
 
-  return canvas.toDataURL('image/jpeg', 0.98);
+  // Set the size of the cropped canvas
+  croppedCanvas.width = pixelCrop.width;
+  croppedCanvas.height = pixelCrop.height;
+
+  // Fill white background for PDF
+  croppedCtx.fillStyle = '#ffffff';
+  croppedCtx.fillRect(0, 0, croppedCanvas.width, croppedCanvas.height);
+
+  // Draw the cropped image onto the final canvas
+  croppedCtx.drawImage(
+    canvas,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return croppedCanvas.toDataURL('image/jpeg', 0.98);
 }

@@ -1,15 +1,17 @@
 import os
 import time
+from contextlib import asynccontextmanager
 from security import verify_csrf
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
-from apis.files import router as files_router  
 from apis import quizzes
 from fastapi.staticfiles import StaticFiles 
 from apis import auth, files, leaderboard
 from apis import admin
 from apis import library
+from apis.notifications import router as notifications_router
+from apis.modules import router as modules_router
 
 
 # Importing the models package triggers your __init__.py loop, 
@@ -21,24 +23,39 @@ from database import engine, SessionLocal, Base
 # Import your API routers
 from apis.auth import router as auth_router
 
-# --- NEW: Retry loop to wait for PostgreSQL ---
-print("Connecting to database...")
-for i in range(10): # Try 10 times
-    try:
-        # Build the database tables
-        models.Base.metadata.create_all(bind=engine)
-        print("Database connected and tables created!")
-        break # If it works, break out of the loop
-    except OperationalError:
-        print(f"Database not ready, waiting 2 seconds... (Attempt {i+1}/10)")
-        time.sleep(2)
+# --- IMPROVED: Retry loop to wait for PostgreSQL ---
+def wait_for_db():
+    import sys
+    print("⏳ Connecting to database...")
+    max_retries = 20
+    for i in range(max_retries):
+        try:
+            # Build the database tables
+            models.Base.metadata.create_all(bind=engine)
+            print("✅ Database connected and tables created!")
+            return
+        except OperationalError as e:
+            print(f"❌ Database not ready, waiting 2 seconds... (Attempt {i+1}/{max_retries})")
+            if i == max_retries - 1:
+                print(f"FATAL: Could not connect to database after {max_retries} attempts.")
+                print(f"Error: {e}")
+                sys.exit(3) # Exit with code 3 so Docker can restart it if needed
+            time.sleep(2)
+
+wait_for_db()
 # ---------------------------------------------
 
-app = FastAPI(title="Support By DV API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize_modules()
+    print("⚔️ The Citadel's modules have been forged in the database!")
+    yield
+
+app = FastAPI(title="Support By DV API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://localhost:5173"], 
+    allow_origins=["http://localhost", "http://localhost:5173", "http://127.0.0.1:5173"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,27 +83,15 @@ def initialize_modules():
     finally:
         db.close()
 
-# 2. Trigger on Docker / FastAPI Startup
-@app.on_event("startup")
-def startup_event():
-    # Ensure tables are created first!
-    Base.metadata.create_all(bind=engine) 
-    
-    # Run our seeder
-    initialize_modules()
-    print("⚔️ The Citadel's modules have been forged in the database!")
-
-
 # Connect the routers to the main app
 app.include_router(auth_router)
-app.include_router(files_router)  
-app.include_router(auth_router)
-app.include_router(quizzes.router)
-app.include_router(files_router, dependencies=[Depends(verify_csrf)]) 
-app.include_router(files.router)
+app.include_router(files.router, dependencies=[Depends(verify_csrf)]) # Protected file uploads
+app.include_router(quizzes.router, dependencies=[Depends(verify_csrf)]) # Protected changes
 app.include_router(leaderboard.router)
-app.include_router(admin.router)
-app.include_router(library.router)
+app.include_router(admin.router, dependencies=[Depends(verify_csrf)])
+app.include_router(library.router, dependencies=[Depends(verify_csrf)])
+app.include_router(notifications_router, dependencies=[Depends(verify_csrf)])
+app.include_router(modules_router)
 
 @app.get("/")
 def read_root():

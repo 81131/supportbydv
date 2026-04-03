@@ -51,9 +51,15 @@ class Collection(Base):
     
     visibility = Column(Enum(VisibilityEnum), default=VisibilityEnum.PRIVATE)
     
+    # Context Mapping
+    year = Column(Integer, nullable=False)
+    semester = Column(Integer, nullable=False)
+    module_id = Column(Integer, ForeignKey("modules.id", ondelete="CASCADE"), nullable=True)
+    
     # Governance
     is_pinned = Column(Boolean, default=False)
     is_recommended = Column(Boolean, default=False)
+    is_hidden = Column(Boolean, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
