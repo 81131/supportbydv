@@ -75,6 +75,11 @@ body.light-theme h1, body.light-theme h2, body.light-theme h3 {
 
 /* --- NAVBAR --- */
 .navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200; /* above quiz sidebars (z-index 50) */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -310,6 +315,7 @@ body.light-theme .auth-input[style*="min-height"] {
   flex: 1;
   display: flex;
   flex-direction: column;
+  padding-top: var(--quiz-topbar-h); /* push content below the fixed navbar */
 }
 
 .page-container {
@@ -578,13 +584,13 @@ body.light-theme .notifications-dropdown {
    ================================================ */
 
 :root {
-  --quiz-nav-width: 64px;  /* icon-only navbar height estimate */
   --quiz-sidebar-left-w: 256px;
   --quiz-sidebar-right-w: 272px;
-  --quiz-topbar-h: 65px;
+  --quiz-topbar-h: 70px; /* actual navbar height: 1rem padding top + 1rem bottom + ~38px content */
 }
 
-/* The outer wrapper removes page-container's max-width for quiz pages */
+/* The outer wrapper removes page-container's max-width for quiz pages.
+   No extra padding-top needed — .main-content already compensates for the fixed navbar. */
 .quiz-layout-wrapper {
   position: relative;
   min-height: calc(100vh - var(--quiz-topbar-h));

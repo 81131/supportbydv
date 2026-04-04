@@ -2,8 +2,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Fetch the database URL from the environment
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+# Fetch the database URL from the environment — crash immediately if missing
+SQLALCHEMY_DATABASE_URL = os.environ["DATABASE_URL"]
 
 # Create the SQLAlchemy engine
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

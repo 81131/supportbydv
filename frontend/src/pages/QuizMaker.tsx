@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, CheckCircle2, GripVertical, AlertCircle, Clock, BookOpen, CheckSquare, FileText, Save, ListOrdered, Edit3, Settings, Upload, LayoutGrid, XCircle } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, GripVertical, AlertCircle, Clock, BookOpen, CheckSquare, FileText, Save, ListOrdered, Edit3, Settings, Upload, LayoutGrid, XCircle, Image as ImageIcon } from 'lucide-react';
 import type { Question, QuestionType, AnswerOption } from '../types/quiz';
 import api from '../api';
 
@@ -62,6 +62,7 @@ const QuizMaker = () => {
             text: q.text,
             marks: q.marks || 1,
             negativeMarks: q.negative_marks || 0,
+            imageUrl: q.image_url,
             options,
             correctNumber: type === 'NUMBER' ? Number(q.correct_number) : undefined,
             correctText: (type === 'SHORT_TEXT' || type === 'ESSAY') ? String(q.correct_text || '') : undefined
@@ -75,6 +76,7 @@ const QuizMaker = () => {
   const addQuestion = (type: QuestionType) => {
     const newQuestion: Question = {
       id: Date.now(), type, text: '', marks: 1, negativeMarks: 0,
+      imageUrl: undefined,
       options: ['MCQ', 'CHECKBOX', 'DRAG_DROP', 'FILL_BLANK'].includes(type) ? [{ text: '', isCorrect: !['MCQ', 'CHECKBOX'].includes(type) }, { text: '', isCorrect: false }] : undefined,
       correctNumber: undefined,
       correctText: ''
@@ -175,6 +177,7 @@ const QuizMaker = () => {
         type: q.type,
         marks: q.marks,
         negative_marks: q.negativeMarks || 0,
+        image_url: q.imageUrl,
         options: mappedOptions,
         correct_number: q.type === 'NUMBER' ? q.correctNumber : null,
         correct_text: (q.type === 'SHORT_TEXT' || q.type === 'ESSAY') ? q.correctText : null
@@ -346,7 +349,34 @@ const QuizMaker = () => {
 
             <textarea className="auth-input" value={q.text} onChange={(e) => {
               const newQs = [...questions]; newQs[qIndex].text = e.target.value; setQuestions(newQs);
-            }} placeholder="Enter question text here..." style={{ minHeight: '80px', fontSize: '1.1rem' }} />
+            }} placeholder="Enter question text here..." style={{ minHeight: '80px', fontSize: '1.1rem', marginBottom: '0.5rem' }} />
+
+            <div style={{ marginBottom: '1rem' }}>
+              {q.imageUrl ? (
+                <div style={{ position: 'relative', display: 'inline-block', marginTop: '0.5rem' }}>
+                  <img src={`/api${(q.imageUrl as string).startsWith('/') ? '' : '/'}${q.imageUrl as string}`} alt="Question visual" style={{ maxHeight: '200px', borderRadius: '4px', border: '1px solid var(--border-dark)' }} />
+                  <button onClick={() => {
+                    const newQs = [...questions]; newQs[qIndex].imageUrl = undefined; setQuestions(newQs);
+                  }} style={{ position: 'absolute', top: -10, right: -10, background: 'var(--bg-deep)', borderRadius: '50%', color: 'var(--accent-red)', border: 'none', cursor: 'pointer' }}><XCircle size={20} /></button>
+                </div>
+              ) : (
+                <label className="btn-ghost" style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', display: 'inline-flex', cursor: 'pointer', marginTop: '0.5rem' }}>
+                  <ImageIcon size={14} style={{ marginRight: '0.4rem' }} /> Add Image
+                  <input type="file" style={{ display: 'none' }} accept="image/*" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 10 * 1024 * 1024) { alert("Image too large"); return; }
+                    setIsSaving(true);
+                    const fd = new FormData(); fd.append('file', file);
+                    try {
+                      const res = await api.post('/files/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' }});
+                      const newQs = [...questions]; newQs[qIndex].imageUrl = res.data.image_url; setQuestions(newQs);
+                    } catch(err) { alert('Upload failed'); } finally { setIsSaving(false); }
+                    e.target.value = '';
+                  }} />
+                </label>
+              )}
+            </div>
 
             {['MCQ', 'CHECKBOX', 'DRAG_DROP', 'FILL_BLANK'].includes(q.type) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginTop: '1rem' }}>

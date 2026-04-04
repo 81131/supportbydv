@@ -7,7 +7,10 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 from database import get_db
 from models.user import User, UserRole
-from security import create_access_token, get_password_hash, verify_password  
+from models.quiz import Quiz
+from models.attempts import QuizAttempt
+from models.library import Note, Collection
+from security import create_access_token, get_password_hash, verify_password, get_current_user 
 from pydantic import BaseModel
 from schemas.user import TokenPayload, UserResponse, UserRegister, UserLogin
 
@@ -41,22 +44,20 @@ def google_auth(
         user = db.query(User).filter(User.email == email).first()
 
         if user:
-            # --- 🛡️ NEW GOVERNANCE LOGIC ---
             if getattr(user, 'is_suspended', False):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, 
                     detail="Your access to the Citadel has been revoked by the Maesters."
                 )
-            
-            # Auto-upgrade you to NO_ONE if you were already in the DB
             if user.email == SUPER_ADMIN_EMAIL and user.role != UserRole.NO_ONE:
                 user.role = UserRole.NO_ONE
-                
-            # Auto-migrate any other old "STUDENT" roles to the new "USER" role
             elif user.role == UserRole.STUDENT:
                 user.role = UserRole.USER
-                
-            # Track online presence
+            # Only update name from Google if user hasn't set a custom name
+            if not user.first_name:
+                user.first_name = first_name
+            if not user.last_name:
+                user.last_name = last_name
             user.last_active_at = func.now()
 
         else:
@@ -214,16 +215,63 @@ def logout(response: Response):
     """
     Clears the authentication and CSRF cookies to end the session.
     """
-    response.delete_cookie(
-        key="access_token",
-        path="/",
-        httponly=True,
-        samesite="lax"
-    )
-    response.delete_cookie(
-        key="csrftoken",
-        path="/",
-        httponly=False,
-        samesite="lax"
-    )
+    response.delete_cookie(key="access_token", path="/", httponly=True, samesite="lax")
+    response.delete_cookie(key="csrftoken", path="/", httponly=False, samesite="lax")
     return {"message": "You have left the Citadel. Your watch has ended."}
+
+
+# ─── Profile Endpoints ───────────────────────────────────────────────────────
+
+class ProfileUpdateRequest(BaseModel):
+    first_name: str
+    last_name: str
+
+@router.patch("/profile", response_model=UserResponse)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update the current user's display name. Persists across Google re-logins."""
+    current_user.first_name = payload.first_name.strip()
+    current_user.last_name = payload.last_name.strip()
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.get("/profile/stats")
+def get_profile_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return aggregate performance stats for the current user."""
+    from models.quiz import Question
+    uid = current_user.id
+
+    quizzes_taken    = db.query(QuizAttempt).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED").count()
+    quizzes_made     = db.query(Quiz).filter(Quiz.created_user_id == uid, Quiz.is_deleted == False).count()
+    notes_uploaded   = db.query(Note).filter(Note.uploader_id == uid).count()
+    collections_made = db.query(Collection).filter(Collection.creator_id == uid).count()
+
+    # Compute score percentages from completed attempts
+    attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED").all()
+    scores = []
+    for a in attempts:
+        # Sum max marks for all questions in this quiz
+        max_marks = db.query(func.sum(Question.marks)).filter(Question.quiz_id == a.quiz_id).scalar() or 0
+        if max_marks > 0:
+            scores.append(round((a.total_marks / max_marks) * 100, 1))
+
+    avg_score  = round(sum(scores) / len(scores), 1) if scores else None
+    best_score = max(scores) if scores else None
+
+    return {
+        "quizzes_taken":    quizzes_taken,
+        "quizzes_made":     quizzes_made,
+        "notes_uploaded":   notes_uploaded,
+        "collections_made": collections_made,
+        "avg_score_pct":    avg_score,
+        "best_score_pct":   best_score,
+        "member_since":     current_user.created_at,
+    }

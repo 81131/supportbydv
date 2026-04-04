@@ -19,7 +19,7 @@ const Leaderboard: React.FC = () => {
 
   useEffect(() => {
     // Using your original endpoint
-    api.get('/leaderboard/')
+    api.get('/leaderboard')
       .then(res => {
         setLeaders(res.data);
       })

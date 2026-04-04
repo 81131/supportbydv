@@ -56,13 +56,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Support By DV API", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost", "http://localhost:5173", "http://127.0.0.1:5173"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is only needed during local Vite dev (port 5173).
+# In production, nginx proxies /api/ so no cross-origin issue exists.
+import os as _os
+if _os.getenv("DEV_MODE") == "true":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 

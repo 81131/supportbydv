@@ -39,9 +39,9 @@ async def upload_quiz_resource(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    return {"message": "Resource uploaded successfully.", "file_url": file_path}
+    return {"message": "Resource uploaded successfully.", "file_url": f"/static/quiz_resources/{safe_filename}"}
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     new_quiz = Quiz(
         title=quiz_in.title, 
@@ -314,8 +314,11 @@ def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), curren
     
     draft_answers = {}
     time_consumed = 0
+    attempt_created_at = None
+    
     if attempt:
         time_consumed = attempt.time_consumed_seconds
+        attempt_created_at = attempt.created_at.isoformat() if attempt.created_at else None
         for qa in attempt.question_attempts:
             # Simple parse mechanism for UI
             import json
@@ -340,9 +343,43 @@ def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), curren
         "time_limit_minutes": quiz.time_limit_minutes,
         "consent_text": quiz.consent_text,
         "allowed_tools": quiz.allowed_tools,
+        "allowed_resources": quiz.allowed_resources,
         "questions": safe_questions,
         "draft": draft_answers,
-        "time_consumed": time_consumed
+        "time_consumed": time_consumed,
+        "attempt_created_at": attempt_created_at
+    }
+
+@router.post("/{quiz_id}/start")
+def start_quiz_attempt(quiz_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Scroll not found.")
+        
+    attempt = db.query(QuizAttempt).filter(
+        QuizAttempt.quiz_id == quiz_id, 
+        QuizAttempt.user_id == current_user.id,
+        QuizAttempt.status == "IN_PROGRESS"
+    ).first()
+    
+    if not attempt:
+        past_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").count()
+        attempt = QuizAttempt(
+            user_id=current_user.id, 
+            quiz_id=quiz.id, 
+            total_marks=0.0, 
+            time_consumed_seconds=0,
+            attempt_number=past_attempts + 1,
+            quiz_version=quiz.version,
+            status="IN_PROGRESS"
+        )
+        db.add(attempt)
+        db.commit()
+        db.refresh(attempt)
+        
+    return {
+        "message": "Attempt started.",
+        "attempt_created_at": attempt.created_at.isoformat()
     }
 
 @router.post("/{quiz_id}/submit")
@@ -365,22 +402,25 @@ def submit_and_grade_quiz(
         QuizAttempt.status == "IN_PROGRESS"
     ).first()
 
+    import datetime
+    from datetime import timezone
+    server_now = datetime.datetime.now(timezone.utc)
+    server_time_consumed = submission.time_consumed_seconds
+    
     if not attempt:
-        past_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").count()
-        attempt = QuizAttempt(
-            user_id=current_user.id, 
-            quiz_id=quiz.id, 
-            total_marks=0.0, 
-            time_consumed_seconds=submission.time_consumed_seconds,
-            attempt_number=past_attempts + 1,
-            quiz_version=quiz.version,
-            status="IN_PROGRESS"
-        )
-        db.add(attempt)
-        db.flush()
+        raise HTTPException(status_code=400, detail="Attempt has not been started yet.")
     else:
-        attempt.time_consumed_seconds = submission.time_consumed_seconds
-        # Remove old question attempts for this draft to replace them cleanly
+        if attempt.created_at:
+            time_diff = (server_now - attempt.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+            server_time_consumed = int(time_diff)
+            
+            # Stop cheating: Enforce time limit on backend (with a 60s grace period for network lag)
+            if quiz.is_timed and quiz.time_limit_minutes and not submission.is_draft:
+                max_seconds = quiz.time_limit_minutes * 60 + 60
+                if time_diff > max_seconds:
+                    server_time_consumed = max_seconds # Cap at max
+        
+        attempt.time_consumed_seconds = server_time_consumed
         db.query(QuestionAttempt).filter(QuestionAttempt.quiz_attempt_id == attempt.id).delete()
         db.flush()
 

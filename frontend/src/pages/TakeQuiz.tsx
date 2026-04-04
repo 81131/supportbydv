@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { Timer as TimerIcon, CheckCircle, XCircle, Send, RefreshCcw, AlertCircle, ArrowLeft, ArrowRight, Flag, Calculator, Hash, LayoutGrid, ListOrdered, FileText, CheckSquare, Edit3 } from 'lucide-react';
 import ScientificCalculator from '../components/ScientificCalculator';
 
 const TakeQuiz: React.FC = () => {
-  const { id } = useParams();
+  const { id, questionIndex } = useParams();
   const navigate = useNavigate();
+
+  const activeQuestionIndex = questionIndex ? parseInt(questionIndex) - 1 : 0;
 
   const [quiz, setQuiz] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<number, any>>({});
@@ -16,8 +18,9 @@ const TakeQuiz: React.FC = () => {
   const [results, setResults] = useState<any>(null); 
   const [startTime, setStartTime] = useState<number | null>(null);
   const [isConsentAgreed, setIsConsentAgreed] = useState(false);
+  const answersRef = useRef(answers);
 
-  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  useEffect(() => { answersRef.current = answers; }, [answers]);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [flash, setFlash] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
@@ -31,29 +34,22 @@ const TakeQuiz: React.FC = () => {
     api.get(`/quizzes/${id}/take`)
       .then(res => {
         setQuiz(res.data);
-        if (res.data.is_timed && res.data.time_limit_minutes) {
-          const remaining = res.data.time_limit_minutes * 60 - res.data.time_consumed;
-          setTimeLeft(remaining > 0 ? remaining : 0); 
-        }
-        if (res.data.draft) {
-          const loadedAnswers: Record<number, any> = {};
-          for (const [qId, data] of Object.entries(res.data.draft)) {
-            loadedAnswers[Number(qId)] = {
-               text_answer: (data as any).parsed?.text_answer || '',
-               numeric_answer: (data as any).parsed?.numeric_answer || null,
-               selected_options: (data as any).parsed?.selected_options || [],
-               drag_drop_answer: (data as any).parsed?.drag_drop_answer || [],
-               fill_blank_answer: (data as any).parsed?.fill_blank_answer || [],
-               is_flagged: (data as any).is_flagged || false,
-               time_spent_seconds: (data as any).parsed?.time_spent_seconds || 0
-            };
-          }
-          setAnswers(loadedAnswers);
-        }
-        
-        if (!res.data.consent_text) {
+        if (res.data.attempt_created_at) {
            setIsConsentAgreed(true);
-           setStartTime(Date.now());
+           const serverStart = new Date(res.data.attempt_created_at).getTime();
+           setStartTime(serverStart);
+           if (res.data.is_timed && res.data.time_limit_minutes) {
+             const consumed = Math.floor((Date.now() - serverStart) / 1000);
+             const remaining = res.data.time_limit_minutes * 60 - consumed;
+             setTimeLeft(remaining > 0 ? remaining : 0); 
+           }
+           if (!questionIndex && res.data.questions?.length > 0) {
+             navigate(`/take-quiz/${id}/q/1`, { replace: true });
+           }
+        } else {
+           if (!res.data.consent_text) {
+             handleStartAttempt();
+           }
         }
       })
       .catch(err => {
@@ -64,15 +60,34 @@ const TakeQuiz: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!isConsentAgreed || timeLeft === null || timeLeft <= 0 || results) return;
+    if (!isConsentAgreed || !quiz || !quiz.is_timed || timeLeft === null || timeLeft <= 0 || results) return;
     const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev && prev <= 1) { clearInterval(timer); handleSubmit(); return 0; }
-        return prev ? prev - 1 : 0;
-      });
+       const consumed = Math.floor((Date.now() - (startTime || Date.now())) / 1000);
+       const remaining = (quiz.time_limit_minutes * 60) - consumed;
+       if (remaining <= 0) { clearInterval(timer); setTimeLeft(0); handleSubmit(); }
+       else { setTimeLeft(remaining); }
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, results, isConsentAgreed]);
+  }, [quiz, isConsentAgreed, results, startTime, timeLeft]);
+
+  useEffect(() => {
+    if (!isConsentAgreed || results) return;
+    const autoSaveTimer = setInterval(() => {
+       saveDraft(true); // silent true
+    }, 10 * 60 * 1000);
+    return () => clearInterval(autoSaveTimer);
+  }, [isConsentAgreed, results, startTime]);
+  
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isConsentAgreed && !results && !isSubmitting) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isConsentAgreed, results, isSubmitting]);
 
   useEffect(() => {
     if (isConsentAgreed && !results && quiz && quiz.questions.length > 0) {
@@ -87,25 +102,42 @@ const TakeQuiz: React.FC = () => {
     }
   }, [isConsentAgreed, results, quiz, activeQuestionIndex]);
 
-  const saveDraft = async () => {
+  const handleStartAttempt = async () => {
+    try {
+      const res = await api.post(`/quizzes/${id}/start`);
+      setIsConsentAgreed(true);
+      const serverStart = new Date(res.data.attempt_created_at).getTime();
+      setStartTime(serverStart);
+      // Wait for fetch inside start or fallback
+      navigate(`/take-quiz/${id}/q/1`, { replace: true });
+      window.location.reload(); // Refresh to catch all questions properly
+    } catch(e) {
+      showFlash("Failed to bind scroll to a new attempt.", "error");
+    }
+  };
+
+  const saveDraft = async (silent=false) => {
     if (results || !quiz || !startTime) return;
     const timeConsumedSeconds = Math.floor((Date.now() - startTime) / 1000);
-    const formattedAnswers = Object.keys(answers).map(qId => ({
+    const currAnswers = answersRef.current;
+    if (Object.keys(currAnswers).length === 0) return;
+    const formattedAnswers = Object.keys(currAnswers).map(qId => ({
       question_id: parseInt(qId),
-      ...answers[parseInt(qId)]
+      ...currAnswers[parseInt(qId)]
     }));
     try {
       await api.post(`/quizzes/${id}/submit`, { answers: formattedAnswers, time_consumed_seconds: timeConsumedSeconds, is_draft: true });
+      if(!silent) showFlash("Draft saved.", "success");
     } catch(err) { console.error("Draft fail", err); }
   };
 
   const handleNext = () => {
-    saveDraft();
-    if (activeQuestionIndex < quiz.questions.length - 1) setActiveQuestionIndex(activeQuestionIndex + 1);
+    saveDraft(true);
+    if (activeQuestionIndex < quiz.questions.length - 1) navigate(`/take-quiz/${id}/q/${activeQuestionIndex + 2}`);
   };
   const handlePrev = () => {
-    saveDraft();
-    if (activeQuestionIndex > 0) setActiveQuestionIndex(activeQuestionIndex - 1);
+    saveDraft(true);
+    if (activeQuestionIndex > 0) navigate(`/take-quiz/${id}/q/${activeQuestionIndex}`);
   };
 
   const formatTime = (seconds: number) => {
@@ -145,14 +177,14 @@ const TakeQuiz: React.FC = () => {
 
     setIsSubmitting(true);
     const timeConsumedSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
-    const formattedAnswers = Object.keys(answers).map(qId => ({
-      question_id: parseInt(qId),
-      ...answers[parseInt(qId)]
-    }));
 
     try {
+      const currAnswers = answersRef.current;
       const res = await api.post(`/quizzes/${id}/submit`, { 
-        answers: formattedAnswers,
+        answers: Object.keys(currAnswers).map(qId => ({
+          question_id: parseInt(qId),
+          ...currAnswers[parseInt(qId)]
+        })),
         time_consumed_seconds: timeConsumedSeconds,
         is_draft: false
       });
@@ -198,12 +230,16 @@ const TakeQuiz: React.FC = () => {
                  {quiz.consent_text}
              </div>
              <p className="text-desc" style={{ marginBottom: '2rem' }}>Once you begin, the timer will start automatically. Ensure you are ready.</p>
-             <button className="btn-solid-gold" style={{ fontSize: '1.2rem', padding: '1rem 3rem' }} onClick={() => { setIsConsentAgreed(true); setStartTime(Date.now()); }}>
+             <button className="btn-solid-gold" style={{ fontSize: '1.2rem', padding: '1rem 3rem' }} onClick={() => handleStartAttempt()}>
                  <CheckSquare size={20} style={{ marginRight: '0.8rem' }} /> I Agree, Begin Scroll
              </button>
          </div>
       </div>
     );
+  }
+
+  if (activeQuestionIndex < 0 || activeQuestionIndex >= quiz.questions?.length) {
+    return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Question not found.</div>;
   }
 
   if (results) {
@@ -347,7 +383,7 @@ const TakeQuiz: React.FC = () => {
         {parsedResources.length > 0 && (
           <>
             {parsedResources.map((resUrl: string, idx: number) => (
-              <a key={idx} href={`http://localhost:8000/${resUrl}`} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', display: 'flex', color: 'var(--accent-gold)', marginBottom: '0.5rem' }}>
+              <a key={idx} href={`/api${resUrl.startsWith('/') ? '' : '/'}${resUrl}`} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', display: 'flex', color: 'var(--accent-gold)', marginBottom: '0.5rem' }}>
                 <FileText size={16} style={{ marginRight: '0.5rem' }} /> Resource {idx + 1}
               </a>
             ))}
@@ -377,7 +413,7 @@ const TakeQuiz: React.FC = () => {
 
             {q.image_url && (
               <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-                <img src={`http://localhost:8000${q.image_url}`} alt="Reference Context" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '4px', border: '1px solid var(--border-dark)' }} />
+                <img src={`/api${q.image_url.startsWith('/') ? '' : '/'}${q.image_url}`} alt="Reference Context" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '4px', border: '1px solid var(--border-dark)' }} />
               </div>
             )}
 
@@ -527,7 +563,7 @@ const TakeQuiz: React.FC = () => {
             const answered = isAnswered(qn.id);
             const flagged = answers[qn.id]?.is_flagged;
             return (
-              <button key={qn.id} onClick={() => { saveDraft(); setActiveQuestionIndex(i); setShowDrawer(false); }}
+              <button key={qn.id} onClick={() => { saveDraft(true); navigate(`/take-quiz/${id}/q/${i + 1}`); setShowDrawer(false); }}
                 style={{ 
                   width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', position: 'relative',
                   borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s',
@@ -560,7 +596,7 @@ const TakeQuiz: React.FC = () => {
           </div>
         </div>
 
-        <button onClick={() => saveDraft().then(() => showFlash("Draft saved to the archives!", "success"))} className="btn-ghost" style={{ width: '100%' }}>
+        <button onClick={() => saveDraft(false)} className="btn-ghost" style={{ width: '100%' }}>
           <RefreshCcw size={16} /> Save Progress
         </button>
 

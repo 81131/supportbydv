@@ -26,6 +26,7 @@ import EditModule from './pages/EditModule';
 import ThemeToggle from './components/ThemeToggle';
 import MyQuizzes from './pages/MyQuizzes';
 import PerformanceAnalytics from './pages/PerformanceAnalytics';
+import MyProfile from './pages/MyProfile';
 
 
 function App() {
@@ -219,7 +220,11 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <span className="text-desc" style={{ color: 'var(--text-main)', fontWeight: 600 }}>{user.first_name}</span>
+                  <span className="text-desc" style={{ color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer' }}>
+                    <Link to="/profile" style={{ color: 'var(--text-main)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setIsMenuOpen(false)}>
+                      {user.first_name}
+                    </Link>
+                  </span>
                   <button onClick={handleLogout} className="btn-logout">Logout</button>
                 </div>
               ) : (
@@ -242,11 +247,13 @@ function App() {
             <Route path="/quiz-maker" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
             <Route path="/edit-quiz/:id" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
             <Route path="/take-quiz/:id" element={<ProtectedRoute user={user}><TakeQuiz /></ProtectedRoute>} />
+            <Route path="/take-quiz/:id/q/:questionIndex" element={<ProtectedRoute user={user}><TakeQuiz /></ProtectedRoute>} />
             <Route path="/leaderboard" element={<ProtectedRoute user={user}><Leaderboard /></ProtectedRoute>} />
             <Route path="/upload-note" element={<ProtectedRoute user={user}><NoteUploader /></ProtectedRoute>} />
             <Route path="/my-vault" element={<ProtectedRoute user={user}><MyVault /></ProtectedRoute>} />
             <Route path="/my-quizzes" element={<ProtectedRoute user={user}><MyQuizzes /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute user={user}><PerformanceAnalytics /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute user={user}><MyProfile /></ProtectedRoute>} />
             <Route path="/about" element={<About />} />
             <Route path="/admin-dashboard" element={<PrivilegedRoute user={user}><AdminDashboard /></PrivilegedRoute>} />
             <Route path="/create-module" element={<PrivilegedRoute user={user}><CreateModule /></PrivilegedRoute>} />

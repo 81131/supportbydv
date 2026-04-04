@@ -10,7 +10,7 @@ from models.quiz import Quiz
 
 router = APIRouter(prefix="/leaderboard", tags=["Leaderboard"])
 
-@router.get("/")
+@router.get("")
 def get_global_leaderboard(db: Session = Depends(get_db)):
     # Total points from all attempts
     points_subquery = db.query(

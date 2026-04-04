@@ -1,12 +1,15 @@
 import axios from 'axios';
-import Cookies from 'js-cookie'; // Optional: install with 'npm install js-cookie'
+import Cookies from 'js-cookie';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// Relative path — works on localhost and any LAN peer without touching env vars.
+// Nginx proxies /api/* → backend:8000/*, stripping the /api prefix.
+export const API_BASE_URL = '/api'; // used for static file paths: /api/static/...
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true, // Required for cookies to be sent
+  baseURL: '/api',
+  withCredentials: true,
 });
+
 
 // Automatically attach CSRF token to state-changing requests
 api.interceptors.request.use((config) => {
