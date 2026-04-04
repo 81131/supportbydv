@@ -12,6 +12,8 @@ class QuestionType(enum.Enum):
     NUMBER = "NUMBER"
     SHORT_TEXT = "SHORT_TEXT"
     ESSAY = "ESSAY"
+    DRAG_DROP = "DRAG_DROP"
+    FILL_BLANK = "FILL_BLANK"
 
 class Module(Base):
     __tablename__ = "modules"
@@ -40,15 +42,20 @@ class Quiz(Base):
     is_timed = Column(Boolean, default=False)
     time_limit_minutes = Column(Integer, nullable=True)
     is_deleted = Column(Boolean, default=False)
+    is_published = Column(Boolean, default=False) # Phase 9: Save draft
     
-    # NEW: The Award Flag
+    # Award Flags
     is_recommended = Column(Boolean, default=False)
-    is_pinned = Column(Boolean, default=False) # 👈 Add this line!
-    version = Column(Integer, default=1) # 👈 Added for tracking history cleanly
+    is_pinned = Column(Boolean, default=False)
+    version = Column(Integer, default=1)
+    
+    # NEW: Consent screen & tool permissions
+    consent_text = Column(String, nullable=True)  # Optional instruction/consent text shown before quiz
+    allowed_tools = Column(String, nullable=True)  # JSON list: e.g., '["calculator", "sci_calculator"]'
+    allowed_resources = Column(String, nullable=True)  # JSON list of resource URLs
+    
     module = relationship("Module", back_populates="quizzes")
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
-    
-    # Ensure this is here so we can easily fetch the creator's role
     creator = relationship("User", back_populates="quizzes", foreign_keys=[created_user_id])
 
 class Question(Base):

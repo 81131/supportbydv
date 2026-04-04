@@ -1,6 +1,6 @@
 // src/types/quiz.ts
 
-export type QuestionType = 'MCQ' | 'CHECKBOX' | 'NUMBER' | 'SHORT_TEXT' | 'ESSAY';
+export type QuestionType = 'MCQ' | 'CHECKBOX' | 'NUMBER' | 'SHORT_TEXT' | 'ESSAY' | 'DRAG_DROP' | 'FILL_BLANK';
 
 export interface Module {
   id?: number;

@@ -5,6 +5,8 @@ import ossaBg from '../assets/OSSA-bg.webp';
 import wmtBg from '../assets/WMT-bg.webp';
 import psBg from '../assets/PS-bg.webp';
 
+import { API_BASE_URL } from '../api';
+
 const Semester: React.FC = () => {
   const { semesterKey } = useParams<{ semesterKey: string }>();
   const [modules, setModules] = useState<any[]>([]);
@@ -14,7 +16,6 @@ const Semester: React.FC = () => {
     const fetchModules = async () => {
       try {
         const res = await api.get('/modules');
-        // Parse key like "Y1S1" to year=1, semester=1
         const match = semesterKey?.match(/Y(\d)S(\d)/);
         if (match) {
           const year = parseInt(match[1]);
@@ -58,7 +59,7 @@ const Semester: React.FC = () => {
             <Link key={mod.id} to={`/module/${mod.id}`} style={{ textDecoration: 'none' }}>
               <div
                 className="module-card"
-                style={moduleBgMap[mod.code] ? { backgroundImage: `url(${moduleBgMap[mod.code]})` } : {}}
+                style={mod.image_url ? { backgroundImage: `url(${API_BASE_URL}${mod.image_url})` } : (moduleBgMap[mod.code] ? { backgroundImage: `url(${moduleBgMap[mod.code]})` } : {})}
               >
                 <h2 className="brand-font">{mod.code}</h2>
                 <p>{mod.name}</p>

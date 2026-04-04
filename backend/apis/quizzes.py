@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import shutil
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from database import get_db
 from models.quiz import Quiz, Question, AnswerOption, QuestionType
@@ -13,6 +15,32 @@ from sqlalchemy import func
 
 router = APIRouter(prefix="/quizzes", tags=["Quizzes"])
 
+QUIZ_RESOURCE_DIR = "uploads/quiz_resources"
+os.makedirs(QUIZ_RESOURCE_DIR, exist_ok=True)
+
+@router.post("/resources/upload")
+async def upload_quiz_resource(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Uploads a resource file for a quiz. Returns the safe file path."""
+    file_extension = file.filename.split(".")[-1].lower() if "." in file.filename else ""
+    
+    # 10MB limit
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Resource size exceeds 10MB limit.")
+        
+    safe_filename = f"user_{current_user.id}_{file.filename}"
+    file_path = os.path.join(QUIZ_RESOURCE_DIR, safe_filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"message": "Resource uploaded successfully.", "file_url": file_path}
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     new_quiz = Quiz(
@@ -22,7 +50,11 @@ def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user
         created_user_id=current_user.id, 
         is_timed=quiz_in.is_timed, 
         time_limit_minutes=quiz_in.time_limit_minutes,
-        is_recommended=False # Defaults to False. Only No One can change this later.
+        consent_text=quiz_in.consent_text,
+        allowed_tools=quiz_in.allowed_tools,
+        allowed_resources=quiz_in.allowed_resources,
+        is_published=quiz_in.is_published,
+        is_recommended=False
     )
     db.add(new_quiz)
     db.flush() 
@@ -57,13 +89,69 @@ def get_my_quizzes(db: Session = Depends(get_db), current_user: User = Depends(g
         result.append({
             "id": q.id, "title": q.title, "description": q.description,
             "question_count": q_count, "attempt_count": a_count,
+            "is_published": q.is_published,
             "created_at": q.created_at
         })
     return result
 
+@router.get("/analytics/me")
+def get_my_analytics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Fetch comprehensive performance matrices comparing student vs peers."""
+    my_attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").all()
+    
+    analytics = []
+    
+    for attempt in my_attempts:
+        quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
+        if not quiz: continue
+        
+        # 1. Fetch ALL completed attempts for THIS quiz to calculate peer averages
+        all_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz.id, QuizAttempt.status == "COMPLETED").all()
+        
+        total_peer_score = sum(a.total_marks for a in all_attempts)
+        total_peer_time = sum(a.time_consumed_seconds for a in all_attempts)
+        peer_count = len(all_attempts)
+        
+        avg_peer_score = round(total_peer_score / peer_count, 2) if peer_count > 0 else 0
+        avg_peer_time = round(total_peer_time / peer_count, 2) if peer_count > 0 else 0
+        
+        # 2. Per-question time average for THIS specific attempt vs peers
+        questions_stats = []
+        for qa in attempt.question_attempts:
+            # Find peer attempts for this specific question
+            peer_q_attempts = db.query(QuestionAttempt).join(QuizAttempt).filter(
+                QuestionAttempt.question_id == qa.question_id,
+                QuizAttempt.status == "COMPLETED"
+            ).all()
+            
+            p_q_time = sum(pqa.time_spent_seconds for pqa in peer_q_attempts)
+            p_q_count = len(peer_q_attempts)
+            avg_p_q_time = round(p_q_time / p_q_count, 1) if p_q_count > 0 else 0
+            
+            questions_stats.append({
+                "question_id": qa.question_id,
+                "marks_awarded": qa.marks_awarded,
+                "time_spent_seconds": qa.time_spent_seconds,
+                "peer_avg_time_seconds": avg_p_q_time
+            })
+            
+        analytics.append({
+            "attempt_id": attempt.id,
+            "quiz_id": quiz.id,
+            "quiz_title": quiz.title,
+            "my_score": attempt.total_marks,
+            "my_time_seconds": attempt.time_consumed_seconds,
+            "peer_avg_score": avg_peer_score,
+            "peer_avg_time_seconds": avg_peer_time,
+            "attempt_date": attempt.created_at,
+            "detailed_questions": questions_stats
+        })
+        
+    return {"analytics": analytics}
+
 @router.get("/module/{module_id}")
 def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
-    quizzes = db.query(Quiz).filter(Quiz.module_id == module_id, Quiz.is_deleted == False).offset(offset).limit(limit).all()
+    quizzes = db.query(Quiz).filter(Quiz.module_id == module_id, Quiz.is_deleted == False, Quiz.is_published == True).offset(offset).limit(limit).all()
     
     result = []
     for q in quizzes:
@@ -89,7 +177,8 @@ def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db:
             "is_recommended": q.is_recommended,
             "is_pinned": q.is_pinned,
             "is_timed": q.is_timed,
-            "time_limit_minutes": q.time_limit_minutes
+            "time_limit_minutes": q.time_limit_minutes,
+            "is_published": q.is_published
         })
         
     return result
@@ -124,7 +213,11 @@ def get_single_quiz(quiz_id: int, db: Session = Depends(get_db)):
         "creator_role": creator_role,
         "is_recommended": quiz.is_recommended,
         "is_timed": quiz.is_timed, 
-        "time_limit_minutes": quiz.time_limit_minutes, 
+        "time_limit_minutes": quiz.time_limit_minutes,
+        "consent_text": quiz.consent_text,
+        "allowed_tools": quiz.allowed_tools,
+        "allowed_resources": quiz.allowed_resources,
+        "is_published": quiz.is_published,
         "questions": questions_list
     }
 
@@ -143,6 +236,10 @@ def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: Session = Depends(get_db)
     quiz.module_id = quiz_in.module_id
     quiz.is_timed = quiz_in.is_timed
     quiz.time_limit_minutes = quiz_in.time_limit_minutes
+    quiz.consent_text = quiz_in.consent_text
+    quiz.allowed_tools = quiz_in.allowed_tools
+    quiz.allowed_resources = quiz_in.allowed_resources
+    quiz.is_published = quiz_in.is_published
     quiz.version = quiz.version + 1  
     
     # 2. Add new versions of these questions (Protecting history)
@@ -208,6 +305,31 @@ def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), curren
             "marks": q.marks, "image_url": q.image_url, "options": options_list
         })
 
+    # Fetch Draft Attempt
+    attempt = db.query(QuizAttempt).filter(
+        QuizAttempt.quiz_id == quiz_id, 
+        QuizAttempt.user_id == current_user.id,
+        QuizAttempt.status == "IN_PROGRESS"
+    ).first()
+    
+    draft_answers = {}
+    time_consumed = 0
+    if attempt:
+        time_consumed = attempt.time_consumed_seconds
+        for qa in attempt.question_attempts:
+            # Simple parse mechanism for UI
+            import json
+            try:
+                parsed = json.loads(qa.user_answer) if qa.user_answer else {}
+            except:
+                parsed = {"text": qa.user_answer}
+                
+            draft_answers[qa.question_id] = {
+                "user_answer": qa.user_answer,
+                "is_flagged": qa.is_flagged,
+                "parsed": parsed
+            }
+
     return {
         "id": quiz.id, 
         "title": quiz.title, 
@@ -215,8 +337,12 @@ def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), curren
         "creator_role": creator_role,
         "is_recommended": quiz.is_recommended,
         "is_timed": quiz.is_timed, 
-        "time_limit_minutes": quiz.time_limit_minutes, 
-        "questions": safe_questions
+        "time_limit_minutes": quiz.time_limit_minutes,
+        "consent_text": quiz.consent_text,
+        "allowed_tools": quiz.allowed_tools,
+        "questions": safe_questions,
+        "draft": draft_answers,
+        "time_consumed": time_consumed
     }
 
 @router.post("/{quiz_id}/submit")
@@ -232,26 +358,36 @@ def submit_and_grade_quiz(
 
     student_answers = {ans.question_id: ans for ans in submission.answers}
     
+    # Check for existing IN_PROGRESS attempt
+    attempt = db.query(QuizAttempt).filter(
+        QuizAttempt.quiz_id == quiz_id, 
+        QuizAttempt.user_id == current_user.id,
+        QuizAttempt.status == "IN_PROGRESS"
+    ).first()
+
+    if not attempt:
+        past_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").count()
+        attempt = QuizAttempt(
+            user_id=current_user.id, 
+            quiz_id=quiz.id, 
+            total_marks=0.0, 
+            time_consumed_seconds=submission.time_consumed_seconds,
+            attempt_number=past_attempts + 1,
+            quiz_version=quiz.version,
+            status="IN_PROGRESS"
+        )
+        db.add(attempt)
+        db.flush()
+    else:
+        attempt.time_consumed_seconds = submission.time_consumed_seconds
+        # Remove old question attempts for this draft to replace them cleanly
+        db.query(QuestionAttempt).filter(QuestionAttempt.quiz_attempt_id == attempt.id).delete()
+        db.flush()
+
     total_score = 0.0
-    # We grade against the version of the quiz that exists RIGHT NOW 
-    # (unless we want to support taking old versions, but usually we take the latest)
     current_questions = db.query(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version).all()
     max_score = sum([q.marks for q in current_questions])
     review_details = []
-
-    past_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id).count()
-    current_attempt_number = past_attempts + 1
-
-    attempt = QuizAttempt(
-        user_id=current_user.id, 
-        quiz_id=quiz.id, 
-        total_marks=0.0, 
-        time_consumed_seconds=submission.time_consumed_seconds,
-        attempt_number=current_attempt_number,
-        quiz_version=quiz.version
-    )
-    db.add(attempt)
-    db.flush()
 
     for q in current_questions:
         q_type = q.type.value if hasattr(q.type, 'value') else q.type
@@ -263,8 +399,12 @@ def submit_and_grade_quiz(
         correct_answer_display = ""
         user_answer_db_string = ""
         needs_manual_review = False
+        is_flagged = False
 
         if ans_data:
+            is_flagged = ans_data.is_flagged
+            
+            import json
             if q_type == "MCQ":
                 correct_opt_ids = [opt.id for opt in q.options if opt.is_correct]
                 correct_texts = [opt.text for opt in q.options if opt.is_correct]
@@ -272,7 +412,7 @@ def submit_and_grade_quiz(
                 
                 selected_opts = [opt.text for opt in q.options if opt.id in ans_data.selected_options]
                 user_answer_display = ", ".join(selected_opts) if selected_opts else "None selected"
-                user_answer_db_string = user_answer_display
+                user_answer_db_string = json.dumps({"selected_options": ans_data.selected_options})
 
                 if set(ans_data.selected_options) == set(correct_opt_ids):
                     marks_awarded = q.marks
@@ -288,7 +428,7 @@ def submit_and_grade_quiz(
                 
                 selected_opts = [opt.text for opt in q.options if opt.id in ans_data.selected_options]
                 user_answer_display = ", ".join(selected_opts) if selected_opts else "None selected"
-                user_answer_db_string = user_answer_display
+                user_answer_db_string = json.dumps({"selected_options": ans_data.selected_options})
 
                 num_correct_selected = len([opt for opt in ans_data.selected_options if opt in correct_opt_ids])
                 num_wrong_selected = len([opt for opt in ans_data.selected_options if opt in wrong_opt_ids])
@@ -307,7 +447,7 @@ def submit_and_grade_quiz(
             elif q_type == "NUMBER":
                 correct_answer_display = str(q.correct_number)
                 user_answer_display = str(ans_data.numeric_answer) if ans_data.numeric_answer is not None else "None"
-                user_answer_db_string = user_answer_display
+                user_answer_db_string = json.dumps({"numeric_answer": ans_data.numeric_answer})
                 
                 if ans_data.numeric_answer == q.correct_number:
                     marks_awarded = q.marks
@@ -316,27 +456,52 @@ def submit_and_grade_quiz(
             elif q_type == "SHORT_TEXT":
                 correct_answer_display = q.correct_text
                 user_answer_display = ans_data.text_answer or "None"
-                user_answer_db_string = user_answer_display
+                user_answer_db_string = json.dumps({"text_answer": ans_data.text_answer})
                 
                 if user_answer_display.lower().strip() == correct_answer_display.lower().strip():
                     marks_awarded = q.marks
                     is_correct = True
 
+            elif q_type == "FILL_BLANK":
+                # Correct words stored in options with is_correct=True, in order
+                correct_words = [opt.text for opt in q.options if opt.is_correct]
+                correct_answer_display = " / ".join(correct_words)
+                user_words = ans_data.fill_blank_answer or []
+                user_answer_display = " / ".join(user_words) if user_words else "None"
+                user_answer_db_string = json.dumps({"fill_blank_answer": user_words})
+                
+                if len(user_words) == len(correct_words) and correct_words:
+                    if all(u.lower().strip() == c.lower().strip() for u, c in zip(user_words, correct_words)):
+                        marks_awarded = q.marks
+                        is_correct = True
+
             elif q_type == "ESSAY":
                 correct_answer_display = "Manual review required. Rubric: " + (q.correct_text or "")
                 user_answer_display = ans_data.text_answer or "None"
-                user_answer_db_string = user_answer_display
+                user_answer_db_string = json.dumps({"text_answer": ans_data.text_answer})
                 marks_awarded = 0.0 
                 needs_manual_review = True
+                
+            elif q_type == "DRAG_DROP":
+                correct_order = [opt.text for opt in q.options if opt.is_correct]
+                correct_answer_display = " -> ".join(correct_order)
+                user_answer_display = " -> ".join(ans_data.drag_drop_answer) if ans_data.drag_drop_answer else "None sorted"
+                user_answer_db_string = json.dumps({"drag_drop_answer": ans_data.drag_drop_answer or []})
+                
+                if ans_data.drag_drop_answer == correct_order:
+                    marks_awarded = q.marks
+                    is_correct = True
 
         total_score += marks_awarded
 
         q_attempt = QuestionAttempt(
             quiz_attempt_id=attempt.id, 
             question_id=q.id, 
-            marks_awarded=marks_awarded,
+            marks_awarded=marks_awarded if not submission.is_draft else 0.0,
             user_answer=user_answer_db_string,
-            needs_manual_review=needs_manual_review
+            needs_manual_review=needs_manual_review if not submission.is_draft else False,
+            is_flagged=is_flagged,
+            time_spent_seconds=getattr(ans_data, 'time_spent_seconds', 0) if ans_data else 0
         )
         db.add(q_attempt)
 
@@ -346,14 +511,31 @@ def submit_and_grade_quiz(
             "correct_answer": correct_answer_display
         })
 
+    if submission.is_draft:
+        db.commit()
+        return {"message": "Draft saved."}
+
     attempt.total_marks = total_score
+    attempt.status = "COMPLETED"
+    
+    # Send essay review notification to quiz creator if any essay questions exist
+    has_essays = any(rev["type"] == "ESSAY" for rev in review_details)
+    if has_essays:
+        creator = db.query(User).filter(User.id == quiz.created_user_id).first()
+        if creator and creator.id != current_user.id:
+            essay_notification = Notification(
+                user_id=quiz.created_user_id,
+                message=f"A student submitted an essay in '{quiz.title}' — review required."
+            )
+            db.add(essay_notification)
+    
     db.commit()
 
     return {
         "message": "Trial complete.",
         "score": total_score,
         "max_score": max_score,
-        "attempt_number": current_attempt_number,
+        "attempt_number": attempt.attempt_number,
         "review": review_details
     }
 

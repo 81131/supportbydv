@@ -1,208 +1,134 @@
 import React, { useEffect, useState } from 'react';
-import { Library, Lock, Globe, Heart, FileText, Download, ArrowLeft, Filter, Swords, Edit3, ClipboardCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Library, DownloadCloud, Trash2, Lock, Globe, FolderHeart } from 'lucide-react';
 import api from '../api';
 
 const MyVault: React.FC = () => {
   const [collections, setCollections] = useState<any[]>([]);
-  const [quizzes, setQuizzes] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'library' | 'trials'>('library');
   const [isLoading, setIsLoading] = useState(true);
-  const [activeCollection, setActiveCollection] = useState<any | null>(null);
-  const [collectionNotes, setCollectionNotes] = useState<any[]>([]);
-  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
-  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
+  const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   const navigate = useNavigate();
 
-  useEffect(() => { 
-    const fetchData = async () => {
-        setIsLoading(true);
-        await Promise.all([fetchMyCollections(), fetchMyQuizzes()]);
-        setIsLoading(false);
-    };
-    fetchData();
+  const showFlash = (message: string, type: 'success' | 'error' = 'success') => {
+    setFlashMessage({ message, type });
+    setTimeout(() => setFlashMessage(null), 3000);
+  };
+
+  useEffect(() => {
+    fetchMyCollections();
   }, []);
 
   const fetchMyCollections = async () => {
     try {
-      const res = await api.get('/library/collections/me');
+      const res = await api.get(`/library/collections/me`);
       setCollections(res.data);
-    } catch (error) { console.error(error); } 
+    } catch (error) { showFlash("Failed to open your vault.", 'error'); } 
+    finally { setIsLoading(false); }
   };
 
-  const fetchMyQuizzes = async () => {
+  const handleZipDownload = async (collectionId: string | number, title: string) => {
     try {
-      const res = await api.get('/quizzes/me');
-      setQuizzes(res.data);
-    } catch (error) { console.error(error); }
-  };
-
-  const openCollection = async (col: any) => {
-    setActiveCollection(col);
-    setIsLoadingNotes(true);
-    try {
-      let res;
-      if (col.id === 'favorites') res = await api.get('/library/notes/favorites/me');
-      else res = await api.get(`/library/collections/${col.id}/notes`);
-      setCollectionNotes(res.data);
-    } catch (error) { console.error(error); } 
-    finally { setIsLoadingNotes(false); }
-  };
-
-  const handleDownload = async (noteId: number, title: string, ext: string) => {
-    try {
-      const res = await api.get(`/library/notes/download/${noteId}`, { responseType: 'blob' });
+      const res = await api.get(`/library/collections/${collectionId}/zip`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
-      link.href = url; link.setAttribute('download', `${title}.${ext}`);
-      document.body.appendChild(link); link.click(); link.remove();
-    } catch (error) { alert("This scroll is sealed or lost to time."); }
+      link.href = url;
+      link.setAttribute('download', `${title.replace(/\s+/g, '_')}_Archive.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) { showFlash("Failed to compile the archive.", 'error'); }
   };
 
-  const processedCollections = collections.filter(col => {
-    if (visibilityFilter === 'public' && col.visibility !== 'public' && !col.is_special) return false;
-    if (visibilityFilter === 'private' && col.visibility !== 'private') return false;
-    return true;
-  });
+  const handleVisibilityChange = async (collectionId: number, newVis: string) => {
+    try {
+      await api.put(`/library/collections/${collectionId}/visibility`, { visibility: newVis });
+      setCollections(collections.map(c => c.id === collectionId ? { ...c, visibility: newVis } : c));
+      showFlash("Archives visibility updated.");
+    } catch (error) { showFlash("Failed to update visibility.", 'error'); }
+  };
+
+  const handleDelete = async (collectionId: number) => {
+    if (window.confirm("Are you sure you want to burn this archive? All contained records will be unlinked (but not destroyed).")) {
+      try {
+        await api.delete(`/library/collections/${collectionId}`);
+        setCollections(collections.filter(c => c.id !== collectionId));
+        showFlash("Archive burned.");
+      } catch (error) { showFlash("You do not have permission.", 'error'); }
+    }
+  };
 
   return (
-    <div className="page-container">
-        
-        <div style={{ borderBottom: '1px solid var(--border-dark)', paddingBottom: '1rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 className="brand-font" style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '2.5rem' }}>My Vault</h1>
-            <p className="text-desc" style={{ marginTop: '0.5rem' }}>Manage your personal archives and forged trials.</p>
-          </div>
-          {activeCollection && (
-            <button onClick={() => setActiveCollection(null)} className="btn-ghost">
-              <ArrowLeft size={18} /> Back to Vault
-            </button>
-          )}
+    <div className="page-container" style={{ position: 'relative' }}>
+      
+      {flashMessage && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+          background: flashMessage.type === 'success' ? '#2e7d32' : '#c62828', color: '#fff',
+          padding: '1rem 2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+          fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem',
+          animation: 'fadeInOut 3s ease-in-out'
+        }}>
+          {flashMessage.message}
         </div>
+      )}
 
-        {!activeCollection && (
-          <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-dark)', marginBottom: '2rem' }}>
-            <button 
-              onClick={() => setActiveTab('library')}
-              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'library' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'library' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
-            >
-              <Library size={20} /> Scrolls Library
-            </button>
-            <button 
-              onClick={() => setActiveTab('trials')}
-              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'trials' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'trials' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
-            >
-              <Swords size={20} /> Forged Trials
-            </button>
-          </div>
-        )}
+      <div style={{ textAlign: 'center', padding: '4rem 1rem', marginBottom: '2rem', borderBottom: '1px solid var(--border-dark)' }}>
+        <h1 className="brand-font" style={{ color: 'var(--accent-gold)', fontSize: '3rem', margin: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem' }}>
+          <FolderHeart size={48} /> My Vault
+        </h1>
+        <p className="text-desc" style={{ marginTop: '1rem', fontSize: '1.2rem' }}>
+          Your personal archives and collected scrolls.
+        </p>
+      </div>
 
-        {isLoading ? (
-          <p style={{ color: 'var(--accent-gold)' }}>Unlocking the vaults...</p>
-        ) : activeTab === 'library' ? (
-          /* --- LIBRARY VIEW --- */
-          !activeCollection ? (
-            <>
-              <div className="control-bar">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)', marginRight: '1rem' }}>
-                  <Filter size={20} /> <strong>Filter Vault</strong>
+      {isLoading ? (
+        <p style={{ color: 'var(--accent-gold)', textAlign: 'center' }}>Unlocking your vault...</p>
+      ) : collections.length === 0 ? (
+        <div className="module-section" style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
+          <Library size={64} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
+          <p className="text-desc" style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Your vault is empty.</p>
+          <button onClick={() => navigate('/upload-note')} className="btn-solid-gold">
+            Forge New Archives
+          </button>
+        </div>
+      ) : (
+        <div className="grid-view">
+          {collections.map((col) => (
+            <div key={col.id} className="item-card column">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Library size={24} color="var(--accent-gold)" />
+                  <h3 className="text-title" style={{ margin: 0, fontSize: '1.4rem' }}>{col.title}</h3>
                 </div>
-                <select value={visibilityFilter} onChange={(e) => setVisibilityFilter(e.target.value as any)} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0 }}>
-                  <option value="all">All Archives</option>
-                  <option value="private">Private Only</option>
-                  <option value="public">Public Only</option>
+                <button onClick={() => handleDelete(col.id)} className="btn-ghost-danger" title="Burn Archive">
+                    <Trash2 size={18} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                {col.visibility === 'private' ? <Lock size={16} color="var(--accent-red)" /> : <Globe size={16} color="var(--accent-blue, #42a5f5)" />}
+                <select 
+                  value={col.visibility} 
+                  onChange={(e) => handleVisibilityChange(col.id, e.target.value)}
+                  style={{ background: 'transparent', color: 'var(--text-main)', border: 'none', outline: 'none', fontSize: '1rem', cursor: 'pointer', flex: 1 }}
+                >
+                  <option value="private">Private Archive</option>
+                  <option value="public">Public Archive</option>
                 </select>
               </div>
 
-              <div className="grid-view">
-                {processedCollections.map(col => (
-                  <div key={col.id} onClick={() => openCollection(col)} className={`item-card column ${col.is_special ? 'special' : ''}`} style={{ cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                      {col.is_special ? <Heart size={28} color="var(--accent-red)" fill="var(--accent-red)" /> : <Library size={28} color="var(--accent-gold)" />}
-                      <h3 className="text-title" style={{ fontSize: '1.3rem' }}>{col.title}</h3>
-                    </div>
-                    <p className="text-desc" style={{ flex: 1 }}>{col.description}</p>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--border-dark)', paddingTop: '1rem' }}>
-                      <span className="text-desc">{col.note_count} Scrolls</span>
-                      {col.visibility === 'private' ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: '#ffb74d' }}><Lock size={14} /> Private</span>
-                      ) : (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: '#4fc3f7' }}><Globe size={14} /> Public</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-                {activeCollection.is_special ? <Heart size={32} color="var(--accent-red)" fill="var(--accent-red)" /> : <Library size={32} color="var(--accent-gold)" />}
-                <h2 className="text-title" style={{ fontSize: '1.8rem' }}>{activeCollection.title}</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-dark)', paddingTop: '1rem', marginTop: 'auto' }}>
+                <span className="text-stat" style={{ fontSize: '1.1rem' }}>{col.note_count} Scrolls</span>
+                <button onClick={() => handleZipDownload(col.id, col.title)} className="btn-ghost-gold" disabled={col.note_count === 0} style={{ opacity: col.note_count === 0 ? 0.5 : 1 }}>
+                  <DownloadCloud size={18} /> Get ZIP
+                </button>
               </div>
 
-              {isLoadingNotes ? (
-                <p style={{ color: 'var(--accent-gold)' }}>Retrieving scrolls...</p>
-              ) : collectionNotes.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
-                  <FileText size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
-                  <p className="text-desc">This archive is currently empty.</p>
-                </div>
-              ) : (
-                <div className="list-view">
-                  {collectionNotes.map(note => (
-                    <div key={note.id} className="item-card row">
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
-                          <FileText size={20} color="var(--accent-gold)" />
-                          <h4 className="text-title">{note.title}</h4>
-                        </div>
-                        <p className="text-desc">{note.description || "No description provided."}</p>
-                      </div>
-                      <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold">
-                        <Download size={18} /> Download
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-          )
-        ) : (
-          /* --- TRIALS VIEW --- */
-          <div className="list-view">
-            {quizzes.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--border-dark)', borderRadius: '8px' }}>
-                <Swords size={48} color="var(--border-dark)" style={{ marginBottom: '1rem' }} />
-                <p className="text-desc">You have not forged any trials yet.</p>
-              </div>
-            ) : (
-              quizzes.map(quiz => (
-                <div key={quiz.id} className="item-card row">
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
-                      <Swords size={20} color="var(--accent-gold)" />
-                      <h4 className="text-title">{quiz.title}</h4>
-                    </div>
-                    <p className="text-desc">{quiz.description}</p>
-                    <div className="text-desc" style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-gold)' }}>
-                      {quiz.question_count} Questions • {quiz.attempt_count} Attempts
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button onClick={() => navigate(`/edit-quiz/${quiz.id}`)} className="btn-ghost">
-                      <Edit3 size={18} /> Edit
-                    </button>
-                    <button onClick={() => navigate(`/review-essays/${quiz.id}`)} className="btn-solid-gold">
-                      <ClipboardCheck size={18} /> Review Essays
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+          ))}
+        </div>
+      )}
     </div>
   );
 };

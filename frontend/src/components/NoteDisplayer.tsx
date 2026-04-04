@@ -20,6 +20,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const [selectedNotes, setSelectedNotes] = useState<number[]>([]);
 
   const [activeNoteForCollection, setActiveNoteForCollection] = useState<number | null>(null);
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [myCollections, setMyCollections] = useState<any[]>([]);
   const [newColTitle, setNewColTitle] = useState('');
   const [newColVis, setNewColVis] = useState('private');
@@ -30,7 +31,20 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
+  const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [allModules, setAllModules] = useState<any[]>([]);
+
+  const showFlash = (message: string, type: 'success' | 'error' = 'success') => {
+    setFlashMessage({ message, type });
+    setTimeout(() => setFlashMessage(null), 3000);
+  };
+
   useEffect(() => { fetchNotes(); }, [moduleId]);
+
+  useEffect(() => {
+    // Fetch all modules for the collection module dropdown
+    api.get('/modules').then(res => setAllModules(res.data)).catch(console.error);
+  }, []);
 
   const fetchNotes = async () => {
     try {
@@ -55,6 +69,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   const openCollectionModal = async (noteId: number | null = null) => {
     setActiveNoteForCollection(noteId);
+    setIsCollectionModalOpen(true);
     try {
       const res = await api.get('/library/collections/me');
       setMyCollections(res.data);
@@ -67,10 +82,11 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       await Promise.all(notesToSave.map(id => 
         api.post(`/library/collections/${collectionId}/notes/${id}`)
       ));
-      alert(`Successfully added ${notesToSave.length} scroll(s) to the archive!`);
+      showFlash(`Successfully added ${notesToSave.length} scroll(s) to the archive!`);
       setActiveNoteForCollection(null); 
       setSelectedNotes([]); 
-    } catch (err) { alert("Failed to add some scrolls."); }
+      setIsCollectionModalOpen(false);
+    } catch (err) { showFlash("Failed to add some scrolls.", 'error'); }
   };
 
   const handleCreateCollection = async () => {
@@ -86,7 +102,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       await handleAddToCollection(res.data.id);
       setNewColTitle('');
       setIsCreatingCol(false);
-    } catch (err) { alert("Failed to forge archive."); }
+    } catch (err) { showFlash("Failed to forge archive.", 'error'); }
   };
 
   const handlePinToggle = async (noteId: number, currentStatus: boolean) => {
@@ -100,7 +116,8 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     try {
       await api.put(`/library/notes/${noteId}/governance`, { is_recommended: !currentStatus });
       setNotes(notes.map(n => n.id === noteId ? { ...n, is_recommended: !currentStatus } : n));
-    } catch (error) { alert("Only No One can bestow this honor."); }
+      showFlash(!currentStatus ? "Scroll recommended!" : "Recommendation removed.");
+    } catch (error) { showFlash("Only No One can bestow this honor.", 'error'); }
   };
 
   const handleDownload = async (noteId: number, title: string, ext: string) => {
@@ -113,15 +130,16 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (error) { alert("This scroll is sealed or lost to time."); }
+    } catch (error) { showFlash("This scroll is sealed or lost to time.", 'error'); }
   };
 
   const handleDelete = async (noteId: number) => {
     if (window.confirm("Are you sure you want to burn this scroll?")) {
       try {
         await api.delete(`/library/notes/${noteId}`);
-        setNotes(notes.filter(n => n.id !== noteId)); 
-      } catch (error) { alert("You do not have permission."); }
+        setNotes(notes.filter(n => n.id !== noteId));
+        showFlash("Scroll burned.");
+      } catch (error) { showFlash("You do not have permission.", 'error'); }
     }
   };
 
@@ -143,6 +161,17 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   return (
     <div className="page-container" style={{ position: 'relative' }}>
       
+      {flashMessage && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+          background: flashMessage.type === 'success' ? '#2e7d32' : '#c62828', color: '#fff',
+          padding: '1rem 2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+          fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem',
+        }}>
+          {flashMessage.message}
+        </div>
+      )}
+      
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
         <div>
           {selectedNotes.length > 0 && (
@@ -152,7 +181,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
           )}
         </div>
 
-        <button onClick={() => navigate('/upload-note')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <button onClick={() => navigate(`/upload-note?moduleId=${moduleId}`)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <FileText size={20} /> Forge New Scroll
         </button>
       </div>
@@ -257,11 +286,11 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       )}
 
       {/* --- 📁 THE "SAVE TO ARCHIVE" MODAL OVERLAY --- */}
-      {(activeNoteForCollection !== null || (selectedNotes.length > 0 && activeNoteForCollection === null)) && myCollections && (
+      {isCollectionModalOpen && myCollections && (
         <div className="modal-overlay" style={{ backdropFilter: 'blur(4px)' }}>
-          <div className="modal-box">
+          <div className="modal-content">
             
-            <button onClick={() => { setActiveNoteForCollection(null); setIsCreatingCol(false); }} className="close-btn">
+            <button onClick={() => { setIsCollectionModalOpen(false); setActiveNoteForCollection(null); setIsCreatingCol(false); }} className="close-btn" style={{ top: '15px', right: '15px' }}>
               <X size={24} />
             </button>
 
@@ -311,9 +340,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                   <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Module mapping</label>
                   <select value={newColMod} onChange={e => setNewColMod(e.target.value ? Number(e.target.value) : '')} className="auth-input" style={{ width: '100%' }}>
                     <option value="">Across all modules</option>
-                    <option value={1}>OSSA</option>
-                    <option value={2}>WMT</option>
-                    <option value={3}>PS</option>
+                    {allModules.map(m => (
+                      <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>

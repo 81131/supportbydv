@@ -18,6 +18,8 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
   const [filterRecommended, setFilterRecommended] = useState(false);
   const [filterNoOne, setFilterNoOne] = useState(false);
 
+  const [expandedAnalytics, setExpandedAnalytics] = useState<Record<number, any>>({});
+
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
@@ -58,6 +60,17 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
     }
   };
 
+  const handleToggleAnalytics = async (quizId: number) => {
+    if (expandedAnalytics[quizId]) {
+      setExpandedAnalytics(prev => { const n = {...prev}; delete n[quizId]; return n; });
+    } else {
+      try {
+        const res = await api.get(`/quizzes/${quizId}/analytics`);
+        setExpandedAnalytics(prev => ({...prev, [quizId]: res.data}));
+      } catch (error) { alert("Failed to load metrics. You might lack permissions."); }
+    }
+  };
+
   const processedQuizzes = quizzes.filter(quiz => {
     const role = String(quiz.creator_role).replace('UserRole.', '');
     const isNoOne = role === 'noOne' || role === 'NO_ONE';
@@ -77,7 +90,7 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
     <div className="page-container" style={{ padding: '3rem 2rem' }}>
       
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
-        <button onClick={() => navigate('/quiz-maker')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
+        <button onClick={() => navigate(`/quiz-maker?moduleId=${moduleId}`)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
           <Plus size={20} /> Forge a {moduleShortName} Trial
         </button>
       </div>
@@ -157,13 +170,36 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
                   )}
 
                   {(currentUser?.id === quiz.created_user_id || currentUser?.role === 'admin' || currentUser?.role === 'noOne') && (
-                    <button onClick={() => handleDelete(quiz.id)} className="btn-ghost-danger"><Trash2 size={16} /> Delete</button>
+                    <>
+                      <button onClick={() => handleToggleAnalytics(quiz.id)} className="btn-ghost"><Award size={16} /> Metrics</button>
+                      <button onClick={() => handleDelete(quiz.id)} className="btn-ghost-danger"><Trash2 size={16} /> Delete</button>
+                    </>
                   )}
 
                   <Link to={`/take-quiz/${quiz.id}`} className="btn-solid-gold" style={{ textDecoration: 'none' }}>
                     Start Trial
                   </Link>
                 </div>
+
+                {expandedAnalytics[quiz.id] && (
+                  <div style={{ padding: '1rem', marginTop: '1rem', borderTop: '1px dashed var(--border-dark)', backgroundColor: 'var(--bg-deep)', borderRadius: '4px' }}>
+                     <h5 className="text-title" style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '0.5rem' }}>Performance Matrix</h5>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                        <div>
+                          <p className="text-desc">Total Attempts</p>
+                          <p className="text-main" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{expandedAnalytics[quiz.id].total_attempts}</p>
+                        </div>
+                        <div>
+                          <p className="text-desc">Pass Rate</p>
+                          <p className="text-main" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{expandedAnalytics[quiz.id].pass_rate}%</p>
+                        </div>
+                        <div>
+                          <p className="text-desc">Hardest Q. ID</p>
+                          <p className="text-main" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{expandedAnalytics[quiz.id].highest_failure_question_id || 'N/A'}</p>
+                        </div>
+                     </div>
+                  </div>
+                )}
               </div>
             );
           })}

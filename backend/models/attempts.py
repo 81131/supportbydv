@@ -17,6 +17,7 @@ class QuizAttempt(Base):
     time_consumed_seconds = Column(Integer, default=0)
     attempt_number = Column(Integer, default=1)
     quiz_version = Column(Integer, default=1)
+    status = Column(String, default="IN_PROGRESS") # COMPLETED or IN_PROGRESS
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -36,6 +37,7 @@ class QuestionAttempt(Base):
     marks_awarded = Column(Float, default=0.0)
     time_spent_seconds = Column(Integer, default=0) # 👈 Individual question time!
     needs_manual_review = Column(Boolean, default=False)
+    is_flagged = Column(Boolean, default=False) # 👈 For Moodle UI
     
     # What the user actually submitted (Store as String or JSON)
     user_answer = Column(String, nullable=True) 

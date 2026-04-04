@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Library, DownloadCloud, Pin, Award, VenetianMask, BadgeCheck, Filter, Heart, Lock, Globe, EyeOff } from 'lucide-react';
 import api from '../api';
 
-const CollectionDisplayer: React.FC = () => {
+interface CollectionDisplayerProps {
+  moduleId?: number;
+}
+
+const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) => {
   const [collections, setCollections] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -21,7 +25,8 @@ const CollectionDisplayer: React.FC = () => {
 
   const fetchCollections = async () => {
     try {
-      const res = await api.get(`/library/collections`);
+      const url = moduleId ? `/library/collections?module_id=${moduleId}` : `/library/collections`;
+      const res = await api.get(url);
       setCollections(res.data);
     } catch (error) { console.error("Failed to load archives", error); } 
     finally { setIsLoading(false); }

@@ -30,6 +30,10 @@ class QuizCreate(BaseModel):
 
     is_timed: bool = False
     time_limit_minutes: Optional[int] = None
+    consent_text: Optional[str] = None
+    allowed_tools: Optional[str] = None  # JSON array string
+    allowed_resources: Optional[str] = None # JSON array string of URLs
+    is_published: bool = False # Draft state
     
     # Nested questions list
     questions: List[QuestionCreate]
@@ -39,7 +43,12 @@ class StudentAnswer(BaseModel):
     selected_options: List[int] = [] 
     numeric_answer: Optional[float] = None
     text_answer: Optional[str] = None
+    drag_drop_answer: Optional[List[str]] = None
+    fill_blank_answer: Optional[List[str]] = None  # For FILL_BLANK questions
+    is_flagged: bool = False
+    time_spent_seconds: int = 0  # Per-question time tracking
 
 class QuizSubmission(BaseModel):
     answers: List[StudentAnswer]
     time_consumed_seconds: int = 0
+    is_draft: bool = False

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Cropper from 'react-easy-crop';
 import jsPDF from 'jspdf';
 import { Upload, RefreshCw, Save, Wand2, AlignCenter, LayoutList } from 'lucide-react';
 import api from '../api';
-import getCroppedImg from '../utils/cropImage';
+import { getCroppedImg } from '../utils/cropImage';
 
 const calculateIdealZoom = (imgWidth: number, imgHeight: number, rotation: number, cropAspect: number) => {
   let activeW = imgWidth; let activeH = imgHeight;
@@ -16,12 +16,26 @@ const calculateIdealZoom = (imgWidth: number, imgHeight: number, rotation: numbe
 
 const NoteUploader: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const prefillModuleId = searchParams.get('moduleId') ? parseInt(searchParams.get('moduleId')!) : '';
+
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [moduleId, setModuleId] = useState<number | ''>('');
+  const [moduleId, setModuleId] = useState<number | ''>(prefillModuleId as number | '');
+  const [availableModules, setAvailableModules] = useState<any[]>([]);
+  const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
+  const showFlash = (message: string, type: 'success' | 'error' = 'success') => {
+    setFlashMessage({ message, type });
+    setTimeout(() => setFlashMessage(null), 4000);
+  };
+
+  React.useEffect(() => {
+    api.get('/modules').then(res => setAvailableModules(res.data)).catch(console.error);
+  }, []);
   
   const [uploadMode, setUploadMode] = useState<'idle' | 'direct' | 'edit'>('idle');
   const [directFile, setDirectFile] = useState<File | null>(null);
@@ -40,7 +54,7 @@ const NoteUploader: React.FC = () => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
     
-    if (files.length > 20) { alert("Max 20 images at a time."); e.target.value = ''; return; }
+    if (files.length > 20) { showFlash("Max 20 images at a time.", 'error'); e.target.value = ''; return; }
 
     const isImages = files.every(f => f.type.startsWith('image/'));
 
@@ -133,7 +147,7 @@ const NoteUploader: React.FC = () => {
   };
 
   const executeUpload = async () => {
-    if (!title || !moduleId) { alert("A title and module are required."); return; }
+    if (!title || !moduleId) { showFlash("A title and module are required.", 'error'); return; }
     setIsUploading(true);
     const formData = new FormData();
     formData.append('title', title);
@@ -149,7 +163,13 @@ const NoteUploader: React.FC = () => {
         const pdfHeight = pdf.internal.pageSize.getHeight();
 
         for (let i = 0; i < images.length; i++) {
-          const croppedDataUrl = await getCroppedImg(images[i].url, croppedAreas[i], rotations[i]);
+          const croppedFile = await getCroppedImg(images[i].url, croppedAreas[i]);
+          const croppedDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(croppedFile);
+          });
+
           if (i > 0) pdf.addPage();
           
           const imgProps = pdf.getImageProperties(croppedDataUrl);
@@ -168,14 +188,35 @@ const NoteUploader: React.FC = () => {
       }
 
       await api.post('/library/notes', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-      alert("Scroll forged and added to the archives!");
-      navigate('/'); 
-    } catch (error) { alert("The Maesters rejected your upload. Try again."); } 
+      showFlash("Scroll forged and added to the archives!", 'success');
+      // Redirect back to the source module page if we came from one, otherwise go home
+      setTimeout(() => {
+        if (prefillModuleId) {
+          navigate(`/module/${prefillModuleId}/notes`);
+        } else {
+          navigate('/');
+        }
+      }, 1500); 
+    } catch (error: any) { 
+      showFlash(error.response?.data?.detail || "The Maesters rejected your upload. Try again.", 'error'); 
+    } 
     finally { setIsUploading(false); }
   };
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ position: 'relative' }}>
+      {flashMessage && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+          background: flashMessage.type === 'success' ? '#2e7d32' : '#c62828', color: '#fff',
+          padding: '1rem 2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+          fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem',
+          animation: 'fadeInOut 4s ease-in-out'
+        }}>
+          {flashMessage.message}
+        </div>
+      )}
+
       <div className="module-section">
         
         <h1 className="brand-font" style={{ color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
@@ -195,9 +236,9 @@ const NoteUploader: React.FC = () => {
             <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Select Module *</label>
             <select value={moduleId} onChange={e => setModuleId(Number(e.target.value))} className="auth-input" style={{ width: '100%' }}>
               <option value="" disabled>Choose a module...</option>
-              <option value={1}>Operating Systems (OSSA)</option>
-              <option value={2}>Web & Mobile Tech (WMT)</option>
-              <option value={3}>Professional Skills (PS)</option>
+              {availableModules.map(m => (
+                  <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
+              ))}
             </select>
           </div>
           <div>

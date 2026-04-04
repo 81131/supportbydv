@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import QuizDisplayer from '../components/QuizDisplayer';
 import NoteDisplayer from '../components/NoteDisplayer';
 import CollectionDisplayer from '../components/CollectionDisplayer';
 import { Swords, ScrollText, Library } from 'lucide-react';
-import api from '../api';
+import api, { API_BASE_URL } from '../api';
 import ossaBg from '../assets/Ned_Stark_OSSA-bg.jpg';
 import wmtBg from '../assets/dragonglass_cave-WMT-bg.avif';
 import psBg from '../assets/Tyrion_PS-bg.avif';
 
+type TabType = 'quizzes' | 'notes' | 'collections';
+
 const ModuleView: React.FC = () => {
-  const { moduleId } = useParams<{ moduleId: string }>();
+  const { moduleId, tab } = useParams<{ moduleId: string; tab?: string }>();
+  const navigate = useNavigate();
   const [module, setModule] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'quizzes' | 'notes' | 'collections'>('quizzes');
+  const [activeTab, setActiveTab] = useState<TabType>((tab as TabType) || 'quizzes');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -21,6 +24,9 @@ const ModuleView: React.FC = () => {
         const res = await api.get('/modules');
         const found = res.data.find((m: any) => m.id === parseInt(moduleId || '0'));
         setModule(found);
+        if (found) {
+          document.title = `${found.code} | Citadel`;
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -30,6 +36,18 @@ const ModuleView: React.FC = () => {
     fetchModule();
   }, [moduleId]);
 
+  // Sync tab to URL
+  useEffect(() => {
+    if (tab && (tab === 'quizzes' || tab === 'notes' || tab === 'collections')) {
+      setActiveTab(tab as TabType);
+    }
+  }, [tab]);
+
+  const handleTabChange = (newTab: TabType) => {
+    setActiveTab(newTab);
+    navigate(`/module/${moduleId}/${newTab}`, { replace: true });
+  };
+
   if (isLoading) return <div className="page-container text-title">Consulting the Grand Library...</div>;
   if (!module) return <div className="page-container text-title">Module not found in the archives.</div>;
 
@@ -38,7 +56,7 @@ const ModuleView: React.FC = () => {
     WMT: wmtBg,
     PS: psBg,
   };
-  const heroBg = moduleBgMap[module.code] || null;
+  const heroBg = module.image_url ? `${API_BASE_URL}${module.image_url}` : (moduleBgMap[module.code] || null);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-deep)' }}>
@@ -64,21 +82,21 @@ const ModuleView: React.FC = () => {
 
       <div style={{ display: 'flex', justifyContent: 'center', borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-surface)', transition: 'background-color 0.4s ease, border-color 0.4s ease' }}>
         <button 
-          onClick={() => setActiveTab('quizzes')}
+          onClick={() => handleTabChange('quizzes')}
           style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'quizzes' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'quizzes' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
         >
           <Swords size={20} /> Quizzes
         </button>
         
         <button 
-          onClick={() => setActiveTab('notes')}
+          onClick={() => handleTabChange('notes')}
           style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'notes' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'notes' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
         >
           <ScrollText size={20} /> Notes
         </button>
 
         <button 
-          onClick={() => setActiveTab('collections')}
+          onClick={() => handleTabChange('collections')}
           style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'collections' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'collections' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
         >
           <Library size={20} /> Collections
@@ -88,7 +106,7 @@ const ModuleView: React.FC = () => {
       <div style={{ flex: 1 }}>
         {activeTab === 'quizzes' && <QuizDisplayer moduleId={module.id} moduleShortName={module.code} />}
         {activeTab === 'notes' && <NoteDisplayer moduleId={module.id} />}
-        {activeTab === 'collections' && <CollectionDisplayer />}
+        {activeTab === 'collections' && <CollectionDisplayer moduleId={module.id} />}
       </div>
 
     </div>

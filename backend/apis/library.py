@@ -21,6 +21,15 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # 📜 NOTES: UPLOAD & HARD DELETE
 # ==========================================
 
+ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "odt", "txt", "png", "jpg", "jpeg", "avif"}
+MAX_FILE_SIZE = 50 * 1024 * 1024 # 50 MB
+ALLOWED_CONTENT_TYPES = {
+    "application/pdf", "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.oasis.opendocument.text",
+    "text/plain", "image/png", "image/jpeg", "image/avif", "image/webp"
+}
+
 @router.post("/notes")
 async def upload_note(
     title: str = Form(...),
@@ -32,16 +41,32 @@ async def upload_note(
 ):
     """Saves the physical file and logs it in the database."""
     
-    # 1. Generate a safe file path
-    file_extension = file.filename.split(".")[-1]
+    # 1. Validate file extension
+    file_extension = file.filename.split(".")[-1].lower() if "." in file.filename else ""
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"The Maesters do not accept this scroll format (.{file_extension}). Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+    
+    # 2. Validate MIME content type (prevents exe/bat files disguised with allowed extensions)
+    if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type '{file.content_type}' is not permitted.")
+        
+    # 3. Validate file size
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="This scroll is too heavy (Max 50MB).")
+
+        
+    # 3. Generate a safe file path
     safe_filename = f"user_{current_user.id}_mod_{module_id}_{file.filename}"
     file_path = os.path.join(UPLOAD_DIR, safe_filename)
     
-    # 2. Save the physical file to the server
+    # 4. Save the physical file to the server
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # 3. Save the record to the database
+    # 5. Save the record to the database
     new_note = Note(
         title=title,
         description=description,
@@ -155,23 +180,28 @@ def get_notes_by_module(module_id: int, db: Session = Depends(get_db), current_u
         })
     return result
 
+from typing import Optional
+
 @router.get("/collections")
-def get_all_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # 1. Inject the "Virtual" Favorites Collection
-    fav_count = db.query(FavoriteNote).filter(FavoriteNote.user_id == current_user.id).count()
-    result = [{
-        "id": "favorites", # 👈 String ID!
-        "title": "Liked Scrolls",
-        "description": "All the scrolls you have favorited across the realm.",
-        "creator_id": current_user.id,
-        "creator_name": current_user.first_name,
-        "creator_role": "user",
-        "visibility": "private",
-        "is_special": True,
-        "is_recommended": False,
-        "is_pinned": False,
-        "note_count": fav_count
-    }]
+def get_all_collections(module_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = []
+    
+    # 1. Inject the "Virtual" Favorites Collection ONLY if not filtering by module
+    if module_id is None:
+        fav_count = db.query(FavoriteNote).filter(FavoriteNote.user_id == current_user.id).count()
+        result.append({
+            "id": "favorites", # 👈 String ID!
+            "title": "Liked Scrolls",
+            "description": "All the scrolls you have favorited across the realm.",
+            "creator_id": current_user.id,
+            "creator_name": current_user.first_name,
+            "creator_role": "user",
+            "visibility": "private",
+            "is_special": True,
+            "is_recommended": False,
+            "is_pinned": False,
+            "note_count": fav_count
+        })
 
     # 2. Fetch Public + User's Private Collections
     is_admin = current_user.role.value in ["admin", "noOne"]
@@ -184,7 +214,10 @@ def get_all_collections(db: Session = Depends(get_db), current_user: User = Depe
     if not is_admin:
         query = query.filter(Collection.is_hidden == False)
         
-    cols = query.all()
+    if module_id is not None:
+        query = query.filter(Collection.module_id == module_id)
+        
+    cols = query.order_by(Collection.id.desc()).all()
 
     for c in cols:
         creator = db.query(User).filter(User.id == c.creator_id).first()

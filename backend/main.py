@@ -13,6 +13,8 @@ from apis import library
 from apis.notifications import router as notifications_router
 from apis.modules import router as modules_router
 
+os.makedirs("uploads/modules", exist_ok=True)
+os.makedirs("uploads/notes", exist_ok=True)
 
 # Importing the models package triggers your __init__.py loop, 
 # registering ALL tables with SQLAlchemy automatically.

@@ -541,3 +541,157 @@ body.light-theme .notifications-dropdown {
   background-color: white !important;
   border: 1px solid var(--border-dark);
 }
+
+/* --- TAKE QUIZ MOBILE DRAWER --- */
+.mobile-drawer-hidden {
+  display: block;
+}
+
+@media (max-width: 1024px) {
+  .mobile-drawer-hidden {
+    display: none;
+  }
+  .mobile-drawer-open {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 999;
+    background-color: var(--bg-surface) !important;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+    overflow-y: auto;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+}
+
+.mobile-only {
+  display: none;
+}
+@media (min-width: 1024px) { .mobile-only { display: none !important; } }
+
+/* ================================================
+   QUIZ LAYOUT: Fixed full-height sidebars
+   Used by both QuizMaker and TakeQuiz
+   ================================================ */
+
+:root {
+  --quiz-nav-width: 64px;  /* icon-only navbar height estimate */
+  --quiz-sidebar-left-w: 256px;
+  --quiz-sidebar-right-w: 272px;
+  --quiz-topbar-h: 65px;
+}
+
+/* The outer wrapper removes page-container's max-width for quiz pages */
+.quiz-layout-wrapper {
+  position: relative;
+  min-height: calc(100vh - var(--quiz-topbar-h));
+}
+
+/* Fixed left panel */
+.quiz-panel-left {
+  position: fixed;
+  left: 0;
+  top: var(--quiz-topbar-h);
+  width: var(--quiz-sidebar-left-w);
+  height: calc(100vh - var(--quiz-topbar-h));
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-dark);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 1.25rem 1rem;
+  box-sizing: border-box;
+}
+
+/* Fixed right panel */
+.quiz-panel-right {
+  position: fixed;
+  right: 0;
+  top: var(--quiz-topbar-h);
+  width: var(--quiz-sidebar-right-w);
+  height: calc(100vh - var(--quiz-topbar-h));
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--bg-surface);
+  border-left: 1px solid var(--border-dark);
+  z-index: 50;
+  padding: 1.25rem 1rem;
+  box-sizing: border-box;
+}
+
+/* Centre scrollable content that avoids fixd panels */
+.quiz-main-content {
+  margin-left: var(--quiz-sidebar-left-w);
+  margin-right: var(--quiz-sidebar-right-w);
+  padding: 2rem 2.5rem;
+  min-height: calc(100vh - var(--quiz-topbar-h));
+  box-sizing: border-box;
+}
+
+/* Dividers between panel sections */
+.panel-divider {
+  height: 1px;
+  background: var(--border-dark);
+  margin: 1rem -1rem;
+}
+
+/* Panel section heading */
+.panel-heading {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  margin-top: 0;
+}
+
+/* Drag pill inside Scroll Layout */
+.scroll-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-dark);
+  background: var(--bg-elevated, var(--bg-deep));
+  cursor: grab;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  margin-bottom: 0.4rem;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.scroll-pill:hover {
+  border-color: var(--accent-gold);
+}
+.scroll-pill.drag-over {
+  border-color: var(--accent-gold);
+  background: rgba(255, 215, 0, 0.08);
+}
+.scroll-pill.answered {
+  border-color: #4caf5066;
+}
+.scroll-pill.flagged {
+  border-color: var(--accent-red);
+}
+
+/* Mobile: collapse sidebars */
+@media (max-width: 1023px) {
+  .quiz-panel-left,
+  .quiz-panel-right {
+    display: none;
+  }
+  .quiz-main-content {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 1rem;
+  }
+}
+

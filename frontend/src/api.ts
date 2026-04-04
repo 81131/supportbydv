@@ -1,8 +1,10 @@
 import axios from 'axios';
 import Cookies from 'js-cookie'; // Optional: install with 'npm install js-cookie'
 
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   withCredentials: true, // Required for cookies to be sent
 });
 

@@ -1,17 +1,20 @@
-import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { BookMarked, Save, ArrowLeft, Upload, X } from 'lucide-react';
 import Cropper from 'react-easy-crop';
-import api from '../api';
+import api, { API_BASE_URL } from '../api';
 import { getCroppedImg } from '../utils/cropImage';
 
-const CreateModule: React.FC = () => {
+const EditModule: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [year, setYear] = useState<number>(1);
   const [semester, setSemester] = useState<number>(1);
+  const [existingImage, setExistingImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -19,6 +22,28 @@ const CreateModule: React.FC = () => {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [croppedImageFile, setCroppedImageFile] = useState<File | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+
+  useEffect(() => {
+    const fetchModule = async () => {
+      try {
+        const res = await api.get('/modules/');
+        const cModule = res.data.find((m: any) => m.id === Number(id));
+        if (!cModule) throw new Error("Module not found");
+        setName(cModule.name);
+        setCode(cModule.code);
+        setYear(cModule.year);
+        setSemester(cModule.semester);
+        setExistingImage(cModule.image_url);
+      } catch (e) {
+        console.error(e);
+        alert("Failed to load module details.");
+        navigate('/');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchModule();
+  }, [id, navigate]);
 
   const onCropComplete = useCallback((croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -41,14 +66,14 @@ const CreateModule: React.FC = () => {
       if (!imageSrc || !croppedAreaPixels) return;
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
       setCroppedImageFile(croppedImage);
-      setImageSrc(URL.createObjectURL(croppedImage)); // use object URL for preview
+      setImageSrc(URL.createObjectURL(croppedImage));
       setShowCropper(false);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !code) {
       alert('Please provide a module name and code.');
@@ -66,17 +91,19 @@ const CreateModule: React.FC = () => {
         formData.append('file', croppedImageFile);
       }
 
-      await api.post('/modules/', formData, {
+      await api.put(`/modules/${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert('Module successfully forged.');
-      navigate('/');
+      alert('Module successfully revised.');
+      window.location.href = `/module/${id}`; // Force full reload to update nav context
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to forge module.');
+      alert(error.response?.data?.detail || 'Failed to revise module.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoading) return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Consulting the archives... ⏳</div>;
 
   return (
     <div className="page-container">
@@ -87,14 +114,14 @@ const CreateModule: React.FC = () => {
 
         <div className="module-section">
           <h1 className="brand-font" style={{ textAlign: 'center', color: 'var(--accent-gold)', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <BookMarked size={32} /> Forge a New Module
+            <BookMarked size={32} /> Revise Module
           </h1>
 
           <p className="text-desc" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            Only the Small Council possesses the power to decree new paths of study.
+            Adjust the nature of the path of study.
           </p>
 
-          <form onSubmit={handleCreate} style={{ display: 'grid', gap: '1.5rem' }}>
+          <form onSubmit={handleUpdate} style={{ display: 'grid', gap: '1.5rem' }}>
             <div>
               <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Module Name</label>
               <input
@@ -144,18 +171,23 @@ const CreateModule: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Module Image (Optional, 1:1)</label>
+              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Module Image (1:1)</label>
               {!showCropper && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  {existingImage && !croppedImageFile && (
+                    <img src={`${API_BASE_URL}${existingImage}`} alt="Current preview" style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} />
+                  )}
+                  {croppedImageFile && (
+                    <img src={imageSrc as string} alt="Cropped preview" style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} />
+                  )}
+
                   <label className="btn-secondary" style={{ cursor: 'pointer', padding: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Upload size={16} /> Choose Image
+                    <Upload size={16} /> {existingImage || croppedImageFile ? 'Change Image' : 'Choose Image'}
                     <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
                   </label>
+
                   {croppedImageFile && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <img src={imageSrc as string} alt="Cropped preview" style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} />
-                      <button type="button" onClick={() => { setCroppedImageFile(null); setImageSrc(null); }} className="btn-ghost" style={{ color: 'red' }}><X size={16} /></button>
-                    </div>
+                    <button type="button" onClick={() => { setCroppedImageFile(null); setImageSrc(null); setExistingImage(null); }} className="btn-ghost" style={{ color: 'red' }}><X size={16} /></button>
                   )}
                 </div>
               )}
@@ -165,7 +197,7 @@ const CreateModule: React.FC = () => {
                     image={imageSrc}
                     crop={crop}
                     zoom={zoom}
-                    aspect={1} // 1:1 ratio
+                    aspect={1}
                     onCropChange={setCrop}
                     onCropComplete={onCropComplete}
                     onZoomChange={setZoom}
@@ -176,7 +208,7 @@ const CreateModule: React.FC = () => {
             </div>
 
             <button type="submit" disabled={isSubmitting} className="btn-solid-gold" style={{ padding: '1rem', fontSize: '1.1rem', justifyContent: 'center', opacity: isSubmitting ? 0.5 : 1, marginTop: '1rem' }}>
-              <Save size={20} /> {isSubmitting ? 'Forging...' : 'Forge Module'}
+              <Save size={20} /> {isSubmitting ? 'Revising...' : 'Save Revisions'}
             </button>
           </form>
         </div>
@@ -185,4 +217,4 @@ const CreateModule: React.FC = () => {
   );
 };
 
-export default CreateModule;
+export default EditModule;
