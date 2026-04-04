@@ -23,7 +23,9 @@ class Module(Base):
     code = Column(String, unique=True, index=True)
     year = Column(Integer)
     semester = Column(Integer)
-    image_url = Column(String, nullable=True)
+    card_image_url = Column(String, nullable=True)
+    banner_image_url = Column(String, nullable=True)
+    module_phrase = Column(String, nullable=True)
     
     quizzes = relationship("Quiz", back_populates="module")
 

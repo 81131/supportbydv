@@ -59,10 +59,11 @@ const Semester: React.FC = () => {
             <Link key={mod.id} to={`/module/${mod.id}`} style={{ textDecoration: 'none' }}>
               <div
                 className="module-card"
-                style={mod.image_url ? { backgroundImage: `url(${API_BASE_URL}${mod.image_url})` } : (moduleBgMap[mod.code] ? { backgroundImage: `url(${moduleBgMap[mod.code]})` } : {})}
+                style={mod.card_image_url ? { backgroundImage: `url(${API_BASE_URL}${mod.card_image_url})` } : (moduleBgMap[mod.code] ? { backgroundImage: `url(${moduleBgMap[mod.code]})` } : {})}
               >
                 <h2 className="brand-font">{mod.code}</h2>
                 <p>{mod.name}</p>
+                {mod.module_phrase && <p style={{ fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.5rem', color: 'var(--accent-gold)' }}>{mod.module_phrase}</p>}
               </div>
             </Link>
           ))}

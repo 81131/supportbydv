@@ -56,7 +56,7 @@ const ModuleView: React.FC = () => {
     WMT: wmtBg,
     PS: psBg,
   };
-  const heroBg = module.image_url ? `${API_BASE_URL}${module.image_url}` : (moduleBgMap[module.code] || null);
+  const heroBg = module.banner_image_url ? `${API_BASE_URL}${module.banner_image_url}` : (moduleBgMap[module.code] || null);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-deep)' }}>
@@ -78,6 +78,11 @@ const ModuleView: React.FC = () => {
         <p style={{ color: '#ffffff', fontSize: '1.2rem', marginTop: '1rem', textShadow: '2px 2px 4px rgba(0,0,0,0.8)', fontFamily: 'var(--font-reading)' }}>
           {module.name}
         </p>
+        {module.module_phrase && (
+          <p style={{ color: 'var(--accent-gold)', fontSize: '1rem', fontStyle: 'italic', marginTop: '0.5rem', textShadow: '1px 1px 2px rgba(0,0,0,0.8)', fontFamily: 'var(--font-reading)' }}>
+            "{module.module_phrase}"
+          </p>
+        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-surface)', transition: 'background-color 0.4s ease, border-color 0.4s ease' }}>

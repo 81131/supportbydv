@@ -8,11 +8,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PrivilegedRoute from './components/PrivilegedRoute';
 import Home from './pages/Home';
 import Year01 from './pages/Year01';
-import Year2Sem2 from './pages/Year2Sem2';
+
 import NotFound from './pages/NotFound';
-import PS from './pages/PS';
-import OSSA from './pages/OSSA';
-import WMT from './pages/WMT';
 import QuizMaker from './pages/QuizMaker';
 import TakeQuiz from './pages/TakeQuiz';
 import Leaderboard from './pages/Leaderboard';
@@ -242,10 +239,6 @@ function App() {
             <Route path="/module/:moduleId/:tab" element={<ProtectedRoute user={user}><ModuleView /></ProtectedRoute>} />
             <Route path="/review-essays/:quizId" element={<ProtectedRoute user={user}><ReviewEssays /></ProtectedRoute>} />
             <Route path="/year01" element={<ProtectedRoute user={user}><Year01 /></ProtectedRoute>} />
-            <Route path="/y2s2" element={<ProtectedRoute user={user}><Year2Sem2 /></ProtectedRoute>} />
-            <Route path="/y2s2/ps" element={<ProtectedRoute user={user}><PS /></ProtectedRoute>} />
-            <Route path="/y2s2/ossa" element={<ProtectedRoute user={user}><OSSA /></ProtectedRoute>} />
-            <Route path="/y2s2/wmt" element={<ProtectedRoute user={user}><WMT /></ProtectedRoute>} />
             <Route path="/quiz-maker" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
             <Route path="/edit-quiz/:id" element={<ProtectedRoute user={user}><QuizMaker /></ProtectedRoute>} />
             <Route path="/take-quiz/:id" element={<ProtectedRoute user={user}><TakeQuiz /></ProtectedRoute>} />

@@ -21,6 +21,7 @@ os.makedirs("uploads/notes", exist_ok=True)
 import models
 from models.quiz import Module 
 from database import engine, SessionLocal, Base 
+from sqlalchemy import text
 
 # Import your API routers
 from apis.auth import router as auth_router
@@ -69,19 +70,46 @@ def initialize_modules():
     db = SessionLocal()
     try:
         default_modules = [
-            {"id": 1, "name": "Operating System & System Administration", "code": "OSSA", "year": 2, "semester": 2},
-            {"id": 2, "name": "Web and Mobile Technologies", "code": "WMT", "year": 2, "semester": 2},
-            {"id": 3, "name": "Professional Skills", "code": "PS", "year": 2, "semester": 2},
+            {
+                "name": "Operating System & System Administration", "code": "OSSA", "year": 2, "semester": 2,
+                "card_image_url": "/static/modules/OSSA-bg.webp",
+                "banner_image_url": "/static/modules/Ned_Stark_OSSA-bg.jpg",
+                "module_phrase": "A LANister always pings his local network."
+            },
+            {
+                "name": "Web and Mobile Technologies", "code": "WMT", "year": 2, "semester": 2,
+                "card_image_url": "/static/modules/WMT-bg.webp",
+                "banner_image_url": "/static/modules/dragonglass_cave-WMT-bg.avif",
+                "module_phrase": "Ours is the Frontend."
+            },
+            {
+                "name": "Professional Skills", "code": "PS", "year": 2, "semester": 2,
+                "card_image_url": "/static/modules/PS-bg.webp",
+                "banner_image_url": "/static/modules/Tyrion_PS-bg.avif",
+                "module_phrase": "I drink and I manage projects."
+            },
         ]
 
         for mod_data in default_modules:
-            # Check if it already exists by code
             existing = db.query(Module).filter(Module.code == mod_data["code"]).first()
             if not existing:
                 new_module = Module(**mod_data)
                 db.add(new_module)
+            else:
+                if existing.card_image_url is None:
+                    existing.card_image_url = mod_data.get("card_image_url")
+                if existing.banner_image_url is None:
+                    existing.banner_image_url = mod_data.get("banner_image_url")
+                if existing.module_phrase is None:
+                    existing.module_phrase = mod_data.get("module_phrase")
         
         db.commit()
+        # Reset the PostgreSQL sequence to sync with actual max(id)
+        db.execute(text("SELECT setval('modules_id_seq', coalesce((SELECT MAX(id) FROM modules), 1))"))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Module init error: {e}")
     finally:
         db.close()
 

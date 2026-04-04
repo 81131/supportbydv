@@ -7,7 +7,7 @@ from security import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-@router.get("/")
+@router.get("")
 def get_notifications(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     notes = db.query(Notification).filter(Notification.user_id == current_user.id).order_by(Notification.created_at.desc()).all()
     return [{"id": n.id, "message": n.message, "is_read": n.is_read, "created_at": n.created_at} for n in notes]

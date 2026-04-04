@@ -9,17 +9,19 @@ from security import get_current_user
 
 router = APIRouter(prefix="/modules", tags=["Modules"])
 
-@router.get("/")
+@router.get("")
 def get_all_modules(db: Session = Depends(get_db)):
     return db.query(Module).all()
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_module(
     name: str = Form(...),
     code: str = Form(...),
     year: int = Form(...),
     semester: int = Form(...),
-    file: UploadFile = File(None),
+    module_phrase: str = Form(None),
+    card_image: UploadFile = File(None),
+    banner_image: UploadFile = File(None),
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
@@ -30,16 +32,26 @@ async def create_module(
     if existing:
         raise HTTPException(status_code=400, detail="A module with this code already exists in the archives.")
         
-    image_url = None
-    if file:
-        file_ext = file.filename.split(".")[-1].lower()
-        safe_filename = f"module_{code}_{file.filename}"
-        file_path = os.path.join("uploads/modules", safe_filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        image_url = f"/static/modules/{safe_filename}"
+    card_url = None
+    if card_image:
+        safe_c_name = f"module_{code}_card_{card_image.filename}"
+        c_path = os.path.join("uploads/modules", safe_c_name)
+        with open(c_path, "wb") as buffer:
+            shutil.copyfileobj(card_image.file, buffer)
+        card_url = f"/static/modules/{safe_c_name}"
+
+    banner_url = None
+    if banner_image:
+        safe_b_name = f"module_{code}_banner_{banner_image.filename}"
+        b_path = os.path.join("uploads/modules", safe_b_name)
+        with open(b_path, "wb") as buffer:
+            shutil.copyfileobj(banner_image.file, buffer)
+        banner_url = f"/static/modules/{safe_b_name}"
     
-    new_module = Module(name=name, code=code, year=year, semester=semester, image_url=image_url)
+    new_module = Module(
+        name=name, code=code, year=year, semester=semester, 
+        card_image_url=card_url, banner_image_url=banner_url, module_phrase=module_phrase
+    )
     db.add(new_module)
     db.commit()
     db.refresh(new_module)
@@ -52,7 +64,9 @@ async def update_module(
     code: str = Form(...),
     year: int = Form(...),
     semester: int = Form(...),
-    file: UploadFile = File(None),
+    module_phrase: str = Form(None),
+    card_image: UploadFile = File(None),
+    banner_image: UploadFile = File(None),
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
@@ -72,13 +86,22 @@ async def update_module(
     module.code = code
     module.year = year
     module.semester = semester
+    if module_phrase is not None:
+        module.module_phrase = module_phrase
     
-    if file:
-        safe_filename = f"module_{code}_{file.filename}"
-        file_path = os.path.join("uploads/modules", safe_filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        module.image_url = f"/static/modules/{safe_filename}"
+    if card_image:
+        safe_c_name = f"module_{code}_card_{card_image.filename}"
+        c_path = os.path.join("uploads/modules", safe_c_name)
+        with open(c_path, "wb") as buffer:
+            shutil.copyfileobj(card_image.file, buffer)
+        module.card_image_url = f"/static/modules/{safe_c_name}"
+        
+    if banner_image:
+        safe_b_name = f"module_{code}_banner_{banner_image.filename}"
+        b_path = os.path.join("uploads/modules", safe_b_name)
+        with open(b_path, "wb") as buffer:
+            shutil.copyfileobj(banner_image.file, buffer)
+        module.banner_image_url = f"/static/modules/{safe_b_name}"
         
     db.commit()
     return module

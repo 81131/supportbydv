@@ -11,38 +11,77 @@ const CreateModule: React.FC = () => {
   const [code, setCode] = useState('');
   const [year, setYear] = useState<number>(1);
   const [semester, setSemester] = useState<number>(1);
+  const [modulePhrase, setModulePhrase] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
-  const [croppedImageFile, setCroppedImageFile] = useState<File | null>(null);
-  const [showCropper, setShowCropper] = useState(false);
+  // Card Image State
+  const [cardImageSrc, setCardImageSrc] = useState<string | null>(null);
+  const [cropCard, setCropCard] = useState({ x: 0, y: 0 });
+  const [zoomCard, setZoomCard] = useState(1);
+  const [croppedCardPixels, setCroppedCardPixels] = useState<any>(null);
+  const [croppedCardFile, setCroppedCardFile] = useState<File | null>(null);
+  const [showCardCropper, setShowCardCropper] = useState(false);
 
-  const onCropComplete = useCallback((croppedAreaPixels: any) => {
-    setCroppedAreaPixels(croppedAreaPixels);
+  // Banner Image State
+  const [bannerImageSrc, setBannerImageSrc] = useState<string | null>(null);
+  const [cropBanner, setCropBanner] = useState({ x: 0, y: 0 });
+  const [zoomBanner, setZoomBanner] = useState(1);
+  const [croppedBannerPixels, setCroppedBannerPixels] = useState<any>(null);
+  const [croppedBannerFile, setCroppedBannerFile] = useState<File | null>(null);
+  const [showBannerCropper, setShowBannerCropper] = useState(false);
+
+  // Fix: The arguments of onCropComplete from react-easy-crop are (croppedArea, croppedAreaPixels)
+  const onCardCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedCardPixels(croppedAreaPixels);
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onBannerCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedBannerPixels(croppedAreaPixels);
+  }, []);
+
+  const handleCardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       const reader = new FileReader();
       reader.addEventListener('load', () => {
-        setImageSrc(reader.result?.toString() || null);
-        setShowCropper(true);
+        setCardImageSrc(reader.result?.toString() || null);
+        setShowCardCropper(true);
       });
       reader.readAsDataURL(file);
     }
   };
 
-  const showCroppedImage = async () => {
+  const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        setBannerImageSrc(reader.result?.toString() || null);
+        setShowBannerCropper(true);
+      });
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const confirmCardCrop = async () => {
     try {
-      if (!imageSrc || !croppedAreaPixels) return;
-      const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
-      setCroppedImageFile(croppedImage);
-      setImageSrc(URL.createObjectURL(croppedImage)); // use object URL for preview
-      setShowCropper(false);
+      if (!cardImageSrc || !croppedCardPixels) return;
+      const croppedImage = await getCroppedImg(cardImageSrc, croppedCardPixels);
+      setCroppedCardFile(croppedImage);
+      setCardImageSrc(URL.createObjectURL(croppedImage)); // update preview
+      setShowCardCropper(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const confirmBannerCrop = async () => {
+    try {
+      if (!bannerImageSrc || !croppedBannerPixels) return;
+      const croppedImage = await getCroppedImg(bannerImageSrc, croppedBannerPixels);
+      setCroppedBannerFile(croppedImage);
+      setBannerImageSrc(URL.createObjectURL(croppedImage)); // update preview
+      setShowBannerCropper(false);
     } catch (e) {
       console.error(e);
     }
@@ -62,11 +101,11 @@ const CreateModule: React.FC = () => {
       formData.append('code', code);
       formData.append('year', year.toString());
       formData.append('semester', semester.toString());
-      if (croppedImageFile) {
-        formData.append('file', croppedImageFile);
-      }
+      if (modulePhrase) formData.append('module_phrase', modulePhrase);
+      if (croppedCardFile) formData.append('card_image', croppedCardFile);
+      if (croppedBannerFile) formData.append('banner_image', croppedBannerFile);
 
-      await api.post('/modules/', formData, {
+      await api.post('/modules', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       alert('Module successfully forged.');
@@ -97,80 +136,76 @@ const CreateModule: React.FC = () => {
           <form onSubmit={handleCreate} style={{ display: 'grid', gap: '1.5rem' }}>
             <div>
               <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Module Name</label>
-              <input
-                type="text"
-                className="auth-input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Operating System & System Administration"
-                autoFocus
-              />
+              <input type="text" className="auth-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Operating System & System Administration" autoFocus />
             </div>
 
             <div>
               <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Module Code</label>
-              <input
-                type="text"
-                className="auth-input"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="e.g., OSSA, WMT, PS"
-              />
+              <input type="text" className="auth-input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g., OSSA, WMT, PS" />
+            </div>
+            
+            <div>
+              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Catchy Phrase (Optional)</label>
+              <input type="text" className="auth-input" value={modulePhrase} onChange={(e) => setModulePhrase(e.target.value)} placeholder="e.g., A LANister always pings his local network." />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
                 <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Year</label>
-                <input
-                  type="number"
-                  className="auth-input"
-                  value={year}
-                  onChange={(e) => setYear(Number(e.target.value))}
-                  min="1"
-                  max="10"
-                />
+                <input type="number" className="auth-input" value={year} onChange={(e) => setYear(Number(e.target.value))} min="1" max="10" />
               </div>
               <div>
                 <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Semester</label>
-                <input
-                  type="number"
-                  className="auth-input"
-                  value={semester}
-                  onChange={(e) => setSemester(Number(e.target.value))}
-                  min="1"
-                  max="10"
-                />
+                <input type="number" className="auth-input" value={semester} onChange={(e) => setSemester(Number(e.target.value))} min="1" max="10" />
               </div>
             </div>
 
+            {/* CARD IMAGE */}
             <div>
-              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Module Image (Optional, 1:1)</label>
-              {!showCropper && (
+              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Card Image (Optional, 1:1)</label>
+              {!showCardCropper && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <label className="btn-secondary" style={{ cursor: 'pointer', padding: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Upload size={16} /> Choose Image
-                    <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                    <input type="file" accept="image/*" onChange={handleCardFileChange} style={{ display: 'none' }} />
                   </label>
-                  {croppedImageFile && (
+                  {croppedCardFile && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <img src={imageSrc as string} alt="Cropped preview" style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} />
-                      <button type="button" onClick={() => { setCroppedImageFile(null); setImageSrc(null); }} className="btn-ghost" style={{ color: 'red' }}><X size={16} /></button>
+                      <img src={cardImageSrc as string} alt="Cropped preview" style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} />
+                      <button type="button" onClick={() => { setCroppedCardFile(null); setCardImageSrc(null); }} className="btn-ghost" style={{ color: 'red' }}><X size={16} /></button>
                     </div>
                   )}
                 </div>
               )}
-              {showCropper && imageSrc && (
+              {showCardCropper && cardImageSrc && (
                 <div style={{ position: 'relative', width: '100%', height: 300, background: '#333', marginTop: '1rem', borderRadius: 8, overflow: 'hidden' }}>
-                  <Cropper
-                    image={imageSrc}
-                    crop={crop}
-                    zoom={zoom}
-                    aspect={1} // 1:1 ratio
-                    onCropChange={setCrop}
-                    onCropComplete={onCropComplete}
-                    onZoomChange={setZoom}
-                  />
-                  <button type="button" onClick={showCroppedImage} className="btn-solid-gold" style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 10 }}>Confirm Crop</button>
+                  <Cropper image={cardImageSrc} crop={cropCard} zoom={zoomCard} aspect={1} onCropChange={setCropCard} onCropComplete={onCardCropComplete} onZoomChange={setZoomCard} />
+                  <button type="button" onClick={confirmCardCrop} className="btn-solid-gold" style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 10 }}>Confirm Crop</button>
+                </div>
+              )}
+            </div>
+
+            {/* BANNER IMAGE */}
+            <div>
+              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Banner Image (Optional, 16:9)</label>
+              {!showBannerCropper && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <label className="btn-secondary" style={{ cursor: 'pointer', padding: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Upload size={16} /> Choose Image
+                    <input type="file" accept="image/*" onChange={handleBannerFileChange} style={{ display: 'none' }} />
+                  </label>
+                  {croppedBannerFile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <img src={bannerImageSrc as string} alt="Cropped preview" style={{ width: 160, height: 90, borderRadius: 8, objectFit: 'cover' }} />
+                      <button type="button" onClick={() => { setCroppedBannerFile(null); setBannerImageSrc(null); }} className="btn-ghost" style={{ color: 'red' }}><X size={16} /></button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {showBannerCropper && bannerImageSrc && (
+                <div style={{ position: 'relative', width: '100%', height: 300, background: '#333', marginTop: '1rem', borderRadius: 8, overflow: 'hidden' }}>
+                  <Cropper image={bannerImageSrc} crop={cropBanner} zoom={zoomBanner} aspect={16 / 9} onCropChange={setCropBanner} onCropComplete={onBannerCropComplete} onZoomChange={setZoomBanner} />
+                  <button type="button" onClick={confirmBannerCrop} className="btn-solid-gold" style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 10 }}>Confirm Crop</button>
                 </div>
               )}
             </div>
