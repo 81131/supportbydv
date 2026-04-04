@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import QuizDisplayer from '../components/QuizDisplayer';
 import NoteDisplayer from '../components/NoteDisplayer';
 import CollectionDisplayer from '../components/CollectionDisplayer';
-import { Swords, ScrollText, Library } from 'lucide-react';
+import { Swords, ScrollText, Library, Settings } from 'lucide-react';
 import api, { API_BASE_URL } from '../api';
 import ossaBg from '../assets/Ned_Stark_OSSA-bg.jpg';
 import wmtBg from '../assets/dragonglass_cave-WMT-bg.avif';
@@ -17,8 +17,12 @@ const ModuleView: React.FC = () => {
   const [module, setModule] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabType>((tab as TabType) || 'quizzes');
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    const u = localStorage.getItem('user');
+    if (u) setUser(JSON.parse(u));
+
     const fetchModule = async () => {
       try {
         const res = await api.get('/modules');
@@ -69,9 +73,18 @@ const ModuleView: React.FC = () => {
               backgroundPosition: 'center',
             }
           : { backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--border-dark)' }),
-        padding: '6rem 2rem 4rem', textAlign: 'center',
+        padding: '6rem 2rem 4rem', textAlign: 'center', position: 'relative',
         transition: 'background 0.4s ease'
       }}>
+        {user && (user.role === 'admin' || user.role === 'noOne') && (
+          <button 
+            onClick={() => navigate(`/edit-module/${module.id}`)} 
+            className="btn-solid-gold" 
+            style={{ position: 'absolute', top: '2rem', right: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 10 }}
+          >
+            <Settings size={16} /> Revise Settings
+          </button>
+        )}
         <h1 className="brand-font" style={{ color: 'var(--accent-gold)', fontSize: '3.5rem', margin: 0, textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
           {module.code}
         </h1>

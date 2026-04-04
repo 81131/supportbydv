@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { BookMarked, Save, ArrowLeft, Upload, X } from 'lucide-react';
+import { BookMarked, Save, ArrowLeft, Upload, X, Plus, Trash2 } from 'lucide-react';
 import Cropper from 'react-easy-crop';
+import type { LectureUnit } from '../types/quiz';
 import api, { API_BASE_URL } from '../api';
 import { getCroppedImg } from '../utils/cropImage';
 
@@ -34,10 +35,22 @@ const EditModule: React.FC = () => {
   const [croppedBannerFile, setCroppedBannerFile] = useState<File | null>(null);
   const [showBannerCropper, setShowBannerCropper] = useState(false);
 
+  // Lecture Units
+  const [units, setUnits] = useState<LectureUnit[]>([]);
+
+  // Modals for units/topics
+  const [showUnitModal, setShowUnitModal] = useState(false);
+  const [newUnitId, setNewUnitId] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
+
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [activeUnitForTopic, setActiveUnitForTopic] = useState<number | null>(null);
+  const [newTopicName, setNewTopicName] = useState('');
+
   useEffect(() => {
     const fetchModule = async () => {
       try {
-        const res = await api.get('/modules/');
+        const res = await api.get('/modules');
         const cModule = res.data.find((m: any) => m.id === Number(id));
         if (!cModule) throw new Error("Module not found");
         setName(cModule.name);
@@ -47,6 +60,8 @@ const EditModule: React.FC = () => {
         setModulePhrase(cModule.module_phrase || '');
         setExistingCard(cModule.card_image_url);
         setExistingBanner(cModule.banner_image_url);
+
+        api.get(`/modules/${id}/units-with-topics`).then(r => setUnits(r.data)).catch(console.error);
       } catch (e) {
         console.error(e);
         alert("Failed to load module details.");
@@ -142,6 +157,55 @@ const EditModule: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleAddUnit = () => {
+    setNewUnitId('');
+    setNewUnitName('');
+    setShowUnitModal(true);
+  };
+
+  const submitAddUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnitId || !newUnitName) return;
+    try {
+        const res = await api.post(`/modules/${id}/units`, { unit_identifier: newUnitId, name: newUnitName });
+        setUnits([...units, { ...res.data, topics: [] }]);
+        setShowUnitModal(false);
+    } catch(err) {
+        alert("Failed to add unit");
+    }
+  };
+
+  const handleDeleteUnit = async (uId: number) => {
+      if(!confirm("Delete unit and all its topics?")) return;
+      await api.delete(`/modules/units/${uId}`);
+      setUnits(units.filter(u => u.id !== uId));
+  };
+
+  const handleAddTopic = (uId: number) => {
+      setActiveUnitForTopic(uId);
+      setNewTopicName('');
+      setShowTopicModal(true);
+  };
+
+  const submitAddTopic = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!newTopicName || !activeUnitForTopic) return;
+      try {
+          const res = await api.post(`/modules/units/${activeUnitForTopic}/topics`, { name: newTopicName });
+          setUnits(units.map(u => u.id === activeUnitForTopic ? { ...u, topics: [...u.topics, res.data] } : u));
+          setShowTopicModal(false);
+          setActiveUnitForTopic(null);
+      } catch(err) {
+          alert("Failed to add topic");
+      }
+  };
+
+  const handleDeleteTopic = async (uId: number, tId: number) => {
+      if(!confirm("Are you sure? This will permanently wipe this topic securely from all questions containing it!")) return;
+      await api.delete(`/modules/topics/${tId}`);
+      setUnits(units.map(u => u.id === uId ? { ...u, topics: u.topics.filter(t => t.id !== tId) } : u));
   };
 
   if (isLoading) return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Consulting the archives... ⏳</div>;
@@ -246,7 +310,77 @@ const EditModule: React.FC = () => {
             </button>
           </form>
         </div>
+
+        {/* --- LECTURE UNITS --- */}
+        <div className="module-section" style={{ marginTop: '2rem' }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem' }}>
+              <h2 className="text-title">Lecture Units &amp; Topics</h2>
+              <button onClick={handleAddUnit} className="btn-ghost-gold"><Plus size={16}/> Add Unit</button>
+           </div>
+           
+           {units.length === 0 ? (
+              <p className="text-desc" style={{ fontStyle: 'italic', textAlign: 'center' }}>No units established yet.</p>
+           ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                 {units.map((u) => (
+                    <div key={u.id} style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-dark)', borderRadius: '8px', padding: '1rem' }}>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                          <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{u.unit_identifier}: {u.name}</span>
+                          <button onClick={() => handleDeleteUnit(u.id)} className="btn-ghost" style={{ color: 'var(--accent-red)' }}><Trash2 size={16}/></button>
+                       </div>
+                       
+                       <div style={{ paddingLeft: '1rem', borderLeft: '2px solid var(--border-dark)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {u.topics.map(t => (
+                             <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.8rem', borderRadius: '4px' }}>
+                                <span className="text-desc">{t.name}</span>
+                                <button onClick={() => handleDeleteTopic(u.id, t.id)} className="btn-ghost-danger" style={{ padding: '0.2rem' }}><X size={14}/></button>
+                             </div>
+                          ))}
+                          <button onClick={() => handleAddTopic(u.id)} className="btn-ghost" style={{ alignSelf: 'flex-start', fontSize: '0.8rem', marginTop: '0.5rem' }}><Plus size={14}/> Add Topic</button>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           )}
+        </div>
       </div>
+
+      {showUnitModal && (
+        <div className="modal-overlay" onClick={() => setShowUnitModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setShowUnitModal(false)}>✕</button>
+            <h2 className="brand-font" style={{ marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>Forge Unit</h2>
+            <form onSubmit={submitAddUnit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                 <label className="text-desc" style={{display:'block'}}>Unit Identifier</label>
+                 <input type="text" className="auth-input" placeholder="e.g. Unit 1" value={newUnitId} onChange={e => setNewUnitId(e.target.value)} required />
+              </div>
+              <div>
+                 <label className="text-desc" style={{display:'block'}}>Unit Name</label>
+                 <input type="text" className="auth-input" placeholder="e.g. Kinematics" value={newUnitName} onChange={e => setNewUnitName(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn-solid-gold" style={{marginTop: '0.5rem', justifyContent: 'center'}}>Add Unit</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showTopicModal && (
+        <div className="modal-overlay" onClick={() => setShowTopicModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setShowTopicModal(false)}>✕</button>
+            <h2 className="brand-font" style={{ marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>Forge Topic</h2>
+            <form onSubmit={submitAddTopic} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                 <label className="text-desc" style={{display:'block'}}>Topic Name</label>
+                 <input type="text" className="auth-input" placeholder="e.g. Velocity Vectors" value={newTopicName} onChange={e => setNewTopicName(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn-solid-gold" style={{marginTop: '0.5rem', justifyContent: 'center'}}>Add Topic</button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

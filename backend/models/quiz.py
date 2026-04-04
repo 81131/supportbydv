@@ -28,6 +28,27 @@ class Module(Base):
     module_phrase = Column(String, nullable=True)
     
     quizzes = relationship("Quiz", back_populates="module")
+    units = relationship("LectureUnit", back_populates="module", cascade="all, delete-orphan")
+
+class LectureUnit(Base):
+    __tablename__ = "lecture_units"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    module_id = Column(Integer, ForeignKey("modules.id"))
+    unit_identifier = Column(String, index=True)  # E.g. "Unit 1"
+    name = Column(String)  # E.g. "Introduction to System Safety"
+    
+    module = relationship("Module", back_populates="units")
+    topics = relationship("LectureTopic", back_populates="unit", cascade="all, delete-orphan")
+
+class LectureTopic(Base):
+    __tablename__ = "lecture_topics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    unit_id = Column(Integer, ForeignKey("lecture_units.id"))
+    name = Column(String)
+    
+    unit = relationship("LectureUnit", back_populates="topics")
 
 class Quiz(Base):
     __tablename__ = "quizzes"
@@ -69,6 +90,9 @@ class Question(Base):
     image_url = Column(String, nullable=True) 
     type = Column(Enum(QuestionType))
     
+    unit_id = Column(Integer, ForeignKey("lecture_units.id"), nullable=True)
+    topic_ids = Column(String, nullable=True)  # JSON-encoded array of topic IDs e.g. '[1, 2]'
+    
     # New Grading Fields
     marks = Column(Float, default=1.0)
     negative_marks = Column(Float, default=0.0) # Used for CHECKBOX
@@ -76,6 +100,8 @@ class Question(Base):
     
     correct_number = Column(Float, nullable=True) 
     correct_text = Column(String, nullable=True)  
+    
+    unit = relationship("LectureUnit")
     
     quiz = relationship("Quiz", back_populates="questions")
     options = relationship("AnswerOption", back_populates="question", cascade="all, delete-orphan")

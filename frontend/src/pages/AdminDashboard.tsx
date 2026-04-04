@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { 
   ShieldAlert, Users, ScrollText, Lock, Unlock, 
-  VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle
+  VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle, Edit3
 } from 'lucide-react';
 
 import Forbidden from './Forbidden'; 
@@ -275,10 +275,16 @@ const AdminDashboard: React.FC = () => {
           <div className="module-section">
             <h3 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem' }}>Existing Modules</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-              {modules.map(mod => (
+              {modules?.map(mod => (
                 <div key={mod.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--bg-deep)', borderRadius: '4px', border: '1px solid var(--border-dark)' }}>
                   <div>
-                    <div className="text-title" style={{ fontSize: '1rem' }}>{mod.name}</div>
+                    <div 
+                      className="text-title" 
+                      style={{ fontSize: '1rem', cursor: 'pointer', color: 'var(--accent-gold)' }}
+                      onClick={() => window.location.href = `/edit-module/${mod.id}`}
+                    >
+                      {mod.name} <Edit3 size={12} style={{ display: 'inline', marginLeft: '0.2rem' }} />
+                    </div>
                     <div className="text-desc" style={{ fontSize: '0.8rem' }}>{mod.code} • Year {mod.year} Semester {mod.semester}</div>
                   </div>
                   <div style={{ fontSize: '0.9rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>

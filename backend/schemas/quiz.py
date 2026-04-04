@@ -18,6 +18,8 @@ class QuestionCreate(BaseModel):
     image_url: Optional[str] = None
     correct_number: Optional[float] = None
     correct_text: Optional[str] = None
+    unit_id: Optional[int] = None
+    topic_ids: Optional[List[int]] = None
     
     # Nested options list
     options: Optional[List[AnswerOptionCreate]] = []
@@ -52,3 +54,11 @@ class QuizSubmission(BaseModel):
     answers: List[StudentAnswer]
     time_consumed_seconds: int = 0
     is_draft: bool = False
+
+# --- Lecture Tracking ---
+class LectureTopicCreate(BaseModel):
+    name: str
+
+class LectureUnitCreate(BaseModel):
+    unit_identifier: str
+    name: str

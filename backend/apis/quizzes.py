@@ -60,10 +60,13 @@ def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user
     db.flush() 
 
     for q_data in quiz_in.questions:
+        import json
         new_question = Question(
             quiz_id=new_quiz.id, text=q_data.text, type=q_data.type, marks=q_data.marks,
             negative_marks=q_data.negative_marks, image_url=q_data.image_url,
-            correct_number=q_data.correct_number, correct_text=q_data.correct_text
+            correct_number=q_data.correct_number, correct_text=q_data.correct_text,
+            unit_id=q_data.unit_id,
+            topic_ids=json.dumps(q_data.topic_ids) if q_data.topic_ids else None
         )
         db.add(new_question)
         db.flush() 
@@ -97,17 +100,43 @@ def get_my_quizzes(db: Session = Depends(get_db), current_user: User = Depends(g
 @router.get("/analytics/me")
 def get_my_analytics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch comprehensive performance matrices comparing student vs peers."""
-    my_attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").all()
+    my_attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").order_by(QuizAttempt.created_at.asc()).all()
     
     analytics = []
     
+    # KPIs preparation
+    total_my_marks = 0.0
+    total_max_marks = 0.0
+    total_my_time = 0
+    total_qs_answered = 0
+    unique_dates = set()
+    
+    # Radar preparations
+    module_scores_acc = {} # dict: module_id -> {"earned": 0, "max": 0, "name": ""}
+    topic_scores_acc = {} # dict: topic_id -> {"earned": 0, "max": 0, "name": ""}
+    
     for attempt in my_attempts:
+        if attempt.created_at:
+            unique_dates.add(attempt.created_at.date())
+            
         quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
         if not quiz: continue
         
-        # 1. Fetch ALL completed attempts for THIS quiz to calculate peer averages
-        all_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz.id, QuizAttempt.status == "COMPLETED").all()
+        # Calculate max score for this attempt
+        current_questions = db.query(Question).filter(Question.quiz_id == quiz.id, Question.version == attempt.quiz_version).all()
+        attempt_max_score = sum([q.marks for q in current_questions])
         
+        total_my_marks += attempt.total_marks
+        total_max_marks += attempt_max_score
+        
+        # Module Radar Integration
+        if quiz.module_id not in module_scores_acc:
+            module_scores_acc[quiz.module_id] = {"earned": 0.0, "max": 0.0, "name": quiz.module.name if quiz.module else "Unknown Module"}
+        module_scores_acc[quiz.module_id]["earned"] += attempt.total_marks
+        module_scores_acc[quiz.module_id]["max"] += attempt_max_score
+        
+        # Peer attempt baseline for this specific quiz
+        all_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz.id, QuizAttempt.status == "COMPLETED").all()
         total_peer_score = sum(a.total_marks for a in all_attempts)
         total_peer_time = sum(a.time_consumed_seconds for a in all_attempts)
         peer_count = len(all_attempts)
@@ -115,9 +144,11 @@ def get_my_analytics(db: Session = Depends(get_db), current_user: User = Depends
         avg_peer_score = round(total_peer_score / peer_count, 2) if peer_count > 0 else 0
         avg_peer_time = round(total_peer_time / peer_count, 2) if peer_count > 0 else 0
         
-        # 2. Per-question time average for THIS specific attempt vs peers
         questions_stats = []
         for qa in attempt.question_attempts:
+            total_my_time += qa.time_spent_seconds
+            total_qs_answered += 1
+            
             # Find peer attempts for this specific question
             peer_q_attempts = db.query(QuestionAttempt).join(QuizAttempt).filter(
                 QuestionAttempt.question_id == qa.question_id,
@@ -127,6 +158,22 @@ def get_my_analytics(db: Session = Depends(get_db), current_user: User = Depends
             p_q_time = sum(pqa.time_spent_seconds for pqa in peer_q_attempts)
             p_q_count = len(peer_q_attempts)
             avg_p_q_time = round(p_q_time / p_q_count, 1) if p_q_count > 0 else 0
+            
+            # Topic Radar Integration
+            question = db.query(Question).filter(Question.id == qa.question_id).first()
+            if question and question.topic_ids:
+                import json
+                try:
+                    t_ids = json.loads(question.topic_ids)
+                    for t_id in t_ids:
+                        from models.quiz import LectureTopic
+                        if t_id not in topic_scores_acc:
+                            lt = db.query(LectureTopic).filter(LectureTopic.id == t_id).first()
+                            topic_scores_acc[t_id] = {"earned": 0.0, "max": 0.0, "name": lt.name if lt else f"Topic {t_id}"}
+                        topic_scores_acc[t_id]["earned"] += qa.marks_awarded
+                        topic_scores_acc[t_id]["max"] += question.marks
+                except Exception:
+                    pass
             
             questions_stats.append({
                 "question_id": qa.question_id,
@@ -140,6 +187,7 @@ def get_my_analytics(db: Session = Depends(get_db), current_user: User = Depends
             "quiz_id": quiz.id,
             "quiz_title": quiz.title,
             "my_score": attempt.total_marks,
+            "my_max_score": attempt_max_score,
             "my_time_seconds": attempt.time_consumed_seconds,
             "peer_avg_score": avg_peer_score,
             "peer_avg_time_seconds": avg_peer_time,
@@ -147,7 +195,62 @@ def get_my_analytics(db: Session = Depends(get_db), current_user: User = Depends
             "detailed_questions": questions_stats
         })
         
-    return {"analytics": analytics}
+    # Calculate Streak
+    import datetime
+    streak = 0
+    if unique_dates:
+        sorted_dates = sorted(list(unique_dates), reverse=True)
+        today = datetime.datetime.utcnow().date()
+        current_date = today
+        if sorted_dates[0] == today or sorted_dates[0] == today - datetime.timedelta(days=1):
+            current_date = sorted_dates[0]
+            for d in sorted_dates:
+                if d == current_date:
+                    streak += 1
+                    current_date -= datetime.timedelta(days=1)
+                else:
+                    break
+    
+    # Calculate Peer Percentile (Approximation via global avg percentage vs other users' avg percentage)
+    all_users_attempts = db.query(QuizAttempt).filter(QuizAttempt.status == "COMPLETED").all()
+    user_scores = {} # user_id -> {earned, max}
+    for ua in all_users_attempts:
+        if ua.user_id not in user_scores:
+            user_scores[ua.user_id] = {"earned": 0.0, "max": 0.0}
+        user_scores[ua.user_id]["earned"] += ua.total_marks
+        qs = db.query(Question).filter(Question.quiz_id == ua.quiz_id, Question.version == ua.quiz_version).all()
+        user_scores[ua.user_id]["max"] += sum(q.marks for q in qs)
+        
+    user_percentages = []
+    for uid, data in user_scores.items():
+        if data["max"] > 0:
+            user_percentages.append((uid, data["earned"] / data["max"]))
+            
+    my_percentile = 0
+    if total_max_marks > 0 and len(user_percentages) > 1:
+        my_perc = total_my_marks / total_max_marks
+        lower_than_me = [uid for uid, perc in user_percentages if perc < my_perc and uid != current_user.id]
+        my_percentile = int((len(lower_than_me) / (len(user_percentages) - 1)) * 100)
+    elif len(user_percentages) <= 1 and total_max_marks > 0:
+        my_percentile = 100
+
+    # Format Radar
+    radar_module = [{"subject": v["name"], "score": int((v["earned"]/v["max"])*100)} for k, v in module_scores_acc.items() if v["max"] > 0]
+    radar_topic = [{"subject": v["name"], "score": int((v["earned"]/v["max"])*100)} for k, v in topic_scores_acc.items() if v["max"] > 0]
+    
+    kpis = {
+        "total_accuracy_percentage": round((total_my_marks / total_max_marks * 100), 1) if total_max_marks > 0 else 0,
+        "avg_speed_per_question_seconds": round((total_my_time / total_qs_answered), 1) if total_qs_answered > 0 else 0,
+        "peer_percentile": my_percentile,
+        "consistency_streak_days": streak
+    }
+
+    return {
+        "kpis": kpis,
+        "radar_stats_module": radar_module,
+        "radar_stats_topic": radar_topic,
+        "analytics": analytics
+    }
 
 @router.get("/module/{module_id}")
 def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
@@ -198,10 +301,20 @@ def get_single_quiz(quiz_id: int, db: Session = Depends(get_db)):
     
     for q in current_questions:
         options_list = [{"text": opt.text, "is_correct": opt.is_correct} for opt in q.options]
+        import json
+        parsed_topics = []
+        if q.topic_ids:
+            try:
+                parsed_topics = json.loads(q.topic_ids)
+            except:
+                pass
+        
         questions_list.append({
             "text": q.text, "type": q.type.value if hasattr(q.type, 'value') else q.type,
             "marks": q.marks, "negative_marks": q.negative_marks, "image_url": q.image_url,
-            "correct_number": q.correct_number, "correct_text": q.correct_text, "options": options_list
+            "correct_number": q.correct_number, "correct_text": q.correct_text, 
+            "unit_id": q.unit_id, "topic_ids": parsed_topics,
+            "options": options_list
         })
         
     return {
@@ -246,6 +359,7 @@ def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: Session = Depends(get_db)
     db.flush() 
 
     for q_data in quiz_in.questions:
+        import json
         new_question = Question(
             quiz_id=quiz.id, 
             text=q_data.text, 
@@ -255,6 +369,8 @@ def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: Session = Depends(get_db)
             image_url=q_data.image_url, 
             correct_number=q_data.correct_number, 
             correct_text=q_data.correct_text,
+            unit_id=q_data.unit_id,
+            topic_ids=json.dumps(q_data.topic_ids) if q_data.topic_ids else None,
             version=quiz.version # 👈 Link to this specific version!
         )
         db.add(new_question)

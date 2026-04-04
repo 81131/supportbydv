@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, CheckCircle2, GripVertical, AlertCircle, Clock, BookOpen, CheckSquare, FileText, Save, ListOrdered, Edit3, Settings, Upload, LayoutGrid, XCircle, Image as ImageIcon } from 'lucide-react';
-import type { Question, QuestionType, AnswerOption } from '../types/quiz';
+import type { Question, QuestionType, AnswerOption, LectureUnit } from '../types/quiz';
 import api from '../api';
 
 const QuizMaker = () => {
@@ -22,12 +22,27 @@ const QuizMaker = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [availableModules, setAvailableModules] = useState<any[]>([]);
+  const [moduleUnits, setModuleUnits] = useState<LectureUnit[]>([]);
 
   const [showDrawer, setShowDrawer] = useState(false);
+
+  // Topic Modal State
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
+  const [topicModalUnitId, setTopicModalUnitId] = useState<number | null>(null);
+  const [topicModalQuestionIndex, setTopicModalQuestionIndex] = useState<number | null>(null);
 
   // Drag state for the Scroll Layout pill reordering
   const dragPillIndex = useRef<number | null>(null);
   const [dragOverPillIndex, setDragOverPillIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (moduleId) {
+      api.get(`/modules/${moduleId}/units-with-topics`).then(res => setModuleUnits(res.data)).catch(console.error);
+    } else {
+      setModuleUnits([]);
+    }
+  }, [moduleId]);
 
   useEffect(() => {
     api.get('/modules').then(res => setAvailableModules(res.data)).catch(console.error);
@@ -65,7 +80,9 @@ const QuizMaker = () => {
             imageUrl: q.image_url,
             options,
             correctNumber: type === 'NUMBER' ? Number(q.correct_number) : undefined,
-            correctText: (type === 'SHORT_TEXT' || type === 'ESSAY') ? String(q.correct_text || '') : undefined
+            correctText: (type === 'SHORT_TEXT' || type === 'ESSAY') ? String(q.correct_text || '') : undefined,
+            unitId: q.unit_id || null,
+            topicIds: q.topic_ids || []
           };
         });
         setQuestions(mappedQs);
@@ -79,7 +96,9 @@ const QuizMaker = () => {
       imageUrl: undefined,
       options: ['MCQ', 'CHECKBOX', 'DRAG_DROP', 'FILL_BLANK'].includes(type) ? [{ text: '', isCorrect: !['MCQ', 'CHECKBOX'].includes(type) }, { text: '', isCorrect: false }] : undefined,
       correctNumber: undefined,
-      correctText: ''
+      correctText: '',
+      unitId: null,
+      topicIds: []
     };
     setQuestions([...questions, newQuestion]);
   };
@@ -122,6 +141,22 @@ const QuizMaker = () => {
   const handlePillDragEnd = () => {
     dragPillIndex.current = null;
     setDragOverPillIndex(null);
+  };
+
+  const submitAddTopic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTopicName.trim() || topicModalUnitId === null || topicModalQuestionIndex === null) return;
+    try {
+        const res = await api.post(`/modules/units/${topicModalUnitId}/topics`, { name: newTopicName });
+        setModuleUnits(prev => prev.map(u => u.id === topicModalUnitId ? { ...u, topics: [...u.topics, res.data] } : u));
+        const newQs = [...questions];
+        if (!newQs[topicModalQuestionIndex].topicIds) newQs[topicModalQuestionIndex].topicIds = [];
+        newQs[topicModalQuestionIndex].topicIds!.push(res.data.id);
+        setQuestions(newQs);
+        setShowTopicModal(false);
+    } catch(err) {
+        alert("Failed to forge topic.");
+    }
   };
 
   const uploadResource = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,7 +215,9 @@ const QuizMaker = () => {
         image_url: q.imageUrl,
         options: mappedOptions,
         correct_number: q.type === 'NUMBER' ? q.correctNumber : null,
-        correct_text: (q.type === 'SHORT_TEXT' || q.type === 'ESSAY') ? q.correctText : null
+        correct_text: (q.type === 'SHORT_TEXT' || q.type === 'ESSAY') ? q.correctText : null,
+        unit_id: q.unitId || null,
+        topic_ids: q.topicIds?.length ? q.topicIds : null
       };
     });
 
@@ -452,7 +489,42 @@ const QuizMaker = () => {
                   const newQs = [...questions]; newQs[qIndex].negativeMarks = Number(e.target.value); setQuestions(newQs);
                 }} min="0" step="0.5" style={{ marginTop: '0.5rem', marginBottom: 0 }} placeholder="e.g. 0.25" />
               </div>
+              <div style={{ flex: 1 }}>
+                 <label className="text-desc" style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>Lecture Unit</label>
+                 <select className="auth-input" value={q.unitId || ''} onChange={(e) => {
+                   const newQs = [...questions]; newQs[qIndex].unitId = e.target.value ? Number(e.target.value) : null; newQs[qIndex].topicIds = []; setQuestions(newQs);
+                 }} style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+                    <option value="">-- No Unit --</option>
+                    {moduleUnits.map(mu => <option key={mu.id} value={mu.id}>{mu.unit_identifier}: {mu.name}</option>)}
+                 </select>
+              </div>
             </div>
+
+            {q.unitId && (
+               <div style={{ padding: '1rem', backgroundColor: 'var(--bg-deep)', borderRadius: '8px', border: '1px solid var(--border-dark)', borderTop: 'none', borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                  <label className="text-desc" style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>Topics <span style={{fontWeight: 'normal', fontStyle:'italic'}}>(optional)</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', background: 'rgba(0,0,0,0.2)', padding:'0.5rem', borderRadius:'4px', marginTop:'0.5rem' }}>
+                     {moduleUnits.find(u => u.id === q.unitId)?.topics.map(t => (
+                        <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', fontSize:'0.8rem', background: q.topicIds?.includes(t.id) ? 'var(--accent-gold)' : 'var(--bg-dark)', color: q.topicIds?.includes(t.id) ? 'black' : 'var(--text-main)', padding: '0.2rem 0.5rem', borderRadius: '12px' }}>
+                           <input type="checkbox" checked={q.topicIds?.includes(t.id)} style={{display: 'none'}} onChange={(e) => {
+                             const newQs = [...questions];
+                             if (!newQs[qIndex].topicIds) newQs[qIndex].topicIds = [];
+                             if (e.target.checked) newQs[qIndex].topicIds!.push(t.id);
+                             else newQs[qIndex].topicIds = newQs[qIndex].topicIds!.filter((id: number) => id !== t.id);
+                             setQuestions(newQs);
+                           }} />
+                           {t.name}
+                        </label>
+                     ))}
+                     <button onClick={() => {
+                        setTopicModalUnitId(q.unitId as number);
+                        setTopicModalQuestionIndex(qIndex);
+                        setNewTopicName('');
+                        setShowTopicModal(true);
+                     }} className="btn-ghost-gold" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '12px', borderStyle: 'dashed' }}><Plus size={12}/> New Topic</button>
+                  </div>
+               </div>
+            )}
           </div>
         ))}
 
@@ -534,6 +606,23 @@ const QuizMaker = () => {
           </button>
         </div>
       </div>
+
+      {showTopicModal && (
+        <div className="modal-overlay" onClick={() => setShowTopicModal(false)} style={{ zIndex: 1100 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setShowTopicModal(false)}>✕</button>
+            <h2 className="brand-font" style={{ marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>Forge Topic</h2>
+            <form onSubmit={submitAddTopic} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                 <label className="text-desc" style={{display:'block'}}>Topic Name</label>
+                 <input type="text" className="auth-input" placeholder="e.g. Velocity Vectors" value={newTopicName} onChange={e => setNewTopicName(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn-solid-gold" style={{marginTop: '0.5rem', justifyContent: 'center'}}>Add Topic</button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

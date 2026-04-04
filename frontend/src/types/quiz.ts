@@ -10,6 +10,18 @@ export interface Module {
   semester: number;
 }
 
+export interface LectureTopic {
+  id: number;
+  name: string;
+}
+
+export interface LectureUnit {
+  id: number;
+  unit_identifier: string;
+  name: string;
+  topics: LectureTopic[];
+}
+
 export interface AnswerOption {
   id?: number;
   text: string;
@@ -26,6 +38,8 @@ export interface Question {
   options?: AnswerOption[]; 
   correctNumber?: number;   
   correctText?: string;     
+  unitId?: number | null;
+  topicIds?: number[];
 }
 
 export interface Quiz {
