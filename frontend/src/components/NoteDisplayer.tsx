@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus } from 'lucide-react';
 import api from '../api';
 
@@ -16,6 +16,15 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const [filterVerified, setFilterVerified] = useState(false);
   const [filterRecommended, setFilterRecommended] = useState(false);
   const [filterNoOne, setFilterNoOne] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialUnitId = searchParams.get('unitId') || '';
+  const initialTopicId = searchParams.get('topicId') || '';
+
+  const [filterUnit, setFilterUnit] = useState<string>(initialUnitId);
+  const [filterTopic, setFilterTopic] = useState<string>(initialTopicId);
+  
+  const [availableUnits, setAvailableUnits] = useState<any[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<any[]>([]);
 
   const [selectedNotes, setSelectedNotes] = useState<number[]>([]);
 
@@ -39,7 +48,20 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     setTimeout(() => setFlashMessage(null), 3000);
   };
 
-  useEffect(() => { fetchNotes(); }, [moduleId]);
+  useEffect(() => {
+    api.get(`/modules/${moduleId}/units-with-topics`).then(res => setAvailableUnits(res.data)).catch(console.error);
+  }, [moduleId]);
+
+  useEffect(() => {
+    if (filterUnit) {
+      const unit = availableUnits.find(u => u.id === Number(filterUnit));
+      setAvailableTopics(unit ? unit.topics : []);
+    } else {
+      setAvailableTopics([]);
+    }
+  }, [filterUnit, availableUnits]);
+
+  useEffect(() => { fetchNotes(); }, [moduleId, filterUnit, filterTopic, filterRecommended]);
 
   useEffect(() => {
     // Fetch all modules for the collection module dropdown
@@ -47,9 +69,18 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   }, []);
 
   const fetchNotes = async () => {
+    setIsLoading(true);
     try {
-      const res = await api.get(`/library/notes/module/${moduleId}`);
+      const query = new URLSearchParams();
+      if (filterUnit) query.append('unitId', filterUnit);
+      if (filterTopic) query.append('topicId', filterTopic);
+      if (filterRecommended) query.append('recommended', 'true');
+
+      const res = await api.get(`/library/notes/module/${moduleId}?${query.toString()}`);
       setNotes(res.data);
+      
+      // Update URL silently
+      setSearchParams(query, { replace: true });
     } catch (error) { console.error(error); } 
     finally { setIsLoading(false); }
   };
@@ -149,7 +180,6 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     const isVerified = role === 'verified' || role === 'VERIFIED' || role === 'admin' || role === 'ADMIN' || isNoOne;
 
     if (filterVerified && !isVerified) return false;
-    if (filterRecommended && !note.is_recommended) return false;
     if (filterNoOne && !isNoOne) return false;
     return true;
   }).sort((a, b) => {
@@ -190,11 +220,24 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold)' }}>
           <Filter size={20} /> <strong style={{ marginRight: '1rem' }}>Filter Archives</strong>
         </div>
-        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="auth-input" style={{ width: 'auto', padding: '0.5rem', margin: 0 }}>
+        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0, fontSize: '0.9rem' }}>
           <option value="newest">Last Updated</option>
           <option value="nameAsc">Name (A-Z)</option>
           <option value="nameDesc">Name (Z-A)</option>
         </select>
+        
+        <select value={filterUnit} onChange={(e) => { setFilterUnit(e.target.value); setFilterTopic(''); }} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0, fontSize: '0.9rem' }}>
+           <option value="">All Units</option>
+           {availableUnits.map(u => <option key={u.id} value={u.id}>{u.unit_identifier} - {u.name}</option>)}
+        </select>
+
+        {filterUnit && (
+          <select value={filterTopic} onChange={(e) => setFilterTopic(e.target.value)} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0, fontSize: '0.9rem' }}>
+            <option value="">All Topics</option>
+            {availableTopics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        )}
+
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.9rem' }}>
             <input type="checkbox" checked={filterVerified} onChange={e => setFilterVerified(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>

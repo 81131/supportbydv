@@ -26,6 +26,15 @@ const NoteUploader: React.FC = () => {
   const [description, setDescription] = useState('');
   const [moduleId, setModuleId] = useState<number | ''>(prefillModuleId as number | '');
   const [availableModules, setAvailableModules] = useState<any[]>([]);
+  
+  const [unitId, setUnitId] = useState<number | ''>('');
+  const [topicIds, setTopicIds] = useState<number[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<any[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<any[]>([]);
+  
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
+
   const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   const showFlash = (message: string, type: 'success' | 'error' = 'success') => {
@@ -36,6 +45,64 @@ const NoteUploader: React.FC = () => {
   React.useEffect(() => {
     api.get('/modules').then(res => setAvailableModules(res.data)).catch(console.error);
   }, []);
+  
+  React.useEffect(() => {
+    if (moduleId) {
+      api.get(`/modules/${moduleId}/units-with-topics`).then(res => {
+         setAvailableUnits(res.data);
+         setUnitId('');
+         setTopicIds([]);
+         setAvailableTopics([]);
+      });
+    } else {
+         setAvailableUnits([]);
+         setUnitId('');
+         setTopicIds([]);
+         setAvailableTopics([]);
+    }
+  }, [moduleId]);
+
+  React.useEffect(() => {
+    if (unitId) {
+      const selectedUnit = availableUnits.find(u => u.id === unitId);
+      if (selectedUnit && selectedUnit.topics) {
+          setAvailableTopics(selectedUnit.topics);
+      } else {
+          setAvailableTopics([]);
+      }
+      setTopicIds([]);
+    } else {
+      setAvailableTopics([]);
+    }
+  }, [unitId, availableUnits]);
+
+  const handleTopicToggle = (id: number) => {
+    if (topicIds.includes(id)) {
+      setTopicIds(topicIds.filter(t => t !== id));
+    } else {
+      setTopicIds([...topicIds, id]);
+    }
+  };
+
+  const submitAddTopic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Attempting to create topic:", newTopicName, "for unitId:", unitId);
+    if (!newTopicName.trim() || unitId === '' || unitId === null || unitId === undefined) {
+        console.log("Validation failed. newTopicName:", newTopicName, "unitId:", unitId);
+        return;
+    }
+    try {
+      const res = await api.post(`/modules/units/${unitId}/topics`, { name: newTopicName });
+      setAvailableTopics([...availableTopics, res.data]);
+      setTopicIds([...topicIds, res.data.id]);
+      setShowTopicModal(false);
+      setNewTopicName('');
+      showFlash("Topic created!", 'success');
+    } catch (err) {
+      console.error(err);
+      showFlash("Failed to create topic.", 'error');
+    }
+  };
   
   const [uploadMode, setUploadMode] = useState<'idle' | 'direct' | 'edit'>('idle');
   const [directFile, setDirectFile] = useState<File | null>(null);
@@ -153,6 +220,8 @@ const NoteUploader: React.FC = () => {
     formData.append('title', title);
     if (description) formData.append('description', description);
     formData.append('module_id', moduleId.toString());
+    if (unitId) formData.append('unit_id', unitId.toString());
+    if (topicIds.length > 0) formData.append('topic_ids', JSON.stringify(topicIds));
 
     try {
       if (uploadMode === 'direct' && directFile) {
@@ -241,6 +310,55 @@ const NoteUploader: React.FC = () => {
               ))}
             </select>
           </div>
+          
+          {moduleId && availableUnits.length > 0 && (
+            <div>
+              <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Select Unit (Optional)</label>
+              <select value={unitId} onChange={e => setUnitId(Number(e.target.value))} className="auth-input" style={{ width: '100%' }}>
+                <option value="">No specific unit</option>
+                {availableUnits.map(u => (
+                  <option key={u.id} value={u.id}>{u.unit_identifier} - {u.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {unitId && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label className="text-desc" style={{ display: 'block' }}>Select Topics (Optional)</label>
+                <div 
+                  className="brand-font" 
+                  style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', cursor: 'pointer' }}
+                  onClick={() => setShowTopicModal(true)}
+                >
+                  + Create New Topic
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {availableTopics.map(t => (
+                  <div 
+                    key={t.id} 
+                    onClick={() => handleTopicToggle(t.id)}
+                    style={{ 
+                      padding: '0.3rem 0.8rem', 
+                      borderRadius: '20px', 
+                      border: topicIds.includes(t.id) ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                      color: topicIds.includes(t.id) ? 'var(--accent-gold)' : 'var(--text-muted)',
+                      background: topicIds.includes(t.id) ? 'rgba(255, 215, 0, 0.1)' : 'transparent',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {t.name}
+                  </div>
+                ))}
+                {availableTopics.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No topics exist for this unit yet.</span>}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Attach Files (PDF, DOCX, JPG, PNG)</label>
             <input type="file" multiple accept=".pdf,.doc,.docx,.odt,image/png,image/jpeg,image/jpg" onChange={handleFileChange} style={{ color: 'var(--text-muted)' }} />
@@ -337,6 +455,31 @@ const NoteUploader: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* CREATE TOPIC MODAL */}
+      {showTopicModal && (
+        <div className="modal-overlay" onClick={() => setShowTopicModal(false)} style={{ zIndex: 1100 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', width: '90%' }}>
+            <button type="button" className="close-btn" onClick={() => setShowTopicModal(false)}>✕</button>
+            <h2 className="brand-font" style={{ marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>Forge Topic</h2>
+            <form onSubmit={submitAddTopic} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                 <label className="text-desc" style={{display:'block'}}>Topic Name</label>
+                 <input
+                   type="text"
+                   autoFocus
+                   className="auth-input"
+                   placeholder="e.g. Velocity Vectors"
+                   value={newTopicName}
+                   onChange={e => setNewTopicName(e.target.value)}
+                   required
+                 />
+              </div>
+              <button type="submit" className="btn-solid-gold" style={{marginTop: '0.5rem', justifyContent: 'center'}}>Create</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

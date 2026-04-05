@@ -25,6 +25,9 @@ class Note(Base):
     module_id = Column(Integer, ForeignKey("modules.id", ondelete="CASCADE"), nullable=False)
     uploader_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
+    unit_id = Column(Integer, ForeignKey("lecture_units.id", ondelete="SET NULL"), nullable=True)
+    topic_ids = Column(String, nullable=True) # JSON-encoded array
+    
     # Governance (No One's Power)
     is_pinned = Column(Boolean, default=False)
     is_recommended = Column(Boolean, default=False)

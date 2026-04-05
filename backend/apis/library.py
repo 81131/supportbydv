@@ -35,6 +35,8 @@ async def upload_note(
     title: str = Form(...),
     description: str = Form(None),
     module_id: int = Form(...),
+    unit_id: int = Form(None),
+    topic_ids: str = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -73,7 +75,9 @@ async def upload_note(
         file_url=file_path,
         file_type=file_extension,
         module_id=module_id,
-        uploader_id=current_user.id
+        uploader_id=current_user.id,
+        unit_id=unit_id,
+        topic_ids=topic_ids
     )
     db.add(new_note)
     db.commit()
@@ -154,8 +158,23 @@ def download_collection_as_zip(collection_id: str, db: Session = Depends(get_db)
 
 # 👇 Ensure you are passing current_user in!
 @router.get("/notes/module/{module_id}")
-def get_notes_by_module(module_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    notes = db.query(Note).filter(Note.module_id == module_id).all()
+def get_notes_by_module(
+    module_id: int, 
+    unitId: int = None,
+    topicId: int = None,
+    recommended: str = None,
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    query = db.query(Note).filter(Note.module_id == module_id)
+    if unitId:
+        query = query.filter(Note.unit_id == unitId)
+    if topicId:
+        query = query.filter(Note.topic_ids.like(f"%{topicId}%"))
+    if recommended == 'true':
+        query = query.filter(Note.is_recommended == True)
+        
+    notes = query.all()
     
     result = []
     for n in notes:
@@ -176,6 +195,8 @@ def get_notes_by_module(module_id: int, db: Session = Depends(get_db), current_u
             "file_type": n.file_type, "uploader_id": n.uploader_id,
             "creator_role": creator_role, "is_recommended": n.is_recommended, 
             "is_pinned": n.is_pinned,
+            "unit_id": n.unit_id,
+            "topic_ids": n.topic_ids,
             "is_favorited": is_fav # 👈 Ship it to React!
         })
     return result
