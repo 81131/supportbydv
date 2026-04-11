@@ -96,6 +96,7 @@ class CollectionNote(Base):
     collection_id = Column(Integer, ForeignKey("collections.id", ondelete="CASCADE"), nullable=False)
     note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False)
     added_at = Column(DateTime(timezone=True), server_default=func.now())
+    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
 
     collection = relationship("Collection", back_populates="note_links")
     note = relationship("Note", back_populates="collection_links")

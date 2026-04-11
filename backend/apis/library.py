@@ -119,6 +119,31 @@ def download_single_note(note_id: int, db: Session = Depends(get_db)):
         
     return FileResponse(path=note.file_url, filename=f"{note.title}.{note.file_type}")
 
+@router.get("/notes/text/{note_id}")
+def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Extracts and returns plain text from a PDF scroll for read-aloud."""
+    from pypdf import PdfReader
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note or not os.path.exists(note.file_url):
+        raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
+    if note.file_type != "pdf":
+        raise HTTPException(status_code=400, detail="Only PDF scrolls can be read aloud.")
+    try:
+        reader = PdfReader(note.file_url)
+        pages_text = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                pages_text.append(text.strip())
+        full_text = "\n\n".join(pages_text)
+        if not full_text.strip():
+            raise HTTPException(status_code=422, detail="This scroll contains no extractable text (it may be a scanned image).")
+        return {"text": full_text, "page_count": len(reader.pages)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not read this scroll: {str(e)}")
+
 # ==========================================
 # 🗂️ COLLECTIONS & DYNAMIC ZIP STREAMING
 # ==========================================
@@ -314,12 +339,6 @@ def toggle_favorite(note_id: int, db: Session = Depends(get_db), current_user: U
     db.commit()
     return {"message": "Added to favorites.", "is_favorited": True}
 
-@router.get("/collections/me")
-def get_my_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Fetches the user's personal vaults."""
-    cols = db.query(Collection).filter(Collection.creator_id == current_user.id).all()
-    return [{"id": c.id, "title": c.title, "visibility": c.visibility.value} for c in cols]
-
 @router.post("/collections")
 def create_collection(data: CollectionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Forges a new archive."""
@@ -372,29 +391,8 @@ def get_my_favorite_notes(db: Session = Depends(get_db), current_user: User = De
         })
     return result
 
-@router.get("/collections/{collection_id}/notes")
-def get_notes_in_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Fetches all scrolls stored inside a specific archive."""
-    # 1. Verify the collection exists and the user is allowed to see it
-    collection = db.query(Collection).filter(Collection.id == collection_id).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Archive not found.")
-        
-    if collection.visibility == VisibilityEnum.PRIVATE and collection.creator_id != current_user.id and current_user.role.value != "noOne":
-        raise HTTPException(status_code=403, detail="This archive is sealed.")
-
-    # 2. Fetch the notes
-    linked_notes = db.query(Note).join(CollectionNote).filter(CollectionNote.collection_id == collection_id).all()
-    
-    result = []
-    for n in linked_notes:
-        is_fav = db.query(FavoriteNote).filter(FavoriteNote.note_id == n.id, FavoriteNote.user_id == current_user.id).first() is not None
-        result.append({
-            "id": n.id, "title": n.title, "description": n.description,
-            "file_type": n.file_type, "is_favorited": is_fav
-        })
-    return result
-
+# ⚠️  IMPORTANT: /collections/me MUST be registered BEFORE /collections/{collection_id}
+# otherwise FastAPI captures "me" as collection_id (int) → 422 Unprocessable Entity.
 @router.get("/collections/me")
 def get_my_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetches the user's personal vaults AND injects the Virtual Favorites Archive."""
@@ -407,11 +405,15 @@ def get_my_collections(db: Session = Depends(get_db), current_user: User = Depen
 
     # 3. Inject the "Virtual" Favorites Collection at the very top!
     result = [{
-        "id": "favorites", # 👈 Special string ID so React knows it's the virtual one
+        "id": "favorites",
         "title": "Liked Scrolls",
         "description": "All the scrolls you have favorited across the realm.",
         "visibility": "private",
         "is_special": True,
+        "creator_id": current_user.id,
+        "module_id": None,
+        "year": None,
+        "semester": None,
         "note_count": fav_count
     }]
 
@@ -424,10 +426,105 @@ def get_my_collections(db: Session = Depends(get_db), current_user: User = Depen
             "description": c.description,
             "visibility": c.visibility.value,
             "is_special": False,
+            "creator_id": c.creator_id,
+            "module_id": c.module_id,
+            "year": c.year,
+            "semester": c.semester,
             "note_count": note_count
         })
         
     return result
+
+@router.get("/collections/{collection_id}")
+def get_collection_detail(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Returns metadata for a single collection, including creator info."""
+    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not col:
+        raise HTTPException(status_code=404, detail="Archive not found.")
+    if col.visibility == VisibilityEnum.PRIVATE and col.creator_id != current_user.id and current_user.role.value != "noOne":
+        raise HTTPException(status_code=403, detail="This archive is sealed.")
+    creator = db.query(User).filter(User.id == col.creator_id).first()
+    note_count = db.query(CollectionNote).filter(CollectionNote.collection_id == col.id).count()
+    return {
+        "id": col.id, "title": col.title, "description": col.description,
+        "visibility": col.visibility.value,
+        "is_special": False,
+        "is_recommended": col.is_recommended, "is_pinned": col.is_pinned,
+        "module_id": col.module_id, "year": col.year, "semester": col.semester,
+        "note_count": note_count,
+        "creator_id": col.creator_id,
+        "creator_name": creator.first_name if creator else "Unknown",
+    }
+
+@router.get("/collections/{collection_id}/notes")
+def get_notes_in_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Fetches all scrolls stored inside a specific archive."""
+    # 1. Verify the collection exists and the user is allowed to see it
+    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not collection:
+        raise HTTPException(status_code=404, detail="Archive not found.")
+        
+    if collection.visibility == VisibilityEnum.PRIVATE and collection.creator_id != current_user.id and current_user.role.value != "noOne":
+        raise HTTPException(status_code=403, detail="This archive is sealed.")
+
+    # 2. Fetch the notes ordered by sort_order
+    links = (
+        db.query(CollectionNote)
+        .filter(CollectionNote.collection_id == collection_id)
+        .order_by(CollectionNote.sort_order.asc(), CollectionNote.id.asc())
+        .all()
+    )
+
+    result = []
+    for link in links:
+        n = link.note
+        if not n:
+            continue
+        is_fav = db.query(FavoriteNote).filter(FavoriteNote.note_id == n.id, FavoriteNote.user_id == current_user.id).first() is not None
+        uploader = db.query(User).filter(User.id == n.uploader_id).first()
+        creator_name = uploader.first_name if uploader else "Scholar"
+        result.append({
+            "id": n.id, "title": n.title, "description": n.description,
+            "file_type": n.file_type, "is_favorited": is_fav,
+            "uploader_id": n.uploader_id, "uploader_name": creator_name,
+        })
+    return result
+
+@router.delete("/collections/{collection_id}/notes/{note_id}")
+def remove_note_from_collection(collection_id: int, note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Removes a scroll from an archive (owner only)."""
+    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not col:
+        raise HTTPException(status_code=404, detail="Archive not found.")
+    if col.creator_id != current_user.id and current_user.role.value != "noOne":
+        raise HTTPException(status_code=403, detail="Not your archive.")
+    link = db.query(CollectionNote).filter_by(collection_id=collection_id, note_id=note_id).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Scroll not in this archive.")
+    db.delete(link)
+    db.commit()
+    return {"message": "Scroll removed from archive."}
+
+class NoteReorderRequest(BaseModel):
+    note_ids: list[int]  # ordered list of note IDs, from first to last
+
+@router.patch("/collections/{collection_id}/notes/reorder")
+def reorder_notes_in_collection(collection_id: int, data: NoteReorderRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Updates the sort_order for notes in a collection (owner only)."""
+    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not col:
+        raise HTTPException(status_code=404, detail="Archive not found.")
+    if col.creator_id != current_user.id and current_user.role.value != "noOne":
+        raise HTTPException(status_code=403, detail="Not your archive.")
+    for idx, note_id in enumerate(data.note_ids):
+        link = db.query(CollectionNote).filter_by(collection_id=collection_id, note_id=note_id).first()
+        if link:
+            link.sort_order = idx
+    db.commit()
+    return {"message": "Order saved."}
+
+
+# /collections/me is now registered above /collections/{collection_id} — see line ~370
 
 
 class VisibilityUpdate(BaseModel):
@@ -462,3 +559,38 @@ def toggle_collection_hidden(
     col.is_hidden = not col.is_hidden
     db.commit()
     return {"message": "Archive hidden status toggled."}
+
+
+class CollectionEditRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    visibility: Optional[str] = None
+    module_id: Optional[int] = None
+    year: Optional[int] = None
+    semester: Optional[int] = None
+
+@router.patch("/collections/{collection_id}/edit")
+def edit_collection(
+    collection_id: int, data: CollectionEditRequest,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """Update archive metadata (title, description, module, year, semester, visibility)."""
+    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not col:
+        raise HTTPException(status_code=404, detail="Archive not found.")
+    if col.creator_id != current_user.id and current_user.role.value not in ["admin", "noOne"]:
+        raise HTTPException(status_code=403, detail="Not your archive.")
+    if data.title is not None and data.title.strip():
+        col.title = data.title.strip()
+    if data.description is not None:
+        col.description = data.description.strip()
+    if data.visibility is not None:
+        col.visibility = VisibilityEnum.PUBLIC if data.visibility == 'public' else VisibilityEnum.PRIVATE
+    # Allow setting module_id to None (cross-module) — use sentinel key check instead of None check
+    col.module_id = data.module_id  # None is valid (means "all modules")
+    if data.year is not None:
+        col.year = data.year
+    if data.semester is not None:
+        col.semester = data.semester
+    db.commit()
+    return {"message": "Archive updated successfully."}

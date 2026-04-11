@@ -43,6 +43,9 @@ def wait_for_db():
                 conn.execute(text(
                     "ALTER TABLE achievements ADD COLUMN IF NOT EXISTS frame_name VARCHAR"
                 ))
+                conn.execute(text(
+                    "ALTER TABLE collection_notes ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
+                ))
                 conn.commit()
             print("✅ Database connected and tables created!")
             return

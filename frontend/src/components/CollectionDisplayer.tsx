@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Library, DownloadCloud, Pin, Award, VenetianMask, BadgeCheck, Filter, Heart, Lock, Globe, EyeOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../api';
 
 interface CollectionDisplayerProps {
@@ -16,6 +17,7 @@ const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) =
   const [filterVerified, setFilterVerified] = useState(false);
   const [filterRecommended, setFilterRecommended] = useState(false);
   const [filterNoOne, setFilterNoOne] = useState(false);
+  const [filterMine, setFilterMine] = useState(false);
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -84,6 +86,7 @@ const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) =
     if (filterVerified && !isVerified && !col.is_special) return false;
     if (filterRecommended && !col.is_recommended && !col.is_special) return false;
     if (filterNoOne && !isNoOne && !col.is_special) return false;
+    if (filterMine && col.creator_id !== currentUser?.id && !col.is_special) return false;
     
     return true;
   }).sort((a, b) => {
@@ -126,6 +129,10 @@ const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) =
             <input type="checkbox" checked={filterNoOne} onChange={e => setFilterNoOne(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
             <VenetianMask size={16} color="var(--accent-purple, #b39ddb)" /> By No One
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
+            <input type="checkbox" checked={filterMine} onChange={e => setFilterMine(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
+            <Heart size={16} color="var(--accent-gold)" /> My Archives
+          </label>
         </div>
       </div>
 
@@ -148,7 +155,15 @@ const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) =
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {col.is_special ? <Heart size={24} color="var(--accent-red)" fill="var(--accent-red)" /> : <Library size={24} color="var(--accent-gold)" />}
-                    <h3 className="text-title">{col.title}</h3>
+                    <Link
+                      to={`/collection/${col.id}`}
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <h3 className="text-title" style={{ margin: 0, transition: 'color 0.2s' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-gold)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '')}
+                      >{col.title}</h3>
+                    </Link>
                   </div>
                 </div>
 
@@ -165,6 +180,16 @@ const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) =
                 <p className="text-desc" style={{ marginBottom: '1.5rem', minHeight: '40px', flex: 1 }}>
                   {col.description || "A curated collection of scrolls."}
                 </p>
+
+                {/* Creator link */}
+                {!col.is_special && col.creator_name && (
+                  <p className="text-desc" style={{ fontSize: '0.82rem', marginBottom: '1rem' }}>
+                    Forged by{' '}
+                    <Link to={`/user/${col.creator_id}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 600 }}>
+                      {col.creator_name}
+                    </Link>
+                  </p>
+                )}
                 
                 {currentUser?.id === col.creator_id && !col.is_special && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>

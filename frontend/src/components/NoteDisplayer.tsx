@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus } from 'lucide-react';
+import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus, Upload, BookOpen } from 'lucide-react';
 import api from '../api';
+import PdfViewer from './PdfViewer';
 
 interface NoteDisplayerProps {
   moduleId: number;
@@ -11,11 +12,13 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const [notes, setNotes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const [pdfNote, setPdfNote] = useState<{ id: number; title: string } | null>(null);
 
   const [sortOrder, setSortOrder] = useState<'newest' | 'nameAsc' | 'nameDesc'>('newest');
   const [filterVerified, setFilterVerified] = useState(false);
   const [filterRecommended, setFilterRecommended] = useState(false);
   const [filterNoOne, setFilterNoOne] = useState(false);
+  const [filterMyUploads, setFilterMyUploads] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const initialUnitId = searchParams.get('unitId') || '';
   const initialTopicId = searchParams.get('topicId') || '';
@@ -164,6 +167,14 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     } catch (error) { showFlash("This scroll is sealed or lost to time.", 'error'); }
   };
 
+  const openNote = (note: any) => {
+    if (note.file_type === 'pdf') {
+      setPdfNote({ id: note.id, title: note.title });
+    } else {
+      handleDownload(note.id, note.title, note.file_type || 'file');
+    }
+  };
+
   const handleDelete = async (noteId: number) => {
     if (window.confirm("Are you sure you want to burn this scroll?")) {
       try {
@@ -181,6 +192,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
     if (filterVerified && !isVerified) return false;
     if (filterNoOne && !isNoOne) return false;
+    if (filterMyUploads && note.uploader_id !== currentUser?.id) return false;
     return true;
   }).sort((a, b) => {
     if (sortOrder === 'nameAsc') return a.title.localeCompare(b.title);
@@ -190,6 +202,15 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   return (
     <div className="page-container" style={{ position: 'relative' }}>
+
+      {/* PDF Viewer Modal */}
+      {pdfNote && (
+        <PdfViewer
+          noteId={pdfNote.id}
+          title={pdfNote.title}
+          onClose={() => setPdfNote(null)}
+        />
+      )}
       
       {flashMessage && (
         <div style={{
@@ -251,6 +272,10 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
             <input type="checkbox" checked={filterNoOne} onChange={e => setFilterNoOne(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
             <VenetianMask size={16} color="var(--accent-purple, #b39ddb)" /> By No One
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
+            <input type="checkbox" checked={filterMyUploads} onChange={e => setFilterMyUploads(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
+            <Upload size={16} color="var(--accent-gold)" /> My Uploads
+          </label>
         </div>
       </div>
 
@@ -280,10 +305,34 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                     style={{ width: '20px', height: '20px', accentColor: 'var(--accent-gold)', marginTop: '0.2rem', cursor: 'pointer' }}
                   />
 
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
-                      <FileText size={20} color="var(--accent-gold)" />
-                      <h4 className="text-title">{note.title}</h4>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                      <FileText size={20} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+                      {/* Clickable title */}
+                      <button
+                        onClick={() => openNote(note)}
+                        style={{
+                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                          color: 'var(--text-primary)', textAlign: 'left', fontWeight: 700,
+                          fontSize: '1rem', fontFamily: 'inherit',
+                          transition: 'color 0.2s',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent-gold)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+                        title={note.file_type === 'pdf' ? 'Read online' : 'Download'}
+                      >
+                        {note.title}
+                      </button>
+                      {/* READ ONLINE badge for PDFs */}
+                      {note.file_type === 'pdf' && (
+                        <span style={{
+                          fontSize: '0.68rem', background: 'rgba(212,175,55,0.12)', color: 'var(--accent-gold)',
+                          border: '1px solid rgba(212,175,55,0.3)', borderRadius: '4px', padding: '1px 6px',
+                          flexShrink: 0,
+                        }}>
+                          READ ONLINE
+                        </span>
+                      )}
                       <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                         {note.is_recommended && <span title="Recommended"><Award size={18} color="var(--accent-gold)" /></span>}
                         {isNoOne && <span title="Forged by No One"><VenetianMask size={18} color="var(--accent-purple, #b39ddb)" /></span>}
@@ -314,15 +363,22 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                   {canDelete && (
                     <button onClick={() => handleDelete(note.id)} title="Burn Scroll" className="btn-ghost-danger"><Trash2 size={18} /></button>
                   )}
-                  
+
                   <button onClick={() => handleFavoriteToggle(note.id)} title={note.is_favorited ? "Remove from Favorites" : "Favorite"} className="btn-ghost" style={{ borderColor: note.is_favorited ? 'var(--accent-red)' : '', color: note.is_favorited ? 'var(--accent-red)' : '' }}>
                     <Heart size={18} fill={note.is_favorited ? "var(--accent-red)" : "transparent"} />
                   </button>
-                  
+
                   <button onClick={() => openCollectionModal(note.id)} title="Add to Archive" className="btn-ghost"><FolderPlus size={18} /></button>
-                  
-                  <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold">
-                    <Download size={18} /> Download
+
+                  {/* Read Online button for PDFs */}
+                  {note.file_type === 'pdf' && (
+                    <button onClick={() => openNote(note)} className="btn-ghost" title="Read online">
+                      <BookOpen size={18} />
+                    </button>
+                  )}
+
+                  <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold" title="Download">
+                    <Download size={18} />
                   </button>
                 </div>
               </div>

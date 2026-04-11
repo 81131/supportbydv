@@ -28,6 +28,7 @@ import MyQuizzes from './pages/MyQuizzes';
 import PerformanceAnalytics from './pages/PerformanceAnalytics';
 import MyProfile from './pages/MyProfile';
 import PublicProfile from './pages/PublicProfile';
+import CollectionView from './pages/CollectionView';
 
 
 function App() {
@@ -172,7 +173,6 @@ function App() {
                     {key}
                   </Link>
                 ))}
-                <Link to="/quiz-maker" className="nav-item" onClick={() => setIsMenuOpen(false)}>Quiz Maker</Link>
                 <Link to="/my-quizzes" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Quizzes</Link>
                 <Link to="/my-vault" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Vault</Link>
               </>
@@ -252,6 +252,7 @@ function App() {
             <Route path="/leaderboard" element={<ProtectedRoute user={user}><Leaderboard /></ProtectedRoute>} />
             <Route path="/upload-note" element={<ProtectedRoute user={user}><NoteUploader /></ProtectedRoute>} />
             <Route path="/my-vault" element={<ProtectedRoute user={user}><MyVault /></ProtectedRoute>} />
+            <Route path="/collection/:id" element={<ProtectedRoute user={user}><CollectionView /></ProtectedRoute>} />
             <Route path="/my-quizzes" element={<ProtectedRoute user={user}><MyQuizzes /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute user={user}><PerformanceAnalytics /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute user={user}><MyProfile /></ProtectedRoute>} />
