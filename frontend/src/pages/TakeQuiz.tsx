@@ -24,6 +24,7 @@ const TakeQuiz: React.FC = () => {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [flash, setFlash] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const showFlash = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setFlash({ message, type });
@@ -172,8 +173,14 @@ const TakeQuiz: React.FC = () => {
       const unansweredCount = quiz.questions.length - Object.keys(answers).filter(qId => isAnswered(parseInt(qId))).length;
       let confirmMsg = "Are you sure you want to finalize your answers?";
       if (unansweredCount > 0) confirmMsg = `You have ${unansweredCount} unanswered question(s). Are you sure you want to finish the attempt?`;
-      if (!window.confirm(confirmMsg)) return;
+      // Show our custom dialog instead of window.confirm
+      setConfirmDialog({ message: confirmMsg, onConfirm: () => { setConfirmDialog(null); doSubmit(); } });
+      return;
     }
+    doSubmit();
+  };
+
+  const doSubmit = async () => {
 
     setIsSubmitting(true);
     const timeConsumedSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
@@ -330,6 +337,25 @@ const TakeQuiz: React.FC = () => {
         </div>
       )}
 
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div onClick={() => setConfirmDialog(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9990, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dark)', borderRadius: '16px', padding: '2rem', maxWidth: '440px', width: '100%', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <AlertCircle size={28} color="var(--accent-gold)" />
+              <h2 className="brand-font" style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.3rem' }}>Finish Attempt?</h2>
+            </div>
+            <p style={{ color: 'var(--text-main)', lineHeight: 1.6, marginBottom: '2rem' }}>{confirmDialog.message}</p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button className="btn-ghost" onClick={() => setConfirmDialog(null)}>Cancel</button>
+              <button className="btn-solid-gold" onClick={confirmDialog.onConfirm} style={{ justifyContent: 'center' }}>
+                <Send size={16} style={{ marginRight: '0.4rem' }} /> Submit Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile drawer toggle */}
       <div className="mobile-only" style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
         <button className="btn-solid-gold" style={{ borderRadius: '50%', width: '50px', height: '50px', padding: 0, justifyContent: 'center' }} onClick={() => setShowDrawer(!showDrawer)}>
@@ -364,9 +390,16 @@ const TakeQuiz: React.FC = () => {
 
         {/* Utility Panel */}
         <p className="panel-heading">Utility</p>
-        <button className="btn-ghost" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }} onClick={() => showFlash("No generic calculator provided.", "info")}>
-          <Calculator size={16} style={{ marginRight: '0.5rem' }} /> Basic Calculator
-        </button>
+        {quiz.allowed_tools && quiz.allowed_tools.includes("basic_calculator") && (
+          <button className="btn-ghost" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }} onClick={() => showFlash("No generic calculator provided.", "info")}>
+            <Calculator size={16} style={{ marginRight: '0.5rem' }} /> Basic Calculator
+          </button>
+        )}
+        {!quiz.allowed_tools?.includes("basic_calculator") && !quiz.allowed_tools?.includes("sci_calculator") && (
+          <button className="btn-ghost" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }} onClick={() => showFlash("No calculator allowed for this quiz.", "info")}>
+            <Calculator size={16} style={{ marginRight: '0.5rem' }} /> No Calculator
+          </button>
+        )}
         
         {quiz.allowed_tools && quiz.allowed_tools.includes("sci_calculator") && (
           <button className="btn-ghost" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }} onClick={() => setShowCalculator(!showCalculator)}>
@@ -619,6 +652,25 @@ const TakeQuiz: React.FC = () => {
           >
             <Send size={16} style={{ marginRight: '0.4rem' }} /> {isSubmitting ? 'Summoning…' : 'Finish Attempt'}
           </button>
+
+          <div className="panel-divider" style={{ marginTop: '1.5rem' }} />
+          <p className="panel-heading" style={{ marginBottom: '1rem' }}>Utility</p>
+          {quiz.allowed_tools && quiz.allowed_tools.includes("basic_calculator") && (
+            <button className="btn-ghost" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }} onClick={() => { showFlash("No generic calculator provided.", "info"); setShowDrawer(false); }}>
+              <Calculator size={16} style={{ marginRight: '0.5rem' }} /> Basic Calculator
+            </button>
+          )}
+          {quiz.allowed_tools && quiz.allowed_tools.includes("sci_calculator") && (
+            <button className="btn-ghost" style={{ width: '100%', marginBottom: '0.5rem', justifyContent: 'flex-start' }} onClick={() => { setShowCalculator(!showCalculator); setShowDrawer(false); }}>
+              <Calculator size={16} style={{ marginRight: '0.5rem' }} color="var(--accent-gold)" />
+              <span style={{ color: 'var(--accent-gold)' }}>{showCalculator ? 'Close Sci Calc' : 'Sci Calculator'}</span>
+            </button>
+          )}
+          {parsedResources.map((resUrl: string, idx: number) => (
+            <a key={idx} href={`/api${resUrl.startsWith('/') ? '' : '/'}${resUrl}`} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', display: 'flex', color: 'var(--accent-gold)', marginBottom: '0.5rem' }}>
+              <FileText size={16} style={{ marginRight: '0.5rem' }} /> Resource {idx + 1}
+            </a>
+          ))}
         </div>
       </div>
     </div>

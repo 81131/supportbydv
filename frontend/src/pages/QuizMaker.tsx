@@ -303,12 +303,19 @@ const QuizMaker = () => {
           <Settings size={14} color="var(--accent-gold)" />
           <span className="text-desc" style={{ fontWeight: 600, fontSize: '0.8rem' }}>Allowed Tools</span>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)', fontSize: '0.82rem', marginBottom: '0.5rem' }}>
+          <input type="checkbox" checked={allowedTools.includes("basic_calculator")} onChange={(e) => {
+            if (e.target.checked) setAllowedTools([...allowedTools, "basic_calculator"]);
+            else setAllowedTools(allowedTools.filter((t: string) => t !== "basic_calculator"));
+          }} style={{ accentColor: 'var(--accent-gold)' }} />
+          Basic Calculator
+        </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)', fontSize: '0.82rem', marginBottom: '0.8rem' }}>
           <input type="checkbox" checked={allowedTools.includes("sci_calculator")} onChange={(e) => {
             if (e.target.checked) setAllowedTools([...allowedTools, "sci_calculator"]);
             else setAllowedTools(allowedTools.filter((t: string) => t !== "sci_calculator"));
           }} style={{ accentColor: 'var(--accent-gold)' }} />
-          Sci Calculator
+          Scientific Calculator
         </label>
 
         {/* Resources */}
@@ -604,6 +611,61 @@ const QuizMaker = () => {
           <button onClick={() => saveQuiz(true)} disabled={isSaving || questions.length === 0} className="btn-solid-gold" style={{ width: '100%', justifyContent: 'center', opacity: (isSaving || questions.length === 0) ? 0.5 : 1 }}>
             <BookOpen size={16} style={{ marginRight: '0.4rem' }} /> Publish Scroll
           </button>
+
+          <div className="panel-divider" style={{ marginTop: '1.5rem' }} />
+          <p className="panel-heading" style={{ marginBottom: '1rem' }}>Advanced Options</p>
+
+          {/* Time */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+            <Clock size={14} color="var(--accent-gold)" />
+            <span className="text-desc" style={{ fontWeight: 600, fontSize: '0.8rem' }}>Time Limit</span>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)', fontSize: '0.82rem', marginBottom: '0.6rem' }}>
+            <input type="checkbox" checked={hasTimeLimit} onChange={(e) => setHasTimeLimit(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }} />
+            Enforce limit
+          </label>
+          {hasTimeLimit && (
+            <div style={{ marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input type="number" className="auth-input" style={{ width: '70px', margin: 0, padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} value={timeLimitMinutes} onChange={(e) => setTimeLimitMinutes(Number(e.target.value))} min="1" />
+              <span className="text-desc" style={{ fontSize: '0.8rem' }}>mins</span>
+            </div>
+          )}
+
+          {/* Tools */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+            <Settings size={14} color="var(--accent-gold)" />
+            <span className="text-desc" style={{ fontWeight: 600, fontSize: '0.8rem' }}>Allowed Tools</span>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)', fontSize: '0.82rem', marginBottom: '0.5rem' }}>
+            <input type="checkbox" checked={allowedTools.includes("basic_calculator")} onChange={(e) => {
+              if (e.target.checked) setAllowedTools([...allowedTools, "basic_calculator"]);
+              else setAllowedTools(allowedTools.filter((t: string) => t !== "basic_calculator"));
+            }} style={{ accentColor: 'var(--accent-gold)' }} />
+            Basic Calculator
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)', fontSize: '0.82rem', marginBottom: '0.8rem' }}>
+            <input type="checkbox" checked={allowedTools.includes("sci_calculator")} onChange={(e) => {
+              if (e.target.checked) setAllowedTools([...allowedTools, "sci_calculator"]);
+              else setAllowedTools(allowedTools.filter((t: string) => t !== "sci_calculator"));
+            }} style={{ accentColor: 'var(--accent-gold)' }} />
+            Scientific Calculator
+          </label>
+
+          {/* Resources */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+            <FileText size={14} color="var(--accent-gold)" />
+            <span className="text-desc" style={{ fontWeight: 600, fontSize: '0.8rem' }}>Resources</span>
+          </div>
+          {allowedResources.map((_url, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-deep)', padding: '0.2rem 0.5rem', borderRadius: '4px', marginBottom: '0.4rem', fontSize: '0.78rem' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>Attachment {i + 1}</span>
+              <button onClick={() => setAllowedResources(allowedResources.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 0 }}><Trash2 size={12} /></button>
+            </div>
+          ))}
+          <label className="btn-ghost" style={{ fontSize: '0.78rem', padding: '0.35rem', justifyContent: 'center', cursor: 'pointer', display: 'flex' }}>
+            <Upload size={13} style={{ marginRight: '0.3rem' }} /> Upload (Max 10MB)
+            <input type="file" style={{ display: 'none' }} onChange={uploadResource} />
+          </label>
         </div>
       </div>
 
