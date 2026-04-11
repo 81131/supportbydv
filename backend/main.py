@@ -12,14 +12,17 @@ from apis import admin
 from apis import library
 from apis.notifications import router as notifications_router
 from apis.modules import router as modules_router
+from apis.users import router as users_router
 
 os.makedirs("uploads/modules", exist_ok=True)
 os.makedirs("uploads/notes", exist_ok=True)
+os.makedirs("uploads/badges", exist_ok=True)
 
 # Importing the models package triggers your __init__.py loop, 
 # registering ALL tables with SQLAlchemy automatically.
 import models
 from models.quiz import Module 
+from models.user import Achievement, UserAchievement, User, UserRole
 from database import engine, SessionLocal, Base 
 from sqlalchemy import text
 
@@ -35,6 +38,12 @@ def wait_for_db():
         try:
             # Build the database tables
             models.Base.metadata.create_all(bind=engine)
+            # Safe migration: add frame_name column to achievements if it doesn't exist yet
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "ALTER TABLE achievements ADD COLUMN IF NOT EXISTS frame_name VARCHAR"
+                ))
+                conn.commit()
             print("✅ Database connected and tables created!")
             return
         except OperationalError as e:
@@ -48,10 +57,48 @@ def wait_for_db():
 wait_for_db()
 # ---------------------------------------------
 
+def initialize_achievements():
+    db = SessionLocal()
+    try:
+        no_one_badge = db.query(Achievement).filter(Achievement.name == "No One").first()
+        if not no_one_badge:
+            no_one_badge = Achievement(
+                name="No One",
+                description="Valar Morghulis. You are no one.",
+                badge_image_url="/static/badges/NoOne.png",
+                frame_name="frame-no-one",
+                condition="Awarded to the ultimate shadow of the Citadel."
+            )
+            db.add(no_one_badge)
+            db.commit()
+            db.refresh(no_one_badge)
+            
+        no_one_users = db.query(User).filter(User.role == UserRole.NO_ONE).all()
+        for u in no_one_users:
+            has_badge = db.query(UserAchievement).filter(
+                UserAchievement.user_id == u.id,
+                UserAchievement.achievement_id == no_one_badge.id
+            ).first()
+            if not has_badge:
+                ua = UserAchievement(
+                    user_id=u.id,
+                    achievement_id=no_one_badge.id,
+                    priority=1,
+                    is_valid=True
+                )
+                db.add(ua)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Achievement init error: {e}")
+    finally:
+        db.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_modules()
-    print("⚔️ The Citadel's modules have been forged in the database!")
+    initialize_achievements()
+    print("⚔️ The Citadel's modules and badges have been forged in the database!")
     yield
 
 app = FastAPI(title="Support By DV API", lifespan=lifespan)
@@ -126,6 +173,7 @@ app.include_router(admin.router, dependencies=[Depends(verify_csrf)])
 app.include_router(library.router, dependencies=[Depends(verify_csrf)])
 app.include_router(notifications_router, dependencies=[Depends(verify_csrf)])
 app.include_router(modules_router)
+app.include_router(users_router, dependencies=[Depends(verify_csrf)])
 
 @app.get("/")
 def read_root():

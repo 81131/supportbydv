@@ -427,13 +427,15 @@ def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db:
             creator_role = "user"
         
         # 3. Append EVERYTHING to the result
+        creator_name = f"{creator.first_name} {creator.last_name}" if creator else "Unknown Scholar"
         result.append({
             "id": q.id,
             "title": q.title,
             "description": q.description,
             "module_id": q.module_id,
             "created_user_id": q.created_user_id,
-            "creator_role": creator_role, # 👈 The missing piece!
+            "creator_role": creator_role, 
+            "creator_name": creator_name.strip(),
             "is_recommended": q.is_recommended,
             "is_pinned": q.is_pinned,
             "is_timed": q.is_timed,

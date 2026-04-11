@@ -184,6 +184,8 @@ def get_notes_by_module(
         elif uploader: creator_role = str(uploader.role).replace('UserRole.', '')
         else: creator_role = "user"
         
+        uploader_name = f"{uploader.first_name} {uploader.last_name}" if uploader else "Unknown Scholar"
+        
         # 👇 NEW: Check if the current user has favorited this scroll!
         is_fav = db.query(FavoriteNote).filter(
             FavoriteNote.note_id == n.id, 
@@ -193,6 +195,7 @@ def get_notes_by_module(
         result.append({
             "id": n.id, "title": n.title, "description": n.description,
             "file_type": n.file_type, "uploader_id": n.uploader_id,
+            "uploader_name": uploader_name.strip(),
             "creator_role": creator_role, "is_recommended": n.is_recommended, 
             "is_pinned": n.is_pinned,
             "unit_id": n.unit_id,

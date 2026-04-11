@@ -27,6 +27,7 @@ import ThemeToggle from './components/ThemeToggle';
 import MyQuizzes from './pages/MyQuizzes';
 import PerformanceAnalytics from './pages/PerformanceAnalytics';
 import MyProfile from './pages/MyProfile';
+import PublicProfile from './pages/PublicProfile';
 
 
 function App() {
@@ -254,6 +255,7 @@ function App() {
             <Route path="/my-quizzes" element={<ProtectedRoute user={user}><MyQuizzes /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute user={user}><PerformanceAnalytics /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute user={user}><MyProfile /></ProtectedRoute>} />
+            <Route path="/user/:id" element={<ProtectedRoute user={user}><PublicProfile /></ProtectedRoute>} />
             <Route path="/about" element={<About />} />
             <Route path="/admin-dashboard" element={<PrivilegedRoute user={user}><AdminDashboard /></PrivilegedRoute>} />
             <Route path="/create-module" element={<PrivilegedRoute user={user}><CreateModule /></PrivilegedRoute>} />

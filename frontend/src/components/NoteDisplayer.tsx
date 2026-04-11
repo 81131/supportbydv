@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus } from 'lucide-react';
 import api from '../api';
 
@@ -291,7 +291,10 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                         {note.is_pinned && <span title="Pinned"><Pin size={18} color="var(--accent-red)" fill="var(--accent-red)" style={{ transform: 'rotate(45deg)' }} /></span>}
                       </div>
                     </div>
-                    <p className="text-desc">{note.description}</p>
+                    <p className="text-desc" style={{ marginBottom: '0.4rem' }}>{note.description}</p>
+                    <p className="text-desc" style={{ fontSize: '0.85rem' }}>
+                      Forged by: <Link to={`/user/${note.uploader_id}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 600 }}>{note.uploader_name}</Link>
+                    </p>
                   </div>
                 </div>
                 

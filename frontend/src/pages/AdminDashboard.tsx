@@ -171,7 +171,7 @@ const AdminDashboard: React.FC = () => {
                     <td style={{ padding: '1rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         {u.picture ? (
-                          <img src={u.picture} alt="profile" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid var(--border-dark)' }} />
+                          <img src={u.picture} alt="profile" referrerPolicy="no-referrer" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid var(--border-dark)' }} />
                         ) : (
                           <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--border-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <UserIcon size={20} color="var(--text-muted)" />

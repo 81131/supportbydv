@@ -48,7 +48,11 @@ const MyVault: React.FC = () => {
     } catch (error) { showFlash("Failed to update visibility.", 'error'); }
   };
 
-  const handleDelete = async (collectionId: number) => {
+  const handleDelete = async (collectionId: number | string) => {
+    if (collectionId === 'favorites') {
+        showFlash("You cannot burn the Liked Scrolls archive.", 'error');
+        return;
+    }
     if (window.confirm("Are you sure you want to burn this archive? All contained records will be unlinked (but not destroyed).")) {
       try {
         await api.delete(`/library/collections/${collectionId}`);
@@ -106,17 +110,24 @@ const MyVault: React.FC = () => {
                 </button>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
-                {col.visibility === 'private' ? <Lock size={16} color="var(--accent-red)" /> : <Globe size={16} color="var(--accent-blue, #42a5f5)" />}
-                <select 
-                  value={col.visibility} 
-                  onChange={(e) => handleVisibilityChange(col.id, e.target.value)}
-                  style={{ background: 'transparent', color: 'var(--text-main)', border: 'none', outline: 'none', fontSize: '1rem', cursor: 'pointer', flex: 1 }}
-                >
-                  <option value="private">Private Archive</option>
-                  <option value="public">Public Archive</option>
-                </select>
-              </div>
+                {col.is_special ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                        <Lock size={16} color="var(--accent-red)" />
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Private Archive</span>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                        {col.visibility === 'private' ? <Lock size={16} color="var(--accent-red)" /> : <Globe size={16} color="var(--accent-blue, #42a5f5)" />}
+                        <select 
+                        value={col.visibility} 
+                        onChange={(e) => handleVisibilityChange(col.id, e.target.value)}
+                        style={{ background: 'transparent', color: 'var(--text-main)', border: 'none', outline: 'none', fontSize: '1rem', cursor: 'pointer', flex: 1 }}
+                        >
+                        <option value="private">Private Archive</option>
+                        <option value="public">Public Archive</option>
+                        </select>
+                    </div>
+                )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-dark)', paddingTop: '1rem', marginTop: 'auto' }}>
                 <span className="text-stat" style={{ fontSize: '1.1rem' }}>{col.note_count} Scrolls</span>

@@ -222,9 +222,7 @@ def logout(response: Response):
 
 # ─── Profile Endpoints ───────────────────────────────────────────────────────
 
-class ProfileUpdateRequest(BaseModel):
-    first_name: str
-    last_name: str
+from schemas.user import ProfileUpdateRequest
 
 @router.patch("/profile", response_model=UserResponse)
 def update_profile(
@@ -232,9 +230,15 @@ def update_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the current user's display name. Persists across Google re-logins."""
-    current_user.first_name = payload.first_name.strip()
-    current_user.last_name = payload.last_name.strip()
+    """Update the current user's display name and social links."""
+    if payload.first_name is not None: current_user.first_name = payload.first_name.strip()
+    if payload.last_name is not None: current_user.last_name = payload.last_name.strip()
+    if payload.bio is not None: current_user.bio = payload.bio.strip()
+    if payload.linkedin_url is not None: current_user.linkedin_url = payload.linkedin_url.strip()
+    if payload.github_url is not None: current_user.github_url = payload.github_url.strip()
+    if payload.instagram_url is not None: current_user.instagram_url = payload.instagram_url.strip()
+    if payload.facebook_url is not None: current_user.facebook_url = payload.facebook_url.strip()
+    if payload.public_email is not None: current_user.public_email = payload.public_email.strip()
     db.commit()
     db.refresh(current_user)
     return current_user

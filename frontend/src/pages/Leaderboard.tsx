@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { Crown, Swords, Shield, Medal, Clock, TrendingUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface LeaderboardEntry {
   rank: number;
@@ -104,32 +105,31 @@ const Leaderboard: React.FC = () => {
             const isMe = currentUser?.id === leader.user_id;
             
             return (
-              <div key={leader.user_id} style={getRankStyle(leader.rank, isMe)}>
-                
-                {/* Rank & Icon */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div key={leader.user_id} style={getRankStyle(leader.rank, isMe)}
+                   className="leaderboard-row"
+              >
+                <div style={{ textAlign: 'center' }}>
                   {getRankIcon(leader.rank)}
-                  {leader.rank > 3 && <span style={{ fontSize: '1.1rem', fontWeight: 'bold', marginTop: '0.2rem', color: 'var(--text-muted)' }}>#{leader.rank}</span>}
                 </div>
-
-                {/* Name */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div className="text-title" style={{ fontSize: '1.2rem', color: isMe ? 'var(--accent-gold)' : 'var(--text-main)' }}>
-                    {leader.name} 
-                    {isMe && <span style={{ fontSize: '0.8rem', backgroundColor: 'var(--accent-gold)', color: '#000', padding: '0.1rem 0.4rem', borderRadius: '4px', marginLeft: '0.5rem', verticalAlign: 'middle', fontWeight: 'bold' }}>YOU</span>}
-                  </div>
+                <div>
+                  <Link to={`/user/${leader.user_id}`} style={{ 
+                    fontWeight: 600, 
+                    fontSize: '1.1rem', 
+                    color: isMe ? 'var(--accent-gold)' : 'var(--text-main)',
+                    textDecoration: 'none'
+                  }}>
+                    {leader.name}
+                  </Link>
+                  {isMe && (
+                    <span style={{ marginLeft: '10px', fontSize: '0.8rem', color: 'var(--accent-gold)', border: '1px solid var(--accent-gold)', padding: '2px 8px', borderRadius: '12px' }}>YOU</span>
+                  )}
                 </div>
-
-                {/* Score */}
-                <div style={{ textAlign: 'right', fontWeight: '900', fontSize: '1.3rem', color: 'var(--accent-gold)' }}>
-                  {leader.total_score.toFixed(1)}
+                <div style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-gold)' }}>
+                  {leader.total_score.toFixed(1)} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>pts</span>
                 </div>
-
-                {/* Time */}
-                <div className="text-desc" style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '1.1rem' }}>
+                <div style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
                   {formatTime(leader.total_time)}
                 </div>
-
               </div>
             );
           })}

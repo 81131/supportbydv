@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -23,6 +23,14 @@ class User(Base):
     picture = Column(String, nullable=True) 
     hashed_password = Column(String, nullable=True)
     auth_provider = Column(String, default="local")
+    
+    # --- Profile & Social Links ---
+    bio = Column(String(500), nullable=True)
+    linkedin_url = Column(String, nullable=True)
+    github_url = Column(String, nullable=True)
+    instagram_url = Column(String, nullable=True)
+    facebook_url = Column(String, nullable=True)
+    public_email = Column(String, nullable=True)
 
     # --- Governance & Tracking ---
     role = Column(Enum(UserRole), default=UserRole.USER)
@@ -32,4 +40,33 @@ class User(Base):
 
     # --- Relationships ---
     attempts = relationship("QuizAttempt", back_populates="user", cascade="all, delete-orphan")
-    quizzes = relationship("Quiz", back_populates="creator") # Uncomment if you track creators bidirectionally
+    quizzes = relationship("Quiz", back_populates="creator")
+    achievements = relationship("UserAchievement", back_populates="user", cascade="all, delete-orphan")
+
+
+class Achievement(Base):
+    __tablename__ = "achievements"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    badge_image_url = Column(String, nullable=True)
+    frame_name = Column(String, nullable=True) # E.g., 'frame-no-one'
+    condition = Column(String, nullable=True)
+
+
+class UserAchievement(Base):
+    __tablename__ = "user_achievements"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    achievement_id = Column(Integer, ForeignKey("achievements.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    achieved_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_valid = Column(Boolean, default=True)
+    
+    # Priority for display on the public profile (0 = lowest default, 1 = highest, etc.)
+    priority = Column(Integer, default=0)
+    
+    # Relationships
+    user = relationship("User", back_populates="achievements")
+    achievement = relationship("Achievement")

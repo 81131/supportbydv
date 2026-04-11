@@ -24,12 +24,26 @@ class UserResponse(BaseModel):
     picture: Optional[str] = None
     role: UserRole
     is_suspended: bool
-    auth_provider: Optional[str] = None # 👈 Make sure this is Optional!
+    auth_provider: Optional[str] = None
+    bio: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    facebook_url: Optional[str] = None
+    public_email: Optional[str] = None
 
     class Config:
-        from_attributes = True # Important for ORM models!
+        from_attributes = True
 
-# ... (your existing schemas) ...
+class ProfileUpdateRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    bio: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    facebook_url: Optional[str] = None
+    public_email: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str

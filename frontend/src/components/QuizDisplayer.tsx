@@ -149,7 +149,10 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
                       {quiz.is_pinned && <span title="Pinned"><Pin size={20} color="var(--accent-red)" fill="var(--accent-red)" style={{ transform: 'rotate(45deg)' }} /></span>}
                     </div>
                   </div>
-                  <p className="text-desc">{quiz.description}</p>
+                  <p className="text-desc" style={{ marginBottom: '0.4rem' }}>{quiz.description}</p>
+                  <p className="text-desc" style={{ fontSize: '0.85rem' }}>
+                    Forged by: <Link to={`/user/${quiz.created_user_id}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 600 }}>{quiz.creator_name}</Link>
+                  </p>
                 </div>
                 
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
