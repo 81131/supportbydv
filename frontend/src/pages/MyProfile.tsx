@@ -34,6 +34,7 @@ const MyProfile: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [achievements, setAchievements] = useState<any[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -43,6 +44,13 @@ const MyProfile: React.FC = () => {
   const [instagram_url, setInstagram] = useState('');
   const [facebook_url, setFacebook] = useState('');
   const [public_email, setPublicEmail] = useState('');
+  const [currentYear, setCurrentYear] = useState<number>(2);
+  const [currentSemester, setCurrentSemester] = useState<number>(2);
+  
+  // preferences
+  const [hiddenSections, setHiddenSections] = useState<string[]>([]);
+  const [hiddenModules, setHiddenModules] = useState<number[]>([]);
+  
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
@@ -52,6 +60,7 @@ const MyProfile: React.FC = () => {
 
     api.get('/auth/profile/stats').then(res => setStats(res.data)).catch(console.error);
     api.get('/users/me/achievements').then(res => setAchievements(res.data)).catch(console.error);
+    api.get('/subscriptions/history/me').then(res => setPaymentHistory(res.data)).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -64,6 +73,13 @@ const MyProfile: React.FC = () => {
       setInstagram(user.instagram_url || '');
       setFacebook(user.facebook_url || '');
       setPublicEmail(user.public_email || '');
+      setCurrentYear(user.current_year ?? 2);
+      setCurrentSemester(user.current_semester ?? 2);
+      
+      const prefs = user.preferences || {};
+      setHiddenSections(prefs.hidden_sections || []);
+      setHiddenModules(prefs.hidden_modules || []);
+      
       document.title = `${user.first_name}'s Profile | Citadel`;
     }
   }, [user]);
@@ -81,7 +97,10 @@ const MyProfile: React.FC = () => {
         github_url: github_url,
         instagram_url: instagram_url,
         facebook_url: facebook_url,
-        public_email: public_email
+        public_email: public_email,
+        current_year: currentYear,
+        current_semester: currentSemester,
+        preferences: { hidden_sections: hiddenSections, hidden_modules: hiddenModules }
       });
       // Update localStorage so navbar and other places reflect new name immediately
       const updated = { 
@@ -93,7 +112,10 @@ const MyProfile: React.FC = () => {
         github_url: res.data.github_url,
         instagram_url: res.data.instagram_url,
         facebook_url: res.data.facebook_url,
-        public_email: res.data.public_email
+        public_email: res.data.public_email,
+        current_year: res.data.current_year,
+        current_semester: res.data.current_semester,
+        preferences: res.data.preferences
       };
       localStorage.setItem('user', JSON.stringify(updated));
       setUser(updated);
@@ -199,6 +221,25 @@ const MyProfile: React.FC = () => {
                 <input className="auth-input" style={{ margin: 0, gridColumn: 'span 2' }} placeholder="Public Email Address" type="email" value={public_email} onChange={e => setPublicEmail(e.target.value)} />
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--bg-deep)', padding: '1rem', borderRadius: '8px' }}>
+                <div>
+                    <label className="text-desc" style={{display:'block', marginBottom:'0.3rem'}}>Current Year</label>
+                    <select className="auth-input" style={{ margin: 0 }} value={currentYear} onChange={e => setCurrentYear(Number(e.target.value))}>
+                        <option value={1}>Year 1</option>
+                        <option value={2}>Year 2</option>
+                        <option value={3}>Year 3</option>
+                        <option value={4}>Year 4</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-desc" style={{display:'block', marginBottom:'0.3rem'}}>Current Semester</label>
+                    <select className="auth-input" style={{ margin: 0 }} value={currentSemester} onChange={e => setCurrentSemester(Number(e.target.value))}>
+                        <option value={1}>Semester 1</option>
+                        <option value={2}>Semester 2</option>
+                    </select>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button className="btn-solid-gold" onClick={handleSave} disabled={isSaving} style={{ opacity: isSaving ? 0.5 : 1 }}>
                   <Save size={16} /> {isSaving ? 'Saving…' : 'Save Profile'}
@@ -213,6 +254,11 @@ const MyProfile: React.FC = () => {
                   setInstagram(user.instagram_url || '');
                   setFacebook(user.facebook_url || '');
                   setPublicEmail(user.public_email || '');
+                  setCurrentYear(user.current_year ?? 2);
+                  setCurrentSemester(user.current_semester ?? 2);
+                  const prefs = user.preferences || {};
+                  setHiddenSections(prefs.hidden_sections || []);
+                  setHiddenModules(prefs.hidden_modules || []);
                 }}>
                   <X size={16} /> Cancel
                 </button>
@@ -308,6 +354,45 @@ const MyProfile: React.FC = () => {
           )}
         </>
       )}
+
+      {/* ── Payment History ── */}
+      <section id="billing" style={{ scrollMarginTop: '100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h2 className="brand-font" style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '1.2rem' }}>
+            Payment History
+          </h2>
+          <button className="btn-ghost" onClick={() => navigate('/subscriptions')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>
+             Purchase / Upgrade Plan
+          </button>
+        </div>
+        
+        {paymentHistory.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border-dark)', marginBottom: '2rem' }}>
+            No purchase records found in the Citadel ledger.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+            {paymentHistory.map(record => (
+              <div key={record.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-surface)', padding: '1.2rem 1.5rem', borderRadius: 12, border: '1px solid var(--border-dark)' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', color: 'var(--text-main)', display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    {record.tier.toUpperCase()} Plan (x{record.requested_duration} M)
+                    {record.is_upgrade && <span style={{ background: 'var(--accent-gold)', color: 'black', padding: '0.1rem 0.5rem', borderRadius: 12, fontSize: '0.7rem' }}>UPGRADE</span>}
+                  </div>
+                  <div className="text-desc" style={{ fontSize: '0.85rem' }}>
+                    Placed on {new Date(record.created_at).toLocaleDateString()} via {record.payment_method}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  {record.status === 'pending' && <span style={{ color: '#f39c12', fontWeight: 'bold', fontSize: '0.9rem' }}>Verification Pending</span>}
+                  {record.status === 'approved' && <span style={{ color: '#2ecc71', fontWeight: 'bold', fontSize: '0.9rem' }}>Approved</span>}
+                  {record.status === 'rejected' && <span style={{ color: '#e74c3c', fontWeight: 'bold', fontSize: '0.9rem' }}>Rejected</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* ── Honours & Badges ── */}
       <h2 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '1.2rem' }}>

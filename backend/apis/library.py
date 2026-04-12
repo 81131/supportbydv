@@ -38,10 +38,14 @@ async def upload_note(
     unit_id: int = Form(None),
     topic_ids: str = Form(None),
     file: UploadFile = File(...),
+    is_premium: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Saves the physical file and logs it in the database."""
+    
+    if is_premium and current_user.role != UserRole.NO_ONE:
+        raise HTTPException(status_code=403, detail="Only No One can create premium content.")
     
     # 1. Validate file extension
     file_extension = file.filename.split(".")[-1].lower() if "." in file.filename else ""
@@ -417,6 +421,7 @@ class CollectionCreate(BaseModel):
     year: int
     semester: int
     module_id: int = None
+    is_premium: bool = False
 
 @router.post("/notes/{note_id}/favorite")
 def toggle_favorite(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -435,6 +440,9 @@ def toggle_favorite(note_id: int, db: Session = Depends(get_db), current_user: U
 @router.post("/collections")
 def create_collection(data: CollectionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Forges a new archive."""
+    if data.is_premium and current_user.role != UserRole.NO_ONE:
+        raise HTTPException(status_code=403, detail="Only No One can create premium content.")
+        
     vis = VisibilityEnum.PUBLIC if data.visibility == "public" else VisibilityEnum.PRIVATE
     new_col = Collection(
         title=data.title, 
@@ -443,7 +451,8 @@ def create_collection(data: CollectionCreate, db: Session = Depends(get_db), cur
         creator_id=current_user.id,
         year=data.year,
         semester=data.semester,
-        module_id=data.module_id
+        module_id=data.module_id,
+        is_premium=data.is_premium
     )
     db.add(new_col)
     db.commit()

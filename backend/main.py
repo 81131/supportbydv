@@ -13,6 +13,10 @@ from apis import library
 from apis.notifications import router as notifications_router
 from apis.modules import router as modules_router
 from apis.users import router as users_router
+from apis.subscription import router as subscription_router
+from apis.ads import router as ads_router
+from apis.dashboard import router as dashboard_router
+from apis.support import router as support_router
 
 os.makedirs("uploads/modules", exist_ok=True)
 os.makedirs("uploads/notes", exist_ok=True)
@@ -234,6 +238,10 @@ app.include_router(library.router, dependencies=[Depends(verify_csrf)])
 app.include_router(notifications_router, dependencies=[Depends(verify_csrf)])
 app.include_router(modules_router)
 app.include_router(users_router, dependencies=[Depends(verify_csrf)])
+app.include_router(subscription_router, dependencies=[Depends(verify_csrf)])
+app.include_router(ads_router, dependencies=[Depends(verify_csrf)])
+app.include_router(dashboard_router)
+app.include_router(support_router, dependencies=[Depends(verify_csrf)])
 
 @app.get("/")
 def read_root():

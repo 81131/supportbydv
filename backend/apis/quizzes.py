@@ -43,6 +43,9 @@ async def upload_quiz_resource(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if getattr(quiz_in, "is_premium", False) and current_user.role != UserRole.NO_ONE:
+        raise HTTPException(status_code=403, detail="Only No One can create premium content.")
+        
     new_quiz = Quiz(
         title=quiz_in.title, 
         description=quiz_in.description, 
@@ -54,6 +57,7 @@ def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user
         allowed_tools=quiz_in.allowed_tools,
         allowed_resources=quiz_in.allowed_resources,
         is_published=quiz_in.is_published,
+        is_premium=getattr(quiz_in, "is_premium", False),
         is_recommended=False
     )
     db.add(new_quiz)

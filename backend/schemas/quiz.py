@@ -36,6 +36,7 @@ class QuizCreate(BaseModel):
     allowed_tools: Optional[str] = None  # JSON array string
     allowed_resources: Optional[str] = None # JSON array string of URLs
     is_published: bool = False # Draft state
+    is_premium: bool = False
     
     # Nested questions list
     questions: List[QuestionCreate]

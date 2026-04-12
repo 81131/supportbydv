@@ -6,7 +6,8 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from database import get_db
-from models.user import User
+from models.user import User, UserRole
+from models.monetization import UserSubscription, SubscriptionTier
 
 SECRET_KEY = os.environ["SECRET_KEY"] # Throw error if missing
 ALGORITHM = "HS256"
@@ -72,3 +73,42 @@ def verify_csrf(request: Request):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="CSRF validation failed. The archives remain sealed."
             )
+
+def require_noOne(user: User = Depends(get_current_user)):
+    """Throws 403 if the user is not a noOne."""
+    if user.role != UserRole.NO_ONE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only No One can forge the truth."
+        )
+    return user
+
+def require_premium_access(user: User, db: Session, module_id: int = None, semester_key: str = None):
+    """
+    Checks if a user is permitted to view premium content associated with a specific module or semester.
+    Returns True if allowed, or raises 403.
+    """
+    # 1. Super users bypass all restrictions
+    if user.role in [UserRole.NO_ONE, UserRole.ADMIN, UserRole.ACOLYTE]:
+        return True
+    
+    # 2. Check active subscriptions
+    now = datetime.utcnow()
+    active_subs = db.query(UserSubscription).filter(
+        UserSubscription.user_id == user.id,
+        UserSubscription.is_active == True,
+        UserSubscription.expiry_date > now
+    ).all()
+    
+    for sub in active_subs:
+        if sub.tier == SubscriptionTier.ADVANCED:
+            return True
+        if sub.tier == SubscriptionTier.INTERMEDIATE and sub.semester_key == semester_key:
+            return True
+        if sub.tier == SubscriptionTier.BEGINNER and sub.module_id == module_id:
+            return True
+            
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="The Citadel demands greater sacrifice. Upgrade your tier to view this content."
+    )

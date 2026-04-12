@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -11,6 +11,8 @@ class UserRole(enum.Enum):
     FACELESS = "faceless"
     USER = "user"
     STUDENT = "student" 
+    PREMIUM_USER = "premium_user"
+    ACOLYTE = "acolyte"
 
 class User(Base):
     __tablename__ = "users"
@@ -22,6 +24,9 @@ class User(Base):
     last_name = Column(String, nullable=True)
     picture = Column(String, nullable=True) 
     hashed_password = Column(String, nullable=True)
+    current_year = Column(Integer, nullable=True, default=2)
+    current_semester = Column(Integer, nullable=True, default=2)
+    preferences = Column(JSON, nullable=True, default={})
     auth_provider = Column(String, default="local")
     
     # --- Profile & Social Links ---

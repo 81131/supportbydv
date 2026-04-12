@@ -732,3 +732,44 @@ body.light-theme .notifications-dropdown {
   background: var(--bg-surface);
   z-index: -1;
 }
+
+/* ─── Ads Layout ─── */
+.ad-page-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.ad-main-cols {
+  display: flex;
+  flex: 1;
+}
+
+.ad-content-center {
+  flex: 1;
+  min-width: 0; /* allows children to shrink/truncate */
+}
+
+/* On Desktop: Show Left and Right sidebars */
+@media (min-width: 1024px) {
+  .ad-sidebar {
+    width: 160px; /* Base width inspired by typical W3Schools skyscraper ads */
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+  }
+}
+
+/* On Mobile/Tablet: Hide local sidebars */
+@media (max-width: 1023px) {
+  .ad-sidebar {
+    display: none;
+  }
+}
+
+.ad-banner-top, .ad-banner-bottom {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}

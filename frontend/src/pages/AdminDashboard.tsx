@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { 
   ShieldAlert, Users, ScrollText, Lock, Unlock, 
-  VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle, Edit3
+  VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle, Edit3, CheckCircle, XCircle, FileText
 } from 'lucide-react';
 
 import Forbidden from './Forbidden'; 
@@ -11,7 +11,9 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [modules, setModules] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'modules'>('users');
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'modules' | 'requests' | 'support'>('users');
   const [isLoading, setIsLoading] = useState(true);
 
   // New Module Form State
@@ -33,14 +35,18 @@ const AdminDashboard: React.FC = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [usersRes, logsRes, modulesRes] = await Promise.all([
+      const [usersRes, logsRes, modulesRes, requestsRes, ticketsRes] = await Promise.all([
         api.get('/admin/users'),
         api.get('/admin/audit-logs'),
-        api.get('/modules')
+        api.get('/modules'),
+        api.get('/subscriptions/requests/pending'),
+        api.get('/support/tickets/all') 
       ]);
       setUsers(usersRes.data);
       setLogs(logsRes.data);
       setModules(modulesRes.data);
+      setPendingRequests(requestsRes.data);
+      setSupportTickets(ticketsRes.data);
     } catch (error) {
       console.error("Failed to fetch admin data", error);
     } finally {
@@ -89,6 +95,20 @@ const AdminDashboard: React.FC = () => {
     } catch (error: any) {
       alert(error.response?.data?.detail || `Failed to ${action} user.`);
     }
+  };
+
+  const handleApproveReq = async (id: number) => {
+    try {
+      await api.put(`/subscriptions/requests/${id}/approve`);
+      fetchData();
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error approving request.'); }
+  };
+
+  const handleRejectReq = async (id: number) => {
+    try {
+      await api.put(`/subscriptions/requests/${id}/reject`);
+      fetchData();
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting request.'); }
   };
 
   const formatDate = (dateString: string) => {
@@ -140,6 +160,23 @@ const AdminDashboard: React.FC = () => {
           style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'logs' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'logs' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
         >
           <Activity size={20} /> Audit Ledger
+        </button>
+        <button 
+          onClick={() => setActiveTab('requests')}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'requests' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'requests' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', position: 'relative' }}
+        >
+          <FileText size={20} /> Purchase Requests
+          {pendingRequests.length > 0 && (
+            <span style={{ position: 'absolute', top: '5px', right: '5px', background: 'red', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '10px' }}>
+              {pendingRequests.length}
+            </span>
+          )}
+        </button>
+        <button 
+          onClick={() => setActiveTab('support')}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'support' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'support' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+        >
+          <AlertTriangle size={20} /> Escalations
         </button>
       </div>
 
@@ -295,8 +332,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-
-      ) : (
+      ) : activeTab === 'logs' ? (
 
         /* --- AUDIT LOGS TABLE --- */
         <div className="module-section">
@@ -331,7 +367,75 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
         </div>
-      )}
+      ) : activeTab === 'requests' ? (
+        
+        /* --- PURCHASE REQUESTS TABLE --- */
+        <div className="module-section">
+          <h3 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem' }}>Pending Payments & Upgrades</h3>
+          {pendingRequests.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+              <CheckCircle size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+              <p>Everything is verified! No pending requests.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {pendingRequests.map(req => (
+                <div key={req.id} style={{ background: 'var(--bg-surface)', border: req.is_upgrade ? '1px dashed var(--accent-gold)' : '1px solid var(--border-dark)', padding: '1.5rem', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: req.is_upgrade ? 'var(--accent-gold)' : 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {req.is_upgrade && <Shield size={16} />} 
+                      {req.is_upgrade ? "UPGRADE REQUESTED" : "NEW SUBSCRIPTION"}
+                    </h4>
+                    <p style={{ margin: '0 0 0.3rem 0' }}><strong>Scholar ID:</strong> {req.user_id}</p>
+                    <p style={{ margin: '0 0 0.3rem 0' }}><strong>Target Tier:</strong> {req.tier.toUpperCase()} ({req.requested_duration} Months)</p>
+                    {req.module_id && <p style={{ margin: '0 0 0.3rem 0' }}><strong>Module ID:</strong> {req.module_id}</p>}
+                    {req.semester_key && <p style={{ margin: '0 0 0.3rem 0' }}><strong>Semester:</strong> {req.semester_key}</p>}
+                    <a href={req.payment_slip_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#3498db', marginTop: '0.5rem', textDecoration: 'none', fontWeight: 'bold' }}>
+                      <FileText size={16} /> View Payment Slip
+                    </a>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn-ghost" style={{ color: '#2ecc71', borderColor: '#2ecc71', padding: '0.6rem 1rem' }} onClick={() => handleApproveReq(req.id)}>
+                      <CheckCircle size={18} style={{ marginRight: '0.4rem' }} /> Approve
+                    </button>
+                    <button className="btn-ghost" style={{ color: '#e74c3c', borderColor: '#e74c3c', padding: '0.6rem 1rem' }} onClick={() => handleRejectReq(req.id)}>
+                      <XCircle size={18} style={{ marginRight: '0.4rem' }} /> Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'support' ? (
+        
+        /* --- SUPPORT ESCALATIONS --- */
+        <div className="module-section">
+          <h3 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem' }}>AI Support Escalations (Incomplete Reports)</h3>
+          {supportTickets.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+              <CheckCircle size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+              <p>The Citadel is quiet. No user escalations.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+               {supportTickets.map(t => (
+                 <div key={t.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dark)', padding: '1.5rem', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <div>
+                           <h4>Ticket #{t.id} - {t.category}</h4>
+                           <p className="text-desc">Created: {new Date(t.created_at).toLocaleString()}</p>
+                        </div>
+                        <div>
+                           <span style={{ padding: '0.3rem 0.6rem', border: '1px solid var(--accent-gold)', borderRadius: 12, color: 'var(--accent-gold)', fontSize: '0.8rem' }}>{t.status.toUpperCase()}</span>
+                        </div>
+                    </div>
+                 </div>
+               ))}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };

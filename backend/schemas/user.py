@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 from datetime import datetime
 from models.user import UserRole
 
@@ -25,6 +26,9 @@ class UserResponse(BaseModel):
     role: UserRole
     is_suspended: bool
     auth_provider: Optional[str] = None
+    current_year: Optional[int] = 2
+    current_semester: Optional[int] = 2
+    preferences: Optional[Dict[str, Any]] = {}
     bio: Optional[str] = None
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
@@ -43,8 +47,11 @@ class ProfileUpdateRequest(BaseModel):
     github_url: Optional[str] = None
     instagram_url: Optional[str] = None
     facebook_url: Optional[str] = None
+    facebook_url: Optional[str] = None
     public_email: Optional[str] = None
-
+    current_year: Optional[int] = None
+    current_semester: Optional[int] = None
+    preferences: Optional[Dict[str, Any]] = None
 class Token(BaseModel):
     access_token: str
     token_type: str

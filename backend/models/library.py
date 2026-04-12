@@ -31,6 +31,7 @@ class Note(Base):
     # Governance (No One's Power)
     is_pinned = Column(Boolean, default=False)
     is_recommended = Column(Boolean, default=False)
+    is_premium = Column(Boolean, default=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -53,6 +54,7 @@ class Collection(Base):
     creator_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     visibility = Column(Enum(VisibilityEnum), default=VisibilityEnum.PRIVATE)
+    is_premium = Column(Boolean, default=False)
     
     # Context Mapping
     year = Column(Integer, nullable=False)

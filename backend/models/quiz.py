@@ -66,6 +66,7 @@ class Quiz(Base):
     time_limit_minutes = Column(Integer, nullable=True)
     is_deleted = Column(Boolean, default=False)
     is_published = Column(Boolean, default=False) # Phase 9: Save draft
+    is_premium = Column(Boolean, default=False)
     
     # Award Flags
     is_recommended = Column(Boolean, default=False)

@@ -30,6 +30,9 @@ import MyProfile from './pages/MyProfile';
 import PublicProfile from './pages/PublicProfile';
 import CollectionView from './pages/CollectionView';
 import NoteViewer from './pages/NoteViewer';
+import { AdWrapper } from './components/AdWrapper';
+import Subscriptions from './pages/Subscriptions';
+import FloatingRaven from './components/FloatingRaven';
 
 
 function App() {
@@ -179,7 +182,10 @@ function App() {
           <div className={`nav-links ${isMenuOpen ? 'open' : ''}`}>
             {user && (
               <>
-                {Object.keys(groupedModules).sort().map(key => (
+                {Object.keys(groupedModules)
+                  .filter(key => key.startsWith(`Y${user.current_year || 2}`))
+                  .sort()
+                  .map(key => (
                   <Link
                     key={key}
                     to={`/semester/${key}`}
@@ -191,6 +197,7 @@ function App() {
                 ))}
                 <Link to="/my-quizzes" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Quizzes</Link>
                 <Link to="/my-vault" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Vault</Link>
+                <Link to="/subscriptions" className="nav-item" style={{ color: 'var(--accent-gold)' }} onClick={() => setIsMenuOpen(false)}>Subscriptions</Link>
               </>
             )}
             <Link to="/leaderboard" className="nav-item" onClick={() => setIsMenuOpen(false)}>Throne Room</Link>
@@ -254,7 +261,8 @@ function App() {
         </nav>
 
         <div className="main-content">
-          <Routes>
+          <AdWrapper>
+            <Routes>
             <Route path="/" element={<Home openModal={openModal} />} />
             <Route path="/semester/:semesterKey" element={<ProtectedRoute user={user}><Semester /></ProtectedRoute>} />
             <Route path="/module/:moduleId" element={<ProtectedRoute user={user}><ModuleView /></ProtectedRoute>} />
@@ -278,9 +286,12 @@ function App() {
             <Route path="/admin-dashboard" element={<PrivilegedRoute user={user}><AdminDashboard /></PrivilegedRoute>} />
             <Route path="/create-module" element={<PrivilegedRoute user={user}><CreateModule /></PrivilegedRoute>} />
             <Route path="/edit-module/:id" element={<PrivilegedRoute user={user}><EditModule /></PrivilegedRoute>} />
+            <Route path="/subscriptions" element={<ProtectedRoute user={user}><Subscriptions /></ProtectedRoute>} />
             <Route path="/forbidden" element={<Forbidden />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </AdWrapper>
+          <FloatingRaven />
         </div>
 
         {isModalOpen && (

@@ -239,6 +239,9 @@ def update_profile(
     if payload.instagram_url is not None: current_user.instagram_url = payload.instagram_url.strip()
     if payload.facebook_url is not None: current_user.facebook_url = payload.facebook_url.strip()
     if payload.public_email is not None: current_user.public_email = payload.public_email.strip()
+    if payload.current_year is not None: current_user.current_year = payload.current_year
+    if payload.current_semester is not None: current_user.current_semester = payload.current_semester
+    if payload.preferences is not None: current_user.preferences = payload.preferences
     db.commit()
     db.refresh(current_user)
     return current_user
