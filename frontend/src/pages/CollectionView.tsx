@@ -291,6 +291,8 @@ const CollectionView: React.FC = () => {
                       {/* Clickable title → navigate to permalink */}
                       <Link
                         to={`/notes/view/${note.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
                           color: 'var(--text-primary)', fontWeight: 700,
                           fontSize: '1rem', textDecoration: 'none',
@@ -344,7 +346,7 @@ const CollectionView: React.FC = () => {
                   )}
 
                   {isPdf && (
-                    <Link to={`/notes/view/${note.id}`} className="btn-ghost" title="Read online">
+                    <Link to={`/notes/view/${note.id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost" title="Read online">
                       <BookOpen size={16} />
                     </Link>
                   )}

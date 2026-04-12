@@ -304,6 +304,8 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                       {/* Clickable title → navigate to permalink */}
                       <Link
                         to={`/notes/view/${note.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
                           color: 'var(--text-primary)', fontWeight: 700,
                           fontSize: '1rem', textDecoration: 'none',
@@ -364,7 +366,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
                   {/* Read Online button for PDFs */}
                   {note.file_type === 'pdf' && (
-                    <Link to={`/notes/view/${note.id}`} className="btn-ghost" title="Read online">
+                    <Link to={`/notes/view/${note.id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost" title="Read online">
                       <BookOpen size={18} />
                     </Link>
                   )}
