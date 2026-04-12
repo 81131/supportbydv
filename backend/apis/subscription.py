@@ -75,7 +75,6 @@ async def submit_subscription_request(
         payment_slip_url=slip_url,
         payment_method=payment_method,
         requested_duration=requested_duration,
-        requested_duration=requested_duration,
         status=SubscriptionStatus.PENDING,
         is_upgrade=is_upgrade
     )
@@ -87,7 +86,7 @@ async def submit_subscription_request(
     if is_upgrade:
         no_ones = db.query(User).filter(User.role == UserRole.NO_ONE).all()
         for admin in no_ones:
-            notif = Notification(user_id=admin.id, message=f"Scholar {current_user.first_name} requested an UPGRADE to {tier.value}. Please evaluate for partial refund.", type="system")
+            notif = Notification(user_id=admin.id, message=f"Scholar {current_user.first_name} requested an UPGRADE to {tier.value}. Please evaluate for partial refund.")
             db.add(notif)
         db.commit()
 

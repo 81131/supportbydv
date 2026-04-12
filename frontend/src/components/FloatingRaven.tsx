@@ -103,17 +103,26 @@ const FloatingRaven: React.FC = () => {
 
           {/* Messages */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {messages.map((m, i) => (
-              <div key={i} style={{
-                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                background: m.role === 'user' ? 'var(--accent-gold)' : 'var(--bg-deep)',
-                color: m.role === 'user' ? 'black' : 'var(--text-main)',
-                padding: '0.8rem 1rem', borderRadius: 12, border: m.role === 'user' ? 'none' : '1px solid var(--border-dark)',
-                maxWidth: '85%', fontSize: '0.9rem', lineHeight: 1.4, whiteSpace: 'pre-wrap'
-              }}>
-                {m.parts}
-              </div>
-            ))}
+            {messages.map((m, i) => {
+              const parseMessage = (text: string, role: string) => {
+                let safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                if (role === 'model') {
+                   safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+                }
+                return safeText;
+              };
+              
+              return (
+                <div key={i} style={{
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  background: m.role === 'user' ? 'var(--accent-gold)' : 'var(--bg-deep)',
+                  color: m.role === 'user' ? 'black' : 'var(--text-main)',
+                  padding: '0.8rem 1rem', borderRadius: 12, border: m.role === 'user' ? 'none' : '1px solid var(--border-dark)',
+                  maxWidth: '85%', fontSize: '0.9rem', lineHeight: 1.4, whiteSpace: 'pre-wrap'
+                }} dangerouslySetInnerHTML={{ __html: parseMessage(m.parts, m.role) }} />
+              );
+            })}
             {isLoading && (
                <div style={{ alignSelf: 'flex-start', color: 'var(--accent-gold)' }}>
                  <Loader2 size={16} className="lucide-spin" style={{ animation: 'spin 2s linear infinite' }} />
