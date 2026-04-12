@@ -141,15 +141,6 @@ const CollectionView: React.FC = () => {
     } catch { showFlash('Could not toggle favorite.', 'error'); }
   };
 
-  // ── Open PDF ───────────────────────────────────────────────────────────────
-  const openPdf = (note: any) => {
-    if (note.file_type === 'pdf') {
-      setPdfNote({ id: note.id, title: note.title });
-    } else {
-      // Non-PDF: trigger download instead
-      handleDownload(note.id, note.title, note.file_type || 'file');
-    }
-  };
 
   return (
     <div className="page-container" style={{ position: 'relative' }}>
@@ -297,21 +288,20 @@ const CollectionView: React.FC = () => {
                   <FileText size={22} color="var(--accent-gold)" style={{ marginTop: '0.15rem', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                      {/* Clickable title */}
-                      <button
-                        onClick={() => openPdf(note)}
+                      {/* Clickable title → navigate to permalink */}
+                      <Link
+                        to={`/notes/view/${note.id}`}
                         style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          color: 'var(--text-primary)', textAlign: 'left', fontWeight: 700,
-                          fontSize: '1rem', fontFamily: 'inherit',
+                          color: 'var(--text-primary)', fontWeight: 700,
+                          fontSize: '1rem', textDecoration: 'none',
                           transition: 'color 0.2s',
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent-gold)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
-                        title={isPdf ? 'Read online' : 'Download'}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-gold)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                        title="Open note page"
                       >
                         {note.title}
-                      </button>
+                      </Link>
                       {/* Badge: PDF readable */}
                       {isPdf && (
                         <span style={{
@@ -354,9 +344,9 @@ const CollectionView: React.FC = () => {
                   )}
 
                   {isPdf && (
-                    <button onClick={() => openPdf(note)} className="btn-ghost" title="Read online">
+                    <Link to={`/notes/view/${note.id}`} className="btn-ghost" title="Read online">
                       <BookOpen size={16} />
-                    </button>
+                    </Link>
                   )}
 
                   <button

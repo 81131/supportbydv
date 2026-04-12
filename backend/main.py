@@ -47,10 +47,10 @@ def wait_for_db():
                     "ALTER TABLE collection_notes ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
                 ))
                 conn.commit()
-            print("✅ Database connected and tables created!")
+            print("Database connected and tables created!")
             return
         except OperationalError as e:
-            print(f"❌ Database not ready, waiting 2 seconds... (Attempt {i+1}/{max_retries})")
+            print(f"Database not ready, waiting 2 seconds... (Attempt {i+1}/{max_retries})")
             if i == max_retries - 1:
                 print(f"FATAL: Could not connect to database after {max_retries} attempts.")
                 print(f"Error: {e}")
@@ -97,11 +97,68 @@ def initialize_achievements():
     finally:
         db.close()
 
+def cleanup_orphaned_files():
+    """
+    On every startup, delete uploaded files that have no corresponding database record.
+    Handles: (1) DB reset via 'docker compose down -v', (2) files left over from failed
+    deletes, (3) orphaned quiz-resource images from versioned question updates.
+    """
+    db = SessionLocal()
+    try:
+        from models.library import Note
+        from models.quiz import Question
+
+        deleted = 0
+
+        # ── Note files ─────────────────────────────────────────────────────────
+        valid_note_urls = {n.file_url for n in db.query(Note.file_url).all()}  # type: ignore[attr-defined]
+        notes_dir = "uploads/notes"
+        if os.path.isdir(notes_dir):
+            for fname in os.listdir(notes_dir):
+                fpath = os.path.join(notes_dir, fname)
+                if os.path.isfile(fpath) and fpath not in valid_note_urls:
+                    os.remove(fpath)
+                    deleted += 1
+                    print(f"Removed orphaned note file: {fname}")
+
+        # ── Quiz resource images ───────────────────────────────────────────────
+        # image_url is stored as "/static/quiz_resources/<filename>"
+        valid_res_urls = {q.image_url for q in db.query(Question.image_url).all() if q.image_url}  # type: ignore[attr-defined]
+        quiz_res_dir = "uploads/quiz_resources"
+        if os.path.isdir(quiz_res_dir):
+            for fname in os.listdir(quiz_res_dir):
+                fpath = os.path.join(quiz_res_dir, fname)
+                static_url = f"/static/quiz_resources/{fname}"
+                if os.path.isfile(fpath) and static_url not in valid_res_urls:
+                    os.remove(fpath)
+                    deleted += 1
+                    print(f"Removed orphaned quiz image: {fname}")
+
+        # ── Stray loose files in the uploads/ root (should never exist) ────────
+        for fname in os.listdir("uploads"):
+            fpath = os.path.join("uploads", fname)
+            if os.path.isfile(fpath):
+                os.remove(fpath)
+                deleted += 1
+                print(f"Removed stray root upload: {fname}")
+
+        if deleted == 0:
+            print("Citadel archives are clean — no orphaned files found.")
+        else:
+            print(f"Citadel cleanup complete — {deleted} orphaned file(s) removed.")
+
+    except Exception as e:
+        print(f"Orphan cleanup warning: {e}")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_modules()
     initialize_achievements()
-    print("⚔️ The Citadel's modules and badges have been forged in the database!")
+    cleanup_orphaned_files()
+    print("The Citadel's modules and badges have been forged in the database!")
     yield
 
 app = FastAPI(title="Support By DV API", lifespan=lifespan)

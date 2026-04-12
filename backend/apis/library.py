@@ -144,6 +144,99 @@ def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not read this scroll: {str(e)}")
 
+# ─── Note metadata (for permalink page) ───────────────────────────────────────
+@router.get("/notes/{note_id}/info")
+def get_note_info(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Returns public metadata for a single note — used by the NoteViewer permalink page."""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Scroll not found.")
+    uploader = db.query(User).filter(User.id == note.uploader_id).first()
+    uploader_name = f"{uploader.first_name} {uploader.last_name}".strip() if uploader else "Unknown Scholar"
+    is_fav = db.query(FavoriteNote).filter(
+        FavoriteNote.note_id == note_id, FavoriteNote.user_id == current_user.id
+    ).first() is not None
+    return {
+        "id": note.id, "title": note.title, "description": note.description,
+        "file_type": note.file_type, "uploader_id": note.uploader_id,
+        "uploader_name": uploader_name, "module_id": note.module_id,
+        "is_recommended": note.is_recommended, "is_pinned": note.is_pinned,
+        "is_favorited": is_fav,
+    }
+
+# ─── Backend Text-to-Speech via Microsoft Edge Neural TTS ─────────────────────
+ALLOWED_TTS_VOICES = {
+    "en-US-JennyNeural", "en-US-GuyNeural", "en-US-AriaNeural",
+    "en-GB-SoniaNeural", "en-GB-RyanNeural",
+    "en-AU-NatashaNeural", "en-AU-WilliamNeural",
+    "en-IN-NeerjaNeural", "en-IN-PrabhatNeural",
+}
+ALLOWED_TTS_RATES = {"-50%", "-25%", "+0%", "+25%", "+50%", "+75%", "+100%"}
+
+@router.get("/notes/tts/{note_id}")
+async def text_to_speech_note(
+    note_id: int,
+    voice: str = "en-US-JennyNeural",
+    rate: str = "+0%",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates an MP3 audio file for the note using Microsoft Edge Neural TTS."""
+    import edge_tts, tempfile
+    from starlette.background import BackgroundTask
+    from pypdf import PdfReader
+
+    # Sanitise params
+    if voice not in ALLOWED_TTS_VOICES:
+        voice = "en-US-JennyNeural"
+    if rate not in ALLOWED_TTS_RATES:
+        rate = "+0%"
+
+    note = db.query(Note).filter(Note.id == note_id).first()
+    if not note or not os.path.exists(note.file_url):
+        raise HTTPException(status_code=404, detail="Scroll not found.")
+    if note.file_type != "pdf":
+        raise HTTPException(status_code=400, detail="Only PDF scrolls support audio reading.")
+
+    # Extract text
+    try:
+        reader = PdfReader(note.file_url)
+        pages = [p.extract_text() or "" for p in reader.pages]
+        text = "\n\n".join(pages).strip()
+        if not text:
+            raise HTTPException(status_code=422, detail="No extractable text in this scroll (may be a scanned image).")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text extraction failed: {e}")
+
+    # Generate TTS audio
+    tmp_path = None
+    try:
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            tmp_path = tmp.name
+        await communicate.save(tmp_path)
+    except Exception as e:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise HTTPException(status_code=500, detail=f"Audio generation failed: {e}")
+
+    def _cleanup():
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    safe_title = note.title.replace('"', "'")
+    return FileResponse(
+        tmp_path,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f'inline; filename="{safe_title}.mp3"'},
+        background=BackgroundTask(_cleanup),
+    )
+
 # ==========================================
 # 🗂️ COLLECTIONS & DYNAMIC ZIP STREAMING
 # ==========================================

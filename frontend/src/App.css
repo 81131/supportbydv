@@ -208,10 +208,10 @@ body.light-theme .hero-subtitle {
   color: var(--text-muted); /* Shifts to dark grey text */
 }
 
-/* --- MOBILE RESPONSIVENESS --- */
-@media (max-width: 768px) {
+/* --- MOBILE RESPONSIVENESS (hamburger below 1100px to prevent wrap at unusual sizes) --- */
+@media (max-width: 1100px) {
   .nav-links {
-    display: none; 
+    display: none;
     flex-direction: column;
     position: absolute;
     top: 60px;

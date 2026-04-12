@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { Bell } from 'lucide-react';
@@ -29,6 +29,7 @@ import PerformanceAnalytics from './pages/PerformanceAnalytics';
 import MyProfile from './pages/MyProfile';
 import PublicProfile from './pages/PublicProfile';
 import CollectionView from './pages/CollectionView';
+import NoteViewer from './pages/NoteViewer';
 
 
 function App() {
@@ -152,12 +153,27 @@ function App() {
     }
   };
 
+  // ── Dynamically sync --quiz-topbar-h to actual navbar height ─────────────
+  // This fixes content overlap at any unusual resolution where the navbar
+  // height grows (e.g., logo wraps to 2 lines, nav items wrap, etc.).
+  const navbarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navbarRef.current;
+    if (!nav) return;
+    const update = () =>
+      document.documentElement.style.setProperty('--quiz-topbar-h', `${nav.offsetHeight}px`);
+    update(); // set immediately on mount
+    const ro = new ResizeObserver(update);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+
   if (isLoading) return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Loading the Citadel... ⏳</div>;
 
   return (
     <Router>
       <div className="app-container">
-        <nav className="navbar">
+        <nav ref={navbarRef} className="navbar">
           <Link to="/" className="logo brand-font">Support by DV</Link>
 
           <div className={`nav-links ${isMenuOpen ? 'open' : ''}`}>
@@ -253,6 +269,7 @@ function App() {
             <Route path="/upload-note" element={<ProtectedRoute user={user}><NoteUploader /></ProtectedRoute>} />
             <Route path="/my-vault" element={<ProtectedRoute user={user}><MyVault /></ProtectedRoute>} />
             <Route path="/collection/:id" element={<ProtectedRoute user={user}><CollectionView /></ProtectedRoute>} />
+            <Route path="/notes/view/:noteId" element={<ProtectedRoute user={user}><NoteViewer /></ProtectedRoute>} />
             <Route path="/my-quizzes" element={<ProtectedRoute user={user}><MyQuizzes /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute user={user}><PerformanceAnalytics /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute user={user}><MyProfile /></ProtectedRoute>} />

@@ -1,315 +1,96 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
-  BookOpen, Download, X, Loader2,
-  Volume2, VolumeX, Play, Pause, Square,
-  ChevronDown, ChevronUp,
+  BookOpen, Download, X, Loader2, Volume2, VolumeX,
 } from 'lucide-react';
 import api from '../api';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface PdfViewerProps {
+export interface PdfViewerProps {
   noteId: number;
   title: string;
   onClose: () => void;
 }
 
-// ─── Read-Aloud Panel ─────────────────────────────────────────────────────────
-const ReadAloudPanel: React.FC<{ noteId: number; isPdf: boolean }> = ({ noteId, isPdf }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [text, setText] = useState<string | null>(null);
-  const [pageCount, setPageCount] = useState<number>(0);
-  const [isLoadingText, setIsLoadingText] = useState(false);
-  const [textError, setTextError] = useState<string | null>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [rate, setRate] = useState(1.0);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState<string>('');
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+// ─── Available TTS Voices ──────────────────────────────────────────────────────
+const TTS_VOICES = [
+  { id: 'en-US-JennyNeural',   label: '🇺🇸 Jenny (US · Female)' },
+  { id: 'en-US-GuyNeural',     label: '🇺🇸 Guy (US · Male)' },
+  { id: 'en-US-AriaNeural',    label: '🇺🇸 Aria (US · Female)' },
+  { id: 'en-GB-SoniaNeural',   label: '🇬🇧 Sonia (British · Female)' },
+  { id: 'en-GB-RyanNeural',    label: '🇬🇧 Ryan (British · Male)' },
+  { id: 'en-AU-NatashaNeural', label: '🇦🇺 Natasha (Australian · Female)' },
+  { id: 'en-AU-WilliamNeural', label: '🇦🇺 William (Australian · Male)' },
+  { id: 'en-IN-NeerjaNeural',  label: '🇮🇳 Neerja (Indian · Female)' },
+  { id: 'en-IN-PrabhatNeural', label: '🇮🇳 Prabhat (Indian · Male)' },
+];
 
-  // Load available voices
-  useEffect(() => {
-    const load = () => {
-      const v = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
-      if (v.length) { setVoices(v); setSelectedVoice(v[0].voiceURI); }
-    };
-    load();
-    window.speechSynthesis.onvoiceschanged = load;
-    return () => { window.speechSynthesis.onvoiceschanged = null; };
-  }, []);
-
-  // Fetch text from backend when panel opens
-  const loadText = useCallback(async () => {
-    if (text !== null) return; // already loaded
-    setIsLoadingText(true);
-    setTextError(null);
-    try {
-      const res = await api.get(`/library/notes/text/${noteId}`);
-      setText(res.data.text);
-      setPageCount(res.data.page_count);
-    } catch (err: any) {
-      setTextError(err?.response?.data?.detail || 'Could not extract text from this scroll.');
-    } finally {
-      setIsLoadingText(false);
-    }
-  }, [noteId, text]);
-
-  const handleTogglePanel = () => {
-    const next = !isOpen;
-    setIsOpen(next);
-    if (next) loadText();
-  };
-
-  const handlePlay = () => {
-    if (!text) return;
-    if (isPaused && window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-      setIsPaused(false);
-      setIsSpeaking(true);
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = rate;
-    const voice = voices.find(v => v.voiceURI === selectedVoice);
-    if (voice) utter.voice = voice;
-    utter.onstart  = () => { setIsSpeaking(true); setIsPaused(false); };
-    utter.onend    = () => { setIsSpeaking(false); setIsPaused(false); };
-    utter.onerror  = () => { setIsSpeaking(false); setIsPaused(false); };
-    utteranceRef.current = utter;
-    window.speechSynthesis.speak(utter);
-  };
-
-  const handlePause = () => {
-    window.speechSynthesis.pause();
-    setIsPaused(true);
-    setIsSpeaking(false);
-  };
-
-  const handleStop = () => {
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-    setIsPaused(false);
-  };
-
-  // Stop when panel unmounts
-  useEffect(() => () => { window.speechSynthesis.cancel(); }, []);
-
-  if (!isPdf) return null;
-
-  return (
-    <div style={{ borderTop: '1px solid var(--border-dark)', flexShrink: 0 }}>
-      {/* Toggle button */}
-      <button
-        onClick={handleTogglePanel}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem',
-          background: 'var(--bg-deep)', border: 'none', cursor: 'pointer',
-          padding: '0.6rem 1.5rem', color: 'var(--text-muted)',
-          fontSize: '0.85rem', transition: 'color 0.2s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-gold)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-      >
-        <Volume2 size={16} color={isOpen ? 'var(--accent-gold)' : undefined} />
-        <span style={{ flex: 1, textAlign: 'left', color: isOpen ? 'var(--accent-gold)' : undefined }}>
-          Read Aloud
-        </span>
-        {isSpeaking && !isPaused && (
-          <span style={{
-            fontSize: '0.7rem', background: 'rgba(212,175,55,0.15)',
-            color: 'var(--accent-gold)', border: '1px solid rgba(212,175,55,0.3)',
-            borderRadius: '4px', padding: '1px 6px', marginRight: '0.5rem',
-          }}>
-            PLAYING
-          </span>
-        )}
-        {isPaused && (
-          <span style={{
-            fontSize: '0.7rem', background: 'rgba(100,100,100,0.2)',
-            color: 'var(--text-muted)', borderRadius: '4px',
-            padding: '1px 6px', marginRight: '0.5rem',
-          }}>
-            PAUSED
-          </span>
-        )}
-        {isOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-      </button>
-
-      {/* Panel body */}
-      {isOpen && (
-        <div style={{
-          background: 'var(--bg-deep)', padding: '1rem 1.5rem',
-          display: 'flex', flexDirection: 'column', gap: '0.85rem',
-        }}>
-          {isLoadingText && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--accent-gold)', fontSize: '0.88rem' }}>
-              <Loader2 size={16} style={{ animation: 'ttspin 1s linear infinite' }} />
-              Extracting text from scroll…
-            </div>
-          )}
-
-          {textError && (
-            <div style={{
-              background: 'rgba(198,40,40,0.1)', border: '1px solid rgba(198,40,40,0.3)',
-              borderRadius: '6px', padding: '0.7rem 1rem', color: '#ef5350', fontSize: '0.85rem',
-            }}>
-              <VolumeX size={15} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
-              {textError}
-            </div>
-          )}
-
-          {text && !textError && (
-            <>
-              {/* Status line */}
-              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {pageCount} page{pageCount !== 1 ? 's' : ''} · {text.split(/\s+/).length.toLocaleString()} words extracted
-              </p>
-
-              {/* Controls row */}
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* Play / Resume */}
-                {(!isSpeaking || isPaused) && (
-                  <button
-                    onClick={handlePlay}
-                    className="btn-solid-gold"
-                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}
-                    title={isPaused ? 'Resume' : 'Play'}
-                  >
-                    <Play size={15} /> {isPaused ? 'Resume' : 'Play'}
-                  </button>
-                )}
-
-                {/* Pause */}
-                {isSpeaking && !isPaused && (
-                  <button
-                    onClick={handlePause}
-                    className="btn-ghost"
-                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}
-                    title="Pause"
-                  >
-                    <Pause size={15} /> Pause
-                  </button>
-                )}
-
-                {/* Stop */}
-                {(isSpeaking || isPaused) && (
-                  <button
-                    onClick={handleStop}
-                    className="btn-ghost-danger"
-                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}
-                    title="Stop"
-                  >
-                    <Square size={14} fill="currentColor" /> Stop
-                  </button>
-                )}
-
-                {/* Speed selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: 'auto' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Speed</span>
-                  <select
-                    value={rate}
-                    onChange={e => {
-                      const r = parseFloat(e.target.value);
-                      setRate(r);
-                      // Restart with new rate if speaking
-                      if (isSpeaking && !isPaused) {
-                        handleStop();
-                        setTimeout(() => {
-                          const utter = new SpeechSynthesisUtterance(text);
-                          utter.rate = r;
-                          const voice = voices.find(v => v.voiceURI === selectedVoice);
-                          if (voice) utter.voice = voice;
-                          utter.onstart  = () => { setIsSpeaking(true); setIsPaused(false); };
-                          utter.onend    = () => { setIsSpeaking(false); setIsPaused(false); };
-                          utter.onerror  = () => { setIsSpeaking(false); setIsPaused(false); };
-                          utteranceRef.current = utter;
-                          window.speechSynthesis.speak(utter);
-                        }, 100);
-                      }
-                    }}
-                    className="auth-input"
-                    style={{ width: 'auto', padding: '0.25rem 0.4rem', margin: 0, fontSize: '0.8rem' }}
-                  >
-                    <option value={0.75}>0.75×</option>
-                    <option value={1.0}>1×</option>
-                    <option value={1.25}>1.25×</option>
-                    <option value={1.5}>1.5×</option>
-                    <option value={2.0}>2×</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Voice selector */}
-              {voices.length > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flexShrink: 0 }}>Voice</span>
-                  <select
-                    value={selectedVoice}
-                    onChange={e => setSelectedVoice(e.target.value)}
-                    className="auth-input"
-                    style={{ flex: 1, margin: 0, padding: '0.25rem 0.4rem', fontSize: '0.8rem' }}
-                  >
-                    {voices.map(v => (
-                      <option key={v.voiceURI} value={v.voiceURI}>
-                        {v.name} ({v.lang})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Extracted text preview */}
-              <details style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                <summary style={{ cursor: 'pointer', userSelect: 'none', marginBottom: '0.4rem' }}>
-                  Preview extracted text
-                </summary>
-                <div style={{
-                  maxHeight: '120px', overflowY: 'auto', background: 'rgba(0,0,0,0.3)',
-                  borderRadius: '4px', padding: '0.5rem 0.75rem', lineHeight: 1.5,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                }}>
-                  {text.slice(0, 800)}{text.length > 800 ? '…' : ''}
-                </div>
-              </details>
-            </>
-          )}
-        </div>
-      )}
-      <style>{`@keyframes ttspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-};
+const TTS_RATES = [
+  { value: '-50%',  label: '0.5×' },
+  { value: '-25%',  label: '0.75×' },
+  { value: '+0%',   label: '1× (Normal)' },
+  { value: '+25%',  label: '1.25×' },
+  { value: '+50%',  label: '1.5×' },
+  { value: '+75%',  label: '1.75×' },
+  { value: '+100%', label: '2×' },
+];
 
 // ─── PDF Viewer Modal ──────────────────────────────────────────────────────────
 const PdfViewer: React.FC<PdfViewerProps> = ({ noteId, title, onClose }) => {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl]           = useState<string | null>(null);
+  const [isLoadingPdf, setIsLoadingPdf] = useState(true);
+  const [pdfError, setPdfError]         = useState<string | null>(null);
 
+  // TTS state
+  const [showTTS, setShowTTS]           = useState(false);
+  const [voice, setVoice]               = useState('en-US-JennyNeural');
+  const [rate, setRate]                 = useState('+0%');
+  const [audioUrl, setAudioUrl]         = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [ttsError, setTtsError]         = useState<string | null>(null);
+  const audioRef                         = useRef<HTMLAudioElement>(null);
+
+  // Load PDF blob
   useEffect(() => {
-    let url: string;
-    const load = async () => {
+    let url = '';
+    (async () => {
       try {
         const res = await api.get(`/library/notes/download/${noteId}`, { responseType: 'blob' });
         url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
         setBlobUrl(url);
       } catch {
-        setError('Could not load this scroll. It may be sealed or lost to time.');
+        setPdfError('Could not load this scroll. It may be sealed or lost to time.');
       } finally {
-        setIsLoading(false);
+        setIsLoadingPdf(false);
       }
-    };
-    load();
+    })();
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [noteId]);
 
+  // Revoke audio blob on unmount
+  useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
+
   // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
   }, [onClose]);
+
+  const generateAudio = async () => {
+    setIsGenerating(true);
+    setTtsError(null);
+    if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+    try {
+      const res = await api.get(
+        `/library/notes/tts/${noteId}?voice=${voice}&rate=${encodeURIComponent(rate)}`,
+        { responseType: 'blob', timeout: 180_000 },
+      );
+      setAudioUrl(URL.createObjectURL(new Blob([res.data], { type: 'audio/mpeg' })));
+    } catch (err: any) {
+      setTtsError(err?.response?.data?.detail ?? 'Audio generation failed. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div
@@ -321,57 +102,140 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ noteId, title, onClose }) => {
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Header bar */}
+      {/* ── Header ─────────────────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0.75rem 1.5rem',
+        display: 'flex', alignItems: 'center', gap: '0.75rem',
+        padding: '0.65rem 1.25rem',
         background: 'var(--bg-deep)',
         borderBottom: '1px solid var(--border-dark)',
-        flexShrink: 0,
+        flexShrink: 0, flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <BookOpen size={20} color="var(--accent-gold)" />
-          <span style={{ color: 'var(--accent-gold)', fontWeight: 700, fontSize: '1rem' }}>{title}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <a
-            href={blobUrl || '#'}
-            download={`${title}.pdf`}
-            className="btn-ghost"
-            style={{ fontSize: '0.85rem', opacity: blobUrl ? 1 : 0.4, pointerEvents: blobUrl ? 'auto' : 'none' }}
-          >
+        <BookOpen size={18} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+        <span style={{
+          color: 'var(--accent-gold)', fontWeight: 700, fontSize: '0.95rem',
+          flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {title}
+        </span>
+
+        <button
+          onClick={() => setShowTTS(v => !v)}
+          className={showTTS ? 'btn-solid-gold' : 'btn-ghost'}
+          style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem', flexShrink: 0 }}
+          title="Read Aloud"
+        >
+          <Volume2 size={15} /> Read Aloud
+        </button>
+
+        {blobUrl && (
+          <a href={blobUrl} download={`${title}.pdf`} className="btn-ghost"
+            style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem', flexShrink: 0 }}>
             <Download size={15} /> Download
           </a>
-          <button onClick={onClose} className="btn-ghost" style={{ padding: '0.4rem', borderRadius: '50%' }}>
-            <X size={20} />
-          </button>
-        </div>
+        )}
+
+        <button onClick={onClose} className="btn-ghost"
+          style={{ padding: '0.35rem', borderRadius: '50%', flexShrink: 0 }} title="Close (Esc)">
+          <X size={18} />
+        </button>
       </div>
 
-      {/* PDF content */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        {isLoading && (
-          <div style={{ textAlign: 'center', color: 'var(--accent-gold)' }}>
-            <Loader2 size={40} style={{ animation: 'ttspin 1s linear infinite', marginBottom: '1rem' }} />
+      {/* ── TTS Panel ──────────────────────── */}
+      {showTTS && (
+        <div style={{
+          background: 'rgba(8,8,14,0.99)',
+          borderBottom: '1px solid var(--border-dark)',
+          padding: '0.8rem 1.25rem',
+          flexShrink: 0,
+          display: 'flex', flexDirection: 'column', gap: '0.65rem',
+        }}>
+          {/* Controls row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            {/* Voice */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              <Volume2 size={13} />
+              <select value={voice} onChange={e => { setVoice(e.target.value); setAudioUrl(null); }}
+                className="auth-input" style={{ margin: 0, padding: '0.25rem 0.4rem', fontSize: '0.8rem', width: 'auto' }}>
+                {TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            </label>
+
+            {/* Speed */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              Speed
+              <select value={rate} onChange={e => { setRate(e.target.value); setAudioUrl(null); }}
+                className="auth-input" style={{ margin: 0, padding: '0.25rem 0.4rem', fontSize: '0.8rem', width: 'auto' }}>
+                {TTS_RATES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </label>
+
+            {/* Generate / Regenerate */}
+            <button onClick={generateAudio} disabled={isGenerating}
+              className="btn-solid-gold"
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem', opacity: isGenerating ? 0.6 : 1 }}>
+              {isGenerating
+                ? <><Loader2 size={14} style={{ animation: 'pdfspin 1s linear infinite' }} /> Generating…</>
+                : audioUrl ? '↻ Regenerate' : '▶ Generate Audio'}
+            </button>
+
+            {isGenerating && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                This may take 10–30 seconds for long scrolls…
+              </span>
+            )}
+          </div>
+
+          {/* Error */}
+          {ttsError && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              background: 'rgba(198,40,40,0.1)', border: '1px solid rgba(198,40,40,0.25)',
+              borderRadius: '6px', padding: '0.5rem 0.8rem', color: '#ef5350', fontSize: '0.83rem',
+            }}>
+              <VolumeX size={14} /> {ttsError}
+            </div>
+          )}
+
+          {/* Audio player */}
+          {audioUrl && !ttsError && (
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              controls
+              autoPlay
+              style={{ width: '100%', height: '36px', accentColor: 'var(--accent-gold)' }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── PDF Content ─────────────────────── */}
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {isLoadingPdf && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', color: 'var(--accent-gold)',
+          }}>
+            <Loader2 size={40} style={{ animation: 'pdfspin 1s linear infinite', marginBottom: '1rem' }} />
             <p style={{ margin: 0 }}>Loading scroll…</p>
           </div>
         )}
-        {error && (
-          <p style={{ color: '#ef5350', textAlign: 'center', padding: '2rem' }}>{error}</p>
+        {pdfError && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <p style={{ color: '#ef5350', textAlign: 'center', padding: '2rem', maxWidth: '480px' }}>{pdfError}</p>
+          </div>
         )}
-        {blobUrl && !error && (
+        {blobUrl && !pdfError && (
           <embed
-            src={blobUrl}
+            src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=1`}
             type="application/pdf"
-            style={{ width: '100%', height: '100%', border: 'none' }}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
           />
         )}
       </div>
 
-      {/* Read-Aloud Panel — docked at the bottom */}
-      <ReadAloudPanel noteId={noteId} isPdf={true} />
-
-      <style>{`@keyframes ttspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes pdfspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

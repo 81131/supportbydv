@@ -25,7 +25,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   const [filterUnit, setFilterUnit] = useState<string>(initialUnitId);
   const [filterTopic, setFilterTopic] = useState<string>(initialTopicId);
-  
+
   const [availableUnits, setAvailableUnits] = useState<any[]>([]);
   const [availableTopics, setAvailableTopics] = useState<any[]>([]);
 
@@ -43,7 +43,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-  const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [flashMessage, setFlashMessage] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [allModules, setAllModules] = useState<any[]>([]);
 
   const showFlash = (message: string, type: 'success' | 'error' = 'success') => {
@@ -81,10 +81,10 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
       const res = await api.get(`/library/notes/module/${moduleId}?${query.toString()}`);
       setNotes(res.data);
-      
+
       // Update URL silently
       setSearchParams(query, { replace: true });
-    } catch (error) { console.error(error); } 
+    } catch (error) { console.error(error); }
     finally { setIsLoading(false); }
   };
 
@@ -96,7 +96,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   };
 
   const toggleNoteSelection = (noteId: number) => {
-    setSelectedNotes(prev => 
+    setSelectedNotes(prev =>
       prev.includes(noteId) ? prev.filter(id => id !== noteId) : [...prev, noteId]
     );
   };
@@ -113,12 +113,12 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const handleAddToCollection = async (collectionId: number) => {
     try {
       const notesToSave = activeNoteForCollection ? [activeNoteForCollection] : selectedNotes;
-      await Promise.all(notesToSave.map(id => 
+      await Promise.all(notesToSave.map(id =>
         api.post(`/library/collections/${collectionId}/notes/${id}`)
       ));
       showFlash(`Successfully added ${notesToSave.length} scroll(s) to the archive!`);
-      setActiveNoteForCollection(null); 
-      setSelectedNotes([]); 
+      setActiveNoteForCollection(null);
+      setSelectedNotes([]);
       setIsCollectionModalOpen(false);
     } catch (err) { showFlash("Failed to add some scrolls.", 'error'); }
   };
@@ -126,8 +126,8 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   const handleCreateCollection = async () => {
     if (!newColTitle) return;
     try {
-      const res = await api.post('/library/collections', { 
-        title: newColTitle, 
+      const res = await api.post('/library/collections', {
+        title: newColTitle,
         visibility: newColVis,
         year: newColYear,
         semester: newColSem,
@@ -167,13 +167,6 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     } catch (error) { showFlash("This scroll is sealed or lost to time.", 'error'); }
   };
 
-  const openNote = (note: any) => {
-    if (note.file_type === 'pdf') {
-      setPdfNote({ id: note.id, title: note.title });
-    } else {
-      handleDownload(note.id, note.title, note.file_type || 'file');
-    }
-  };
 
   const handleDelete = async (noteId: number) => {
     if (window.confirm("Are you sure you want to burn this scroll?")) {
@@ -197,8 +190,8 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
   }).sort((a, b) => {
     if (sortOrder === 'nameAsc') return a.title.localeCompare(b.title);
     if (sortOrder === 'nameDesc') return b.title.localeCompare(a.title);
-    return b.id - a.id; 
-  }).sort((a, b) => Number(b.is_pinned || false) - Number(a.is_pinned || false)); 
+    return b.id - a.id;
+  }).sort((a, b) => Number(b.is_pinned || false) - Number(a.is_pinned || false));
 
   return (
     <div className="page-container" style={{ position: 'relative' }}>
@@ -211,7 +204,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
           onClose={() => setPdfNote(null)}
         />
       )}
-      
+
       {flashMessage && (
         <div style={{
           position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
@@ -222,7 +215,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
           {flashMessage.message}
         </div>
       )}
-      
+
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
         <div>
           {selectedNotes.length > 0 && (
@@ -246,10 +239,10 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
           <option value="nameAsc">Name (A-Z)</option>
           <option value="nameDesc">Name (Z-A)</option>
         </select>
-        
+
         <select value={filterUnit} onChange={(e) => { setFilterUnit(e.target.value); setFilterTopic(''); }} className="auth-input" style={{ width: 'auto', padding: '0.4rem', margin: 0, fontSize: '0.9rem' }}>
-           <option value="">All Units</option>
-           {availableUnits.map(u => <option key={u.id} value={u.id}>{u.unit_identifier} - {u.name}</option>)}
+          <option value="">All Units</option>
+          {availableUnits.map(u => <option key={u.id} value={u.id}>{u.unit_identifier} - {u.name}</option>)}
         </select>
 
         {filterUnit && (
@@ -261,19 +254,19 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.9rem' }}>
-            <input type="checkbox" checked={filterVerified} onChange={e => setFilterVerified(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
+            <input type="checkbox" checked={filterVerified} onChange={e => setFilterVerified(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }} />
             <BadgeCheck size={16} color="#4caf50" /> Verified
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.9rem' }}>
-            <input type="checkbox" checked={filterRecommended} onChange={e => setFilterRecommended(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
+            <input type="checkbox" checked={filterRecommended} onChange={e => setFilterRecommended(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }} />
             <Award size={16} color="var(--accent-gold)" /> Recommended
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.9rem' }}>
-            <input type="checkbox" checked={filterNoOne} onChange={e => setFilterNoOne(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
+            <input type="checkbox" checked={filterNoOne} onChange={e => setFilterNoOne(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }} />
             <VenetianMask size={16} color="var(--accent-purple, #b39ddb)" /> By No One
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
-            <input type="checkbox" checked={filterMyUploads} onChange={e => setFilterMyUploads(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }}/>
+            <input type="checkbox" checked={filterMyUploads} onChange={e => setFilterMyUploads(e.target.checked)} style={{ accentColor: 'var(--accent-gold)' }} />
             <Upload size={16} color="var(--accent-gold)" /> My Uploads
           </label>
         </div>
@@ -297,9 +290,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
             return (
               <div key={note.id} className={`item-card row ${note.is_recommended ? 'recommended' : ''} ${note.is_pinned && !note.is_recommended ? 'pinned' : ''}`}>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                  
-                  <input 
-                    type="checkbox" 
+
+                  <input
+                    type="checkbox"
                     checked={selectedNotes.includes(note.id)}
                     onChange={() => toggleNoteSelection(note.id)}
                     style={{ width: '20px', height: '20px', accentColor: 'var(--accent-gold)', marginTop: '0.2rem', cursor: 'pointer' }}
@@ -308,22 +301,21 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
                       <FileText size={20} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
-                      {/* Clickable title */}
-                      <button
-                        onClick={() => openNote(note)}
+                      {/* Clickable title → navigate to permalink */}
+                      <Link
+                        to={`/notes/view/${note.id}`}
                         style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          color: 'var(--text-primary)', textAlign: 'left', fontWeight: 700,
-                          fontSize: '1rem', fontFamily: 'inherit',
+                          color: 'var(--text-primary)', fontWeight: 700,
+                          fontSize: '1rem', textDecoration: 'none',
                           transition: 'color 0.2s',
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent-gold)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
-                        title={note.file_type === 'pdf' ? 'Read online' : 'Download'}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-gold)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                        title="Open note page"
                       >
                         {note.title}
-                      </button>
-                      {/* READ ONLINE badge for PDFs */}
+                      </Link>
+                      {/* VIEW badge for PDFs */}
                       {note.file_type === 'pdf' && (
                         <span style={{
                           fontSize: '0.68rem', background: 'rgba(212,175,55,0.12)', color: 'var(--accent-gold)',
@@ -346,9 +338,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                     </p>
                   </div>
                 </div>
-                
+
                 <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  
+
                   {currentUser?.role === 'noOne' && (
                     <div style={{ display: 'flex', gap: '0.5rem', borderRight: '1px solid var(--border-dark)', paddingRight: '0.8rem' }}>
                       <button onClick={() => handleRecommendToggle(note.id, note.is_recommended)} className="btn-ghost" style={{ borderColor: note.is_recommended ? 'var(--accent-gold)' : '', color: note.is_recommended ? 'var(--accent-gold)' : '' }}>
@@ -372,9 +364,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
                   {/* Read Online button for PDFs */}
                   {note.file_type === 'pdf' && (
-                    <button onClick={() => openNote(note)} className="btn-ghost" title="Read online">
+                    <Link to={`/notes/view/${note.id}`} className="btn-ghost" title="Read online">
                       <BookOpen size={18} />
-                    </button>
+                    </Link>
                   )}
 
                   <button onClick={() => handleDownload(note.id, note.title, note.file_type)} className="btn-solid-gold" title="Download">
@@ -391,7 +383,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       {isCollectionModalOpen && myCollections && (
         <div className="modal-overlay" style={{ backdropFilter: 'blur(4px)' }}>
           <div className="modal-content">
-            
+
             <button onClick={() => { setIsCollectionModalOpen(false); setActiveNoteForCollection(null); setIsCreatingCol(false); }} className="close-btn" style={{ top: '15px', right: '15px' }}>
               <X size={24} />
             </button>
