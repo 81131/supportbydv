@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { 
   ShieldAlert, Users, ScrollText, Lock, Unlock, 
-  VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle, Edit3, CheckCircle, XCircle, FileText
+  VenetianMask, BadgeCheck, Shield, User as UserIcon, Activity, AlertTriangle, Edit3, CheckCircle, XCircle, FileText, Send
 } from 'lucide-react';
 
 import Forbidden from './Forbidden'; 
@@ -16,6 +16,8 @@ const AdminDashboard: React.FC = () => {
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [adRequests, setAdRequests] = useState<any[]>([]);
   const [businessRequests, setBusinessRequests] = useState<any[]>([]);
+  const [activeTicket, setActiveTicket] = useState<any>(null);
+  const [ticketReply, setTicketReply] = useState("");
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'modules' | 'requests' | 'support' | 'ads' | 'business'>((tab as any) || 'users');
@@ -45,6 +47,16 @@ const AdminDashboard: React.FC = () => {
     }
   }, [tab]);
 
+  useEffect(() => {
+    let interval: number;
+    if (activeTicket) {
+      interval = window.setInterval(() => {
+        api.get(`/support/tickets/${activeTicket.ticket.id}`).then(res => setActiveTicket(res.data)).catch(() => {});
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [activeTicket?.ticket?.id]);
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -54,7 +66,7 @@ const AdminDashboard: React.FC = () => {
         api.get('/admin/audit-logs'),
         api.get('/modules'),
         api.get('/subscriptions/requests/all'),
-        api.get('/support/tickets/all'),
+        api.get('/support/tickets/all?category=General Escalation'),
         isNoOne ? api.get('/ads/requests/pending') : Promise.resolve({ data: [] }),
         isNoOne ? api.get('/support/business/pending') : Promise.resolve({ data: [] })
       ]);
@@ -129,6 +141,59 @@ const AdminDashboard: React.FC = () => {
     } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting request.'); }
   };
 
+  const handleApproveAd = async (id: number) => {
+    try {
+      await api.put(`/ads/requests/${id}/approve`);
+      fetchData();
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error approving ad.'); }
+  };
+
+  const handleRejectAd = async (id: number) => {
+    try {
+      await api.put(`/ads/requests/${id}/reject`);
+      fetchData();
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting ad.'); }
+  };
+
+  const handleApproveBiz = async (id: number) => {
+    try {
+      await api.put(`/support/business/${id}/approve`);
+      fetchData();
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error approving business req.'); }
+  };
+
+  const handleRejectBiz = async (id: number) => {
+    try {
+      await api.put(`/support/business/${id}/reject`);
+      fetchData();
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting business req.'); }
+  };
+
+  const handleOpenTicket = async (id: number) => {
+    try {
+      const res = await api.get(`/support/tickets/${id}`);
+      setActiveTicket(res.data);
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error opening ticket.'); }
+  };
+
+  const handleReplyTicket = async () => {
+    if (!ticketReply.trim() || !activeTicket) return;
+    try {
+      await api.post(`/support/tickets/${activeTicket.ticket.id}/reply`, { content: ticketReply });
+      setTicketReply("");
+      handleOpenTicket(activeTicket.ticket.id); // Refresh ticket
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error sending reply.'); }
+  };
+
+  const handleResolveTicket = async () => {
+    if (!activeTicket) return;
+    try {
+      await api.put(`/support/tickets/${activeTicket.ticket.id}/resolve`);
+      handleOpenTicket(activeTicket.ticket.id); // Refresh ticket
+      fetchData(); // Refresh list to update status pill
+    } catch (err: any) { alert(err.response?.data?.detail || 'Error resolving ticket.'); }
+  };
+
   const formatDate = (dateString: string) => {
     if (!dateString) return "Never";
     const date = new Date(dateString);
@@ -192,23 +257,38 @@ const AdminDashboard: React.FC = () => {
         </button>
         <button 
           onClick={() => navigate('/admin-dashboard/support')}
-          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'support' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'support' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'support' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'support' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', position: 'relative' }}
         >
           <AlertTriangle size={20} /> Escalations
+          {supportTickets.filter(t => t.status === 'open').length > 0 && (
+            <span style={{ position: 'absolute', top: '5px', right: '5px', background: 'red', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '10px' }}>
+              {supportTickets.filter(t => t.status === 'open').length}
+            </span>
+          )}
         </button>
         {isSuperAdmin && (
           <>
             <button 
               onClick={() => navigate('/admin-dashboard/ads')}
-              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'ads' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'ads' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'ads' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'ads' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', position: 'relative' }}
             >
               <AlertTriangle size={20} /> Ad Requests
+              {adRequests.length > 0 && (
+                <span style={{ position: 'absolute', top: '5px', right: '5px', background: 'red', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '10px' }}>
+                  {adRequests.length}
+                </span>
+              )}
             </button>
             <button 
               onClick={() => navigate('/admin-dashboard/business')}
-              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'business' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'business' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+              style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'business' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'business' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', position: 'relative' }}
             >
               <Users size={20} /> Business Inquiries
+              {businessRequests.length > 0 && (
+                <span style={{ position: 'absolute', top: '5px', right: '0px', background: 'red', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '10px' }}>
+                  {businessRequests.length}
+                </span>
+              )}
             </button>
           </>
         )}
@@ -505,7 +585,10 @@ const AdminDashboard: React.FC = () => {
                            <p className="text-desc">Created: {new Date(t.created_at).toLocaleString()}</p>
                         </div>
                         <div>
-                           <span style={{ padding: '0.3rem 0.6rem', border: '1px solid var(--accent-gold)', borderRadius: 12, color: 'var(--accent-gold)', fontSize: '0.8rem' }}>{t.status.toUpperCase()}</span>
+                           <span style={{ padding: '0.3rem 0.6rem', border: '1px solid var(--accent-gold)', borderRadius: 12, color: 'var(--accent-gold)', fontSize: '0.8rem', marginRight: '1rem' }}>{t.status.toUpperCase()}</span>
+                           <button className="btn-ghost" style={{ padding: '0.4rem 1rem' }} onClick={() => handleOpenTicket(t.id)}>
+                             VIEW
+                           </button>
                         </div>
                     </div>
                  </div>
@@ -544,7 +627,12 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     )}
                     <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--border-dark)', display: 'flex', gap: '1rem' }}>
-                      <button className="btn-solid-gold" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>Approve Campaign</button>
+                      <button className="btn-solid-gold" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }} onClick={() => handleApproveAd(r.id)}>
+                        Approve Campaign
+                      </button>
+                      <button className="btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => handleRejectAd(r.id)}>
+                        Reject
+                      </button>
                     </div>
                  </div>
                ))}
@@ -577,12 +665,89 @@ const AdminDashboard: React.FC = () => {
                     <div style={{ background: 'var(--bg-deep)', padding: '1rem', borderRadius: 4, color: 'var(--text-muted)', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
                       {r.message}
                     </div>
+                    <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--border-dark)', display: 'flex', gap: '1rem' }}>
+                      <button className="btn-solid-gold" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }} onClick={() => handleApproveBiz(r.id)}>
+                        Mark as Reviewed (Notify)
+                      </button>
+                      <button className="btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => handleRejectBiz(r.id)}>
+                        Decline & Archive
+                      </button>
+                    </div>
                  </div>
                ))}
             </div>
           )}
         </div>
       ) : null}
+
+      {/* Ticket Modal */}
+      {activeTicket && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dark)', borderRadius: 16, width: '700px', maxWidth: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-dark)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Ticket #{activeTicket.ticket.id} <span style={{ color: 'var(--accent-gold)' }}>[{activeTicket.ticket.status.toUpperCase()}]</span></h3>
+              <button className="btn-ghost" style={{ padding: '0.3rem', border: 'none' }} onClick={() => setActiveTicket(null)}><XCircle size={24} /></button>
+            </div>
+            
+            <div style={{ padding: '1rem 1.5rem', background: '#111', borderBottom: '1px solid var(--border-dark)', display: 'flex', gap: '2rem', fontSize: '0.85rem' }}>
+               <div><span style={{ color: 'var(--text-muted)' }}>User:</span> <strong>{activeTicket.ticket.user_name}</strong> (ID: {activeTicket.ticket.user_id})</div>
+               <div><span style={{ color: 'var(--text-muted)' }}>Role:</span> <strong>{activeTicket.ticket.user_role?.toUpperCase()}</strong></div>
+               <div><span style={{ color: 'var(--text-muted)' }}>Status:</span> <strong style={{ color: activeTicket.ticket.user_suspended ? '#e74c3c' : '#2ecc71' }}>{activeTicket.ticket.user_suspended ? 'SUSPENDED' : 'ACTIVE'}</strong></div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {activeTicket.ticket.chat_history && (
+                 <div style={{ background: 'var(--bg-deep)', padding: '1rem', borderRadius: 8, fontSize: '0.9rem' }}>
+                   <p style={{ margin: '0 0 0.5rem 0', color: 'var(--accent-gold)' }}><strong>Initial Chat Context:</strong></p>
+                   <pre style={{ whiteSpace: 'pre-wrap', color: 'var(--text-muted)', margin: 0, fontFamily: 'inherit' }}>
+                     {(() => {
+                        try {
+                          const history = JSON.parse(activeTicket.ticket.chat_history);
+                          return history.map((h: any) => `(${h.role.toUpperCase()}): ${h.parts}`).join('\n\n');
+                        } catch { return activeTicket.ticket.chat_history; }
+                     })()}
+                   </pre>
+                 </div>
+              )}
+
+              {activeTicket.messages.map((m: any) => (
+                <div key={m.id} style={{ 
+                  alignSelf: m.sender_role === 'admin' ? 'flex-end' : 'flex-start',
+                  background: m.sender_role === 'admin' ? 'var(--dark-gold)' : 'var(--bg-deep)',
+                  padding: '1rem', borderRadius: 12, maxWidth: '80%'
+                }}>
+                  <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.8rem', color: m.sender_role === 'admin' ? '#fff' : 'var(--accent-gold)', fontWeight: 'bold' }}>
+                    {m.sender_role.toUpperCase() === 'USER' ? 'SCHOLAR' : m.sender_role.toUpperCase()} 
+                    <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>{new Date(m.created_at).toLocaleTimeString()}</span>
+                  </p>
+                  <p style={{ margin: 0, color: m.sender_role === 'admin' ? '#fff' : 'var(--text-main)' }}>{m.content}</p>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-dark)', display: 'flex', gap: '0.5rem' }}>
+              <input 
+                value={ticketReply}
+                onChange={e => setTicketReply(e.target.value)}
+                placeholder="Type your reply to the scholar..."
+                style={{ flex: 1, padding: '0.8rem', background: 'var(--bg-deep)', border: '1px solid var(--border-dark)', borderRadius: 8, color: 'var(--text-main)' }}
+                onKeyDown={e => e.key === 'Enter' ? handleReplyTicket() : null}
+                disabled={activeTicket.ticket.status === 'resolved'}
+              />
+              {activeTicket.ticket.status !== 'resolved' && (
+                <>
+                  <button className="btn-solid-gold" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={handleReplyTicket}>
+                    <Send size={18} /> Send
+                  </button>
+                  <button onClick={handleResolveTicket} style={{ background: '#2ecc71', color: 'black', border: 'none', borderRadius: 8, padding: '0 1rem', cursor: 'pointer', fontWeight: 'bold' }}>
+                    RESOLVE
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

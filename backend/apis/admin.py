@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import String
 from database import get_db
 from models.user import User, UserRole
 from models.audit import AuditLog
@@ -26,13 +27,23 @@ class SuspendRequest(BaseModel):
 
 # --- Routes ---
 
+from typing import Optional
+
 @router.get("/users")
-def get_all_users(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def get_all_users(q: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Fetch all users and their status for the dashboard table."""
     from models.monetization import UserSubscription
     from datetime import datetime
     
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    query = db.query(User)
+    if q:
+        query = query.filter(
+            (User.first_name.ilike(f"%{q}%")) |
+            (User.last_name.ilike(f"%{q}%")) |
+            (User.email.ilike(f"%{q}%")) |
+            (User.id.cast(String).ilike(f"%{q}%"))
+        )
+    users = query.order_by(User.created_at.desc()).all()
     now = datetime.utcnow()
     
     result = []

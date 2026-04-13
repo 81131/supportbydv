@@ -42,6 +42,7 @@ class BusinessContactRequest(Base):
     __tablename__ = "business_contact_requests"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     contact_name = Column(String, nullable=False)
     contact_email = Column(String, nullable=False)
     company = Column(String, nullable=True)

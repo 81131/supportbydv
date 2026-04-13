@@ -77,6 +77,7 @@ class AdSubmissionRequest(Base):
     __tablename__ = "ad_submission_requests"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     contact_name = Column(String, nullable=False)
     contact_number = Column(String, nullable=False)
     duration_months = Column(Integer, nullable=False)

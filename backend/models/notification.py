@@ -10,6 +10,7 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     message = Column(String, nullable=False)
     is_read = Column(Boolean, default=False)
+    destination_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     user = relationship("User")

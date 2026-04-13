@@ -59,6 +59,19 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
         
     return user
 
+def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get("access_token")
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+        return db.query(User).filter(User.id == int(user_id)).first()
+    except JWTError:
+        return None
+
 def verify_csrf(request: Request):
     """
     Ensures the CSRF token in the header matches the one in the cookie.

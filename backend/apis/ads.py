@@ -5,7 +5,8 @@ from datetime import datetime
 from database import get_db
 from models.user import User
 from models.monetization import AdCampaign, AdPlacement, AdSubmissionRequest
-from security import get_current_user, require_noOne, verify_csrf
+from security import get_current_user, get_current_user_optional, require_noOne, verify_csrf
+from models.notification import Notification
 from pydantic import BaseModel
 from typing import Optional
 
@@ -76,9 +77,11 @@ class AdSubmission(BaseModel):
     additional_details: Optional[str] = None
 
 @router.post("/request", status_code=status.HTTP_201_CREATED)
-def submit_ad_request(submission: AdSubmission, db: Session = Depends(get_db)):
+def submit_ad_request(submission: AdSubmission, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_current_user_optional)):
     """Public endpoint for submitting an ad inquiry."""
     req = AdSubmissionRequest(**submission.dict())
+    if current_user:
+        req.user_id = current_user.id
     db.add(req)
     db.commit()
     return {"message": "Request submitted successfully. The Maesters will contact you."}
@@ -88,3 +91,31 @@ def get_pending_ad_requests(db: Session = Depends(get_db), current_user: User = 
     """Only NoOne can view these."""
     reqs = db.query(AdSubmissionRequest).filter(AdSubmissionRequest.status == "pending").order_by(AdSubmissionRequest.created_at.desc()).all()
     return reqs
+
+@router.put("/requests/{req_id}/approve", dependencies=[Depends(verify_csrf)])
+def approve_ad_request(req_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+    req = db.query(AdSubmissionRequest).filter(AdSubmissionRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Ad request not found")
+    req.status = "approved"
+    
+    if req.user_id:
+        notif = Notification(user_id=req.user_id, message="Your Ad Campaign was approved by the Small Council. It is now active.", destination_url="/about")
+        db.add(notif)
+        
+    db.commit()
+    return {"message": "Ad campaign approved."}
+
+@router.put("/requests/{req_id}/reject", dependencies=[Depends(verify_csrf)])
+def reject_ad_request(req_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+    req = db.query(AdSubmissionRequest).filter(AdSubmissionRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Ad request not found")
+    req.status = "rejected"
+    
+    if req.user_id:
+        notif = Notification(user_id=req.user_id, message="Your Ad Campaign was declined by the Small Council.", destination_url="/about")
+        db.add(notif)
+        
+    db.commit()
+    return {"message": "Ad campaign rejected."}

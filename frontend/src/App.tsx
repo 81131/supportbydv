@@ -234,8 +234,12 @@ function App() {
                                 await api.put(`/notifications/${n.id}/read`);
                                 fetchNotifications();
                               }
-                              // If the message mentions a quiz review, navigate there
-                              if (n.message && n.message.includes('essay') && n.quiz_id) {
+                              // Support generic destination urls from the backend
+                              if (n.destination_url) {
+                                window.location.href = n.destination_url;
+                              } 
+                              // Legacy manual overrides
+                              else if (n.message && n.message.includes('essay') && n.quiz_id) {
                                 window.location.href = `/review-essays/${n.quiz_id}`;
                               }
                               setShowNotifications(false);
