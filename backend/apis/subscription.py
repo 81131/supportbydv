@@ -82,13 +82,12 @@ async def submit_subscription_request(
     db.commit()
     db.refresh(req)
     
-    # Notify NoOne if it's an upgrade so they know to refund the rest value
-    if is_upgrade:
-        no_ones = db.query(User).filter(User.role == UserRole.NO_ONE).all()
-        for admin in no_ones:
-            notif = Notification(user_id=admin.id, message=f"Scholar {current_user.first_name} requested an UPGRADE to {tier.value}. Please evaluate for partial refund.")
-            db.add(notif)
-        db.commit()
+    no_ones = db.query(User).filter(User.role == UserRole.NO_ONE).all()
+    for admin in no_ones:
+        msg = f"Scholar {current_user.first_name} requested an UPGRADE to {tier.value}. Please evaluate for partial refund." if is_upgrade else f"Scholar {current_user.first_name} submitted a new subscription request for {tier.value}."
+        notif = Notification(user_id=admin.id, message=msg)
+        db.add(notif)
+    db.commit()
 
     return {"message": "Request submitted. Awaiting the Maesters' review."}
 
@@ -99,7 +98,13 @@ async def submit_subscription_request(
 def get_pending_requests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Forbidden.")
-    return db.query(SubscriptionRequest).filter(SubscriptionRequest.status == SubscriptionStatus.PENDING).all()
+    return db.query(SubscriptionRequest).filter(SubscriptionRequest.status == SubscriptionStatus.PENDING).order_by(SubscriptionRequest.created_at.desc()).all()
+
+@router.get("/requests/all")
+def get_all_requests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
+        raise HTTPException(status_code=403, detail="Forbidden.")
+    return db.query(SubscriptionRequest).order_by(SubscriptionRequest.created_at.desc()).all()
 
 
 # -------------------------------------------------------------
@@ -141,7 +146,7 @@ def approve_request(req_id: int, db: Session = Depends(get_db), current_user: Us
     db.add(sub)
     
     # Notify user
-    notif = Notification(user_id=req.user_id, message="Your Citadel subscription has been approved! The archives are open.", type="system")
+    notif = Notification(user_id=req.user_id, message="Your Citadel subscription has been approved! The archives are open.")
     db.add(notif)
     
     db.commit()
@@ -165,7 +170,7 @@ def reject_request(req_id: int, db: Session = Depends(get_db), current_user: Use
     req.reviewed_by = current_user.id
     
     # Notify user
-    notif = Notification(user_id=req.user_id, message="Your subscription request was declined. Please contact support.", type="system")
+    notif = Notification(user_id=req.user_id, message="Your subscription request was declined. Please contact support.")
     db.add(notif)
 
     db.commit()

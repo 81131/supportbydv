@@ -4,6 +4,7 @@ import api from '../api';
 import ossaBg from '../assets/OSSA-bg.webp';
 import wmtBg from '../assets/WMT-bg.webp';
 import psBg from '../assets/PS-bg.webp';
+import { AdWrapper } from '../components/AdWrapper';
 
 import { API_BASE_URL } from '../api';
 
@@ -41,8 +42,9 @@ const Semester: React.FC = () => {
   };
 
   return (
-    <div className="page-container">
-      <h1 className="brand-font" style={{ color: 'var(--accent-gold)', textAlign: 'center', marginTop: '2rem' }}>
+    <AdWrapper semesterKey={semesterKey}>
+      <div className="page-container">
+        <h1 className="brand-font" style={{ color: 'var(--accent-gold)', textAlign: 'center', marginTop: '2rem' }}>
         {semesterKey} Archives
       </h1>
       <p className="text-desc" style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -68,8 +70,9 @@ const Semester: React.FC = () => {
             </Link>
           ))}
         </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AdWrapper>
   );
 };
 

@@ -37,3 +37,14 @@ class TicketMessage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     ticket = relationship("SupportTicket", back_populates="messages")
+
+class BusinessContactRequest(Base):
+    __tablename__ = "business_contact_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    contact_name = Column(String, nullable=False)
+    contact_email = Column(String, nullable=False)
+    company = Column(String, nullable=True)
+    message = Column(Text, nullable=False)
+    status = Column(String, default="unread") # unread, read, replied
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

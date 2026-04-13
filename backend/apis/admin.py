@@ -29,10 +29,40 @@ class SuspendRequest(BaseModel):
 @router.get("/users")
 def get_all_users(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Fetch all users and their status for the dashboard table."""
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    from models.monetization import UserSubscription
+    from datetime import datetime
     
-    # Optional: You can attach total quizzes created or attempts here if needed
-    return users
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    now = datetime.utcnow()
+    
+    result = []
+    for u in users:
+        # Reconstruct as dictionary to append custom fields safely
+        u_dict = {
+            "id": u.id,
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "picture": u.picture,
+            "role": u.role.value if hasattr(u.role, 'value') else u.role,
+            "is_suspended": u.is_suspended,
+            "last_active_at": u.last_active_at,
+            "created_at": u.created_at
+        }
+        
+        # Calculate active tiers
+        subs = db.query(UserSubscription).filter(
+            UserSubscription.user_id == u.id,
+            UserSubscription.is_active == True,
+            UserSubscription.expiry_date > now
+        ).all()
+        
+        tiers = list(set([sub.tier.value for sub in subs])) if subs else ["free"]
+        u_dict["active_tiers"] = tiers
+        
+        result.append(u_dict)
+        
+    return result
 
 @router.put("/users/{target_id}/role")
 def change_user_role(

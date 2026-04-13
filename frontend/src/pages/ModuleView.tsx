@@ -5,6 +5,7 @@ import NoteDisplayer from '../components/NoteDisplayer';
 import CollectionDisplayer from '../components/CollectionDisplayer';
 import { Swords, ScrollText, Library, Settings } from 'lucide-react';
 import api, { API_BASE_URL } from '../api';
+import { AdWrapper } from '../components/AdWrapper';
 import ossaBg from '../assets/Ned_Stark_OSSA-bg.jpg';
 import wmtBg from '../assets/dragonglass_cave-WMT-bg.avif';
 import psBg from '../assets/Tyrion_PS-bg.avif';
@@ -61,11 +62,13 @@ const ModuleView: React.FC = () => {
     PS: psBg,
   };
   const heroBg = module.banner_image_url ? `${API_BASE_URL}${module.banner_image_url}` : (moduleBgMap[module.code] || null);
+  const semesterKey = `Y${module.year}S${module.semester}`;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-deep)' }}>
-      
-      <div style={{
+    <AdWrapper semesterKey={semesterKey}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-deep)' }}>
+        
+        <div style={{
         ...(heroBg
           ? {
               backgroundImage: `linear-gradient(to bottom, rgba(10, 10, 10, 0.5), var(--bg-deep)), url(${heroBg})`,
@@ -125,9 +128,10 @@ const ModuleView: React.FC = () => {
         {activeTab === 'quizzes' && <QuizDisplayer moduleId={module.id} moduleShortName={module.code} />}
         {activeTab === 'notes' && <NoteDisplayer moduleId={module.id} />}
         {activeTab === 'collections' && <CollectionDisplayer moduleId={module.id} />}
+        </div>
+  
       </div>
-
-    </div>
+    </AdWrapper>
   );
 };
 

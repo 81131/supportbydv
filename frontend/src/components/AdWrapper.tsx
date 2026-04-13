@@ -1,30 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../api';
 
-const EXEMPT_ROUTES = ['/', '/quiz-maker', '/take-quiz', '/upload-note'];
-
-export const AdWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const location = useLocation();
+export const AdWrapper: React.FC<{ children: React.ReactNode, semesterKey?: string }> = ({ children, semesterKey }) => {
   const [ads, setAds] = useState<any[]>([]);
 
   useEffect(() => {
-    // Fetch active ads from backend
-    api.get('/ads/active').then(res => setAds(res.data)).catch(() => {});
-  }, []);
-
-  // Check if current route is exempt from ads
-  const isExempt = EXEMPT_ROUTES.some(r => location.pathname === r || location.pathname.startsWith(r + '/'));
-
-  if (isExempt) {
-    return <>{children}</>;
-  }
+    // Fetch targeted ads from backend
+    const params = semesterKey ? { semester_key: semesterKey } : {};
+    api.get('/ads/active', { params }).then(res => setAds(res.data)).catch(() => {});
+  }, [semesterKey]);
 
   // Organize ads by placement
   const getAd = (placement: string) => {
     const isDark = document.body.getAttribute('data-theme') === 'dark';
     const ad = ads.find(a => a.placement === placement);
-    if (!ad) return null;
+    if (!ad) {
+      return (
+        <Link to="/submit-ad" className={`ad-container ad-${placement} empty-ad`} style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            background: 'var(--bg-deep)', border: '1px dashed var(--border-dark)',
+            color: 'var(--text-muted)', textDecoration: 'none', padding: '1rem',
+            textAlign: 'center', minHeight: placement.includes('nav') ? '400px' : '90px',
+            borderRadius: '8px', transition: 'all 0.3s'
+        }} onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-gold)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-dark)'}>
+          <div>Advertise Here<br/><span style={{fontSize: '0.8rem'}}>Place your business ad</span></div>
+        </Link>
+      );
+    }
     
     // Choose image based on theme (fallback to light if dark is missing)
     const imgUrl = (isDark && ad.dark_image_url) ? ad.dark_image_url : ad.light_image_url;

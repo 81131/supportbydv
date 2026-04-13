@@ -7,9 +7,9 @@ from typing import List, Optional
 
 from database import get_db
 from models.user import User, UserRole
-from models.reports import SupportTicket, TicketMessage, TicketStatus
+from models.reports import SupportTicket, TicketMessage, TicketStatus, BusinessContactRequest
 from models.monetization import UserSubscription
-from security import get_current_user
+from security import get_current_user, require_noOne, verify_csrf
 
 router = APIRouter(prefix="/support", tags=["Support"])
 
@@ -43,7 +43,7 @@ class EscalateRequest(BaseModel):
     description: str
     chat_history: str # JSON Dump
 
-@router.post("/chat")
+@router.post("/chat", dependencies=[Depends(verify_csrf)])
 def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not api_key:
         return {"reply": "The maesters have not configured the Raven network (API key missing)."}
@@ -68,7 +68,7 @@ def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_u
     except Exception as e:
         return {"reply": f"The Raven dropped the scroll. Error: {str(e)}"}
 
-@router.post("/escalate")
+@router.post("/escalate", dependencies=[Depends(verify_csrf)])
 def escalate_to_admin(req: EscalateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticket = SupportTicket(
         user_id=current_user.id,
@@ -102,3 +102,23 @@ def get_all_tickets(db: Session = Depends(get_db), current_user: User = Depends(
         raise HTTPException(status_code=403, detail="Forbidden")
     tickets = db.query(SupportTicket).order_by(SupportTicket.created_at.desc()).all()
     return [{"id": t.id, "status": t.status.value, "category": t.category, "created_at": t.created_at} for t in tickets]
+
+class BusinessContact(BaseModel):
+    contact_name: str
+    contact_email: str
+    company: Optional[str] = None
+    message: str
+
+@router.post("/business-contact", status_code=status.HTTP_201_CREATED)
+def submit_business_contact(contact: BusinessContact, db: Session = Depends(get_db)):
+    """Public endpoint for business contacts."""
+    req = BusinessContactRequest(**contact.dict())
+    db.add(req)
+    db.commit()
+    return {"message": "Message sent! We will echo a raven to you shortly."}
+
+@router.get("/business/pending")
+def get_pending_business(db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+    """Only NoOne can view these."""
+    reqs = db.query(BusinessContactRequest).filter(BusinessContactRequest.status == "unread").order_by(BusinessContactRequest.created_at.desc()).all()
+    return reqs

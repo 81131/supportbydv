@@ -50,6 +50,12 @@ def wait_for_db():
                 conn.execute(text(
                     "ALTER TABLE collection_notes ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
                 ))
+                conn.execute(text(
+                    "ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS target_semester VARCHAR"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE ad_submission_requests ADD COLUMN IF NOT EXISTS target_semester VARCHAR"
+                ))
                 conn.commit()
             print("Database connected and tables created!")
             return
@@ -239,9 +245,9 @@ app.include_router(notifications_router, dependencies=[Depends(verify_csrf)])
 app.include_router(modules_router)
 app.include_router(users_router, dependencies=[Depends(verify_csrf)])
 app.include_router(subscription_router, dependencies=[Depends(verify_csrf)])
-app.include_router(ads_router, dependencies=[Depends(verify_csrf)])
+app.include_router(ads_router)
 app.include_router(dashboard_router)
-app.include_router(support_router, dependencies=[Depends(verify_csrf)])
+app.include_router(support_router)
 
 @app.get("/")
 def read_root():

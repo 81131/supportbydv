@@ -12,8 +12,6 @@ class UserRole(enum.Enum):
     USER = "user"
     STUDENT = "student" 
     PREMIUM_USER = "premium_user"
-    ACOLYTE = "acolyte"
-
 class User(Base):
     __tablename__ = "users"
     __table_args__ = {'extend_existing': True}

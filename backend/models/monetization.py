@@ -25,6 +25,7 @@ class AdCampaign(Base):
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True) # duration
     is_active = Column(Boolean, default=True)
+    target_semester = Column(String, nullable=True) # e.g. "Y1S1", or null for global
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class SubscriptionTier(enum.Enum):
@@ -71,3 +72,16 @@ class UserSubscription(Base):
     
     # Optional link back to the request that generated this
     request_id = Column(Integer, ForeignKey("subscription_requests.id"), nullable=True)
+
+class AdSubmissionRequest(Base):
+    __tablename__ = "ad_submission_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    contact_name = Column(String, nullable=False)
+    contact_number = Column(String, nullable=False)
+    duration_months = Column(Integer, nullable=False)
+    target_semester = Column(String, nullable=True) # Null means global
+    desired_placeholders = Column(String, nullable=False) # JSON or comma separated string
+    additional_details = Column(String, nullable=True)
+    status = Column(String, default="pending") # pending, approved, rejected
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -89,7 +89,7 @@ def require_premium_access(user: User, db: Session, module_id: int = None, semes
     Returns True if allowed, or raises 403.
     """
     # 1. Super users bypass all restrictions
-    if user.role in [UserRole.NO_ONE, UserRole.ADMIN, UserRole.ACOLYTE]:
+    if user.role in [UserRole.NO_ONE, UserRole.ADMIN, UserRole.FACELESS]:
         return True
     
     # 2. Check active subscriptions

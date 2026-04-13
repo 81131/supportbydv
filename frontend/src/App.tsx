@@ -30,9 +30,11 @@ import MyProfile from './pages/MyProfile';
 import PublicProfile from './pages/PublicProfile';
 import CollectionView from './pages/CollectionView';
 import NoteViewer from './pages/NoteViewer';
-import { AdWrapper } from './components/AdWrapper';
 import Subscriptions from './pages/Subscriptions';
 import FloatingRaven from './components/FloatingRaven';
+import Footer from './components/Footer';
+import SubmitAd from './pages/SubmitAd';
+import BusinessContact from './pages/BusinessContact';
 
 
 function App() {
@@ -186,23 +188,24 @@ function App() {
                   .filter(key => key.startsWith(`Y${user.current_year || 2}`))
                   .sort()
                   .map(key => (
-                  <Link
-                    key={key}
-                    to={`/semester/${key}`}
-                    className="nav-item"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {key}
-                  </Link>
-                ))}
+                    <Link
+                      key={key}
+                      to={`/semester/${key}`}
+                      className="nav-item"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      {key}
+                    </Link>
+                  ))}
                 <Link to="/my-quizzes" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Quizzes</Link>
                 <Link to="/my-vault" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Vault</Link>
-                <Link to="/subscriptions" className="nav-item" style={{ color: 'var(--accent-gold)' }} onClick={() => setIsMenuOpen(false)}>Subscriptions</Link>
               </>
             )}
             <Link to="/leaderboard" className="nav-item" onClick={() => setIsMenuOpen(false)}>Throne Room</Link>
             <Link to="/analytics" className="nav-item" onClick={() => setIsMenuOpen(false)}>Performance</Link>
             <Link to="/about" className="nav-item" onClick={() => setIsMenuOpen(false)}>About</Link>
+            <Link to="/subscriptions" className="nav-item" style={{ color: 'var(--accent-gold)' }} onClick={() => setIsMenuOpen(false)}>Subscriptions</Link>
+
             {user && (user.role === 'noOne' || user.role === 'admin') && (
               <>
                 <Link to="/admin-dashboard" className="nav-item" style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }} onClick={() => setIsMenuOpen(false)}>Small Council</Link>
@@ -261,8 +264,7 @@ function App() {
         </nav>
 
         <div className="main-content">
-          <AdWrapper>
-            <Routes>
+          <Routes>
             <Route path="/" element={<Home openModal={openModal} />} />
             <Route path="/semester/:semesterKey" element={<ProtectedRoute user={user}><Semester /></ProtectedRoute>} />
             <Route path="/module/:moduleId" element={<ProtectedRoute user={user}><ModuleView /></ProtectedRoute>} />
@@ -283,15 +285,17 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute user={user}><MyProfile /></ProtectedRoute>} />
             <Route path="/user/:id" element={<ProtectedRoute user={user}><PublicProfile /></ProtectedRoute>} />
             <Route path="/about" element={<About />} />
-            <Route path="/admin-dashboard" element={<PrivilegedRoute user={user}><AdminDashboard /></PrivilegedRoute>} />
+            <Route path="/admin-dashboard/:tab?" element={<PrivilegedRoute user={user}><AdminDashboard /></PrivilegedRoute>} />
             <Route path="/create-module" element={<PrivilegedRoute user={user}><CreateModule /></PrivilegedRoute>} />
             <Route path="/edit-module/:id" element={<PrivilegedRoute user={user}><EditModule /></PrivilegedRoute>} />
             <Route path="/subscriptions" element={<ProtectedRoute user={user}><Subscriptions /></ProtectedRoute>} />
             <Route path="/forbidden" element={<Forbidden />} />
+            <Route path="/submit-ad" element={<SubmitAd />} />
+            <Route path="/business-contact" element={<BusinessContact />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
-          </AdWrapper>
           <FloatingRaven />
+          <Footer />
         </div>
 
         {isModalOpen && (
