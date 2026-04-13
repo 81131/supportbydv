@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, Pencil, Trash2, BadgeCheck, VenetianMask, Award, Pin, Filter } from 'lucide-react';
+import { Plus, BookOpen, Pencil, Trash2, BadgeCheck, VenetianMask, Award, Pin, Filter, Crown } from 'lucide-react';
 import api from '../api';
 
 interface QuizDisplayerProps {
@@ -49,6 +49,13 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
       await api.put(`/quizzes/${quizId}/governance`, { is_recommended: !currentStatus });
       setQuizzes(quizzes.map(q => q.id === quizId ? { ...q, is_recommended: !currentStatus } : q));
     } catch (error) { alert("Only No One can bestow this honor."); }
+  };
+
+  const handlePremiumToggle = async (quizId: number, currentStatus: boolean) => {
+    try {
+      await api.put(`/quizzes/${quizId}/governance`, { is_premium: !currentStatus });
+      setQuizzes(quizzes.map(q => q.id === quizId ? { ...q, is_premium: !currentStatus } : q));
+    } catch (error) { alert("Only No One can make this premium."); }
   };
 
   const handleDelete = async (quizId: number) => {
@@ -147,6 +154,7 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
                       {isNoOne && <span title="Forged by No One"><VenetianMask size={20} color="var(--accent-purple, #b39ddb)" /></span>}
                       {isVerified && <span title="Verified Scholar"><BadgeCheck size={20} color="#4caf50" /></span>}
                       {quiz.is_pinned && <span title="Pinned"><Pin size={20} color="var(--accent-red)" fill="var(--accent-red)" style={{ transform: 'rotate(45deg)' }} /></span>}
+                      {quiz.is_premium && <span title="Premium Exclusive"><Crown size={20} color="#f1c40f" fill="#f1c40f" /></span>}
                     </div>
                   </div>
                   <p className="text-desc" style={{ marginBottom: '0.4rem' }}>{quiz.description}</p>
@@ -161,6 +169,9 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
                     <div style={{ display: 'flex', gap: '0.5rem', borderRight: '1px solid var(--border-dark)', paddingRight: '1rem' }}>
                       <button onClick={() => handleRecommendToggle(quiz.id, quiz.is_recommended)} className="btn-ghost" style={{ borderColor: quiz.is_recommended ? 'var(--accent-gold)' : '', color: quiz.is_recommended ? 'var(--accent-gold)' : '' }}>
                         <Award size={16} /> {quiz.is_recommended ? 'Revoke' : 'Recommend'}
+                      </button>
+                      <button onClick={() => handlePremiumToggle(quiz.id, quiz.is_premium)} className="btn-ghost" style={{ borderColor: quiz.is_premium ? '#f1c40f' : '', color: quiz.is_premium ? '#f1c40f' : '' }}>
+                        <Crown size={16} /> {quiz.is_premium ? 'Unpremium' : 'Premium'}
                       </button>
                       <button onClick={() => handlePinToggle(quiz.id, quiz.is_pinned)} className="btn-ghost" style={{ borderColor: quiz.is_pinned ? 'var(--accent-red)' : '', color: quiz.is_pinned ? 'var(--accent-red)' : '' }}>
                         <Pin size={16} style={{ transform: quiz.is_pinned ? 'rotate(45deg)' : 'none' }} /> {quiz.is_pinned ? 'Unpin' : 'Pin'}

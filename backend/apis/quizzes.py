@@ -862,6 +862,7 @@ def submit_and_grade_quiz(
 class GovernanceToggle(BaseModel):
     is_pinned: bool = None
     is_recommended: bool = None
+    is_premium: bool = None
 
 @router.put("/{quiz_id}/governance")
 def toggle_quiz_governance(
@@ -881,6 +882,8 @@ def toggle_quiz_governance(
         quiz.is_pinned = flags.is_pinned
     if flags.is_recommended is not None:
         quiz.is_recommended = flags.is_recommended
+    if flags.is_premium is not None:
+        quiz.is_premium = flags.is_premium
         
     db.commit()
     return {"message": "The Citadel's archives have been updated."}

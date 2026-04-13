@@ -386,6 +386,7 @@ def get_all_collections(module_id: Optional[int] = None, db: Session = Depends(g
 class GovernanceToggle(BaseModel):
     is_pinned: bool = None
     is_recommended: bool = None
+    is_premium: bool = None
 
 @router.put("/notes/{note_id}/governance")
 def toggle_note_governance(
@@ -397,6 +398,7 @@ def toggle_note_governance(
     note = db.query(Note).filter(Note.id == note_id).first()
     if flags.is_pinned is not None: note.is_pinned = flags.is_pinned
     if flags.is_recommended is not None: note.is_recommended = flags.is_recommended
+    if flags.is_premium is not None: note.is_premium = flags.is_premium
     db.commit()
     return {"message": "Scroll governance updated."}
 

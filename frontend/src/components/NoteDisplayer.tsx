@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus, Upload, BookOpen } from 'lucide-react';
+import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus, Upload, BookOpen, Crown } from 'lucide-react';
 import api from '../api';
 import PdfViewer from './PdfViewer';
 
@@ -152,6 +152,14 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
       setNotes(notes.map(n => n.id === noteId ? { ...n, is_recommended: !currentStatus } : n));
       showFlash(!currentStatus ? "Scroll recommended!" : "Recommendation removed.");
     } catch (error) { showFlash("Only No One can bestow this honor.", 'error'); }
+  };
+
+  const handlePremiumToggle = async (noteId: number, currentStatus: boolean) => {
+    try {
+      await api.put(`/library/notes/${noteId}/governance`, { is_premium: !currentStatus });
+      setNotes(notes.map(n => n.id === noteId ? { ...n, is_premium: !currentStatus } : n));
+      showFlash(!currentStatus ? "Marked as Premium!" : "Premium status removed.");
+    } catch (error) { showFlash("Only No One can make this premium.", 'error'); }
   };
 
   const handleDownload = async (noteId: number, title: string, ext: string) => {
@@ -332,6 +340,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                         {isNoOne && <span title="Forged by No One"><VenetianMask size={18} color="var(--accent-purple, #b39ddb)" /></span>}
                         {isVerified && <span title="Verified Scholar"><BadgeCheck size={18} color="#4caf50" /></span>}
                         {note.is_pinned && <span title="Pinned"><Pin size={18} color="var(--accent-red)" fill="var(--accent-red)" style={{ transform: 'rotate(45deg)' }} /></span>}
+                        {note.is_premium && <span title="Premium Exclusive"><Crown size={18} color="#f1c40f" fill="#f1c40f" /></span>}
                       </div>
                     </div>
                     <p className="text-desc" style={{ marginBottom: '0.4rem' }}>{note.description}</p>
@@ -347,6 +356,9 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
                     <div style={{ display: 'flex', gap: '0.5rem', borderRight: '1px solid var(--border-dark)', paddingRight: '0.8rem' }}>
                       <button onClick={() => handleRecommendToggle(note.id, note.is_recommended)} className="btn-ghost" style={{ borderColor: note.is_recommended ? 'var(--accent-gold)' : '', color: note.is_recommended ? 'var(--accent-gold)' : '' }}>
                         <Award size={16} /> {note.is_recommended ? 'Revoke' : 'Recommend'}
+                      </button>
+                      <button onClick={() => handlePremiumToggle(note.id, note.is_premium)} className="btn-ghost" style={{ borderColor: note.is_premium ? '#f1c40f' : '', color: note.is_premium ? '#f1c40f' : '' }}>
+                        <Crown size={16} /> {note.is_premium ? 'Unpremium' : 'Premium'}
                       </button>
                       <button onClick={() => handlePinToggle(note.id, note.is_pinned)} className="btn-ghost" style={{ borderColor: note.is_pinned ? 'var(--accent-red)' : '', color: note.is_pinned ? 'var(--accent-red)' : '' }}>
                         <Pin size={16} style={{ transform: note.is_pinned ? 'rotate(45deg)' : 'none' }} /> {note.is_pinned ? 'Unpin' : 'Pin'}

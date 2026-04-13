@@ -65,11 +65,10 @@ const ModuleView: React.FC = () => {
   const semesterKey = `Y${module.year}S${module.semester}`;
 
   return (
-    <AdWrapper semesterKey={semesterKey}>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-deep)' }}>
-        
-        <div style={{
-        ...(heroBg
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-deep)' }}>
+      
+      <div style={{
+      ...(heroBg
           ? {
               backgroundImage: `linear-gradient(to bottom, rgba(10, 10, 10, 0.5), var(--bg-deep)), url(${heroBg})`,
               backgroundSize: 'cover',
@@ -101,7 +100,8 @@ const ModuleView: React.FC = () => {
         )}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-surface)', transition: 'background-color 0.4s ease, border-color 0.4s ease' }}>
+      <AdWrapper semesterKey={semesterKey}>
+        <div style={{ display: 'flex', justifyContent: 'center', borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-surface)', transition: 'background-color 0.4s ease, border-color 0.4s ease' }}>
         <button 
           onClick={() => handleTabChange('quizzes')}
           style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'quizzes' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'quizzes' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
@@ -128,10 +128,9 @@ const ModuleView: React.FC = () => {
         {activeTab === 'quizzes' && <QuizDisplayer moduleId={module.id} moduleShortName={module.code} />}
         {activeTab === 'notes' && <NoteDisplayer moduleId={module.id} />}
         {activeTab === 'collections' && <CollectionDisplayer moduleId={module.id} />}
-        </div>
-  
       </div>
     </AdWrapper>
+  </div>
   );
 };
 
