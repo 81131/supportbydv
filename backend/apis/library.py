@@ -11,11 +11,9 @@ from models.library import Note, Collection, CollectionNote, FavoriteNote, Visib
 from pydantic import BaseModel
 from security import get_current_user
 
-router = APIRouter(prefix="/library", tags=["Grand Library"])
+from storage import s3_client, R2_BUCKET_NAME
 
-# Ensure the upload directory exists!
-UPLOAD_DIR = "uploads/notes"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+router = APIRouter(prefix="/library", tags=["Grand Library"])
 
 # ==========================================
 # 📜 NOTES: UPLOAD & HARD DELETE
@@ -64,19 +62,26 @@ async def upload_note(
         raise HTTPException(status_code=400, detail="This scroll is too heavy (Max 50MB).")
 
         
-    # 3. Generate a safe file path
-    safe_filename = f"user_{current_user.id}_mod_{module_id}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+    # 3. Generate a safe object key
+    safe_filename = f"notes/user_{current_user.id}_mod_{module_id}_{file.filename}"
     
-    # 4. Save the physical file to the server
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # 4. Save the file to Cloudflare R2
+    try:
+        s3_client.upload_fileobj(
+            file.file, 
+            R2_BUCKET_NAME, 
+            safe_filename,
+            ExtraArgs={'ContentType': file.content_type}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload to the clouds: {str(e)}")
         
     # 5. Save the record to the database
     new_note = Note(
         title=title,
         description=description,
-        file_url=file_path,
+        file_url=safe_filename,
+
         file_type=file_extension,
         module_id=module_id,
         uploader_id=current_user.id,
@@ -104,9 +109,12 @@ def hard_delete_note(
     if note.uploader_id != current_user.id and current_user.role.value not in ["admin", "noOne"]:
         raise HTTPException(status_code=403, detail="You do not have permission to burn this scroll.")
 
-    # 1. Destroy the physical file
-    if os.path.exists(note.file_url):
-        os.remove(note.file_url)
+    # 1. Destroy the object in R2
+    try:
+        s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+    except Exception as e:
+        # We might log this, but continue dropping the DB record
+        pass
 
     # 2. Destroy the DB record (SQLAlchemy will automatically cascade and delete favorites/collection links!)
     db.delete(note)
@@ -115,25 +123,40 @@ def hard_delete_note(
     return {"message": "Scroll burned and erased from all collections."}
 
 @router.get("/notes/download/{note_id}")
-def download_single_note(note_id: int, db: Session = Depends(get_db)):
+def download_single_note(
+    note_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     """Serves the file to the user."""
     note = db.query(Note).filter(Note.id == note_id).first()
-    if not note or not os.path.exists(note.file_url):
+    if not note:
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
         
-    return FileResponse(path=note.file_url, filename=f"{note.title}.{note.file_type}")
+    try:
+        presigned_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': R2_BUCKET_NAME, 'Key': note.file_url},
+            ExpiresIn=900
+        )
+        return {"url": presigned_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch scroll: {str(e)}")
 
 @router.get("/notes/text/{note_id}")
 def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Extracts and returns plain text from a PDF scroll for read-aloud."""
     from pypdf import PdfReader
     note = db.query(Note).filter(Note.id == note_id).first()
-    if not note or not os.path.exists(note.file_url):
+    if not note:
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
     if note.file_type != "pdf":
         raise HTTPException(status_code=400, detail="Only PDF scrolls can be read aloud.")
     try:
-        reader = PdfReader(note.file_url)
+        # Fetch file from R2 directly into memory
+        response = s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+        pdf_stream = io.BytesIO(response['Body'].read())
+        reader = PdfReader(pdf_stream)
         pages_text = []
         for page in reader.pages:
             text = page.extract_text()
@@ -268,8 +291,12 @@ def download_collection_as_zip(collection_id: str, db: Session = Depends(get_db)
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for note in linked_notes:
-            if os.path.exists(note.file_url):
-                zip_file.write(note.file_url, arcname=f"{note.title}.{note.file_type}")
+            try:
+                response = s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+                file_bytes = response['Body'].read()
+                zip_file.writestr(f"{note.title}.{note.file_type}", file_bytes)
+            except Exception:
+                pass  # Skip files that got lost in the void
 
     zip_buffer.seek(0)
     return StreamingResponse(

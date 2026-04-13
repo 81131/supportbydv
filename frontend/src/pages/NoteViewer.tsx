@@ -74,9 +74,14 @@ const NoteViewer: React.FC = () => {
     if (!noteId) return;
     let url = '';
     setPdfLoading(true);
-    api.get(`/library/notes/download/${noteId}`, { responseType: 'blob' })
-      .then(res => {
-        url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+    api.get(`/library/notes/download/${noteId}`)
+      .then(async (res) => {
+        // Fetch the object directly via the frontend to secure it into a blob
+        const pdfReq = await fetch(res.data.url);
+        if (!pdfReq.ok) throw new Error("Failed to retrieve scroll from vault.");
+        const pdfBlob = await pdfReq.blob();
+        
+        url = URL.createObjectURL(pdfBlob);
         setBlobUrl(url);
       })
       .catch(() => setPdfError('Could not load this scroll.'))

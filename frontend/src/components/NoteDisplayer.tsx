@@ -164,14 +164,20 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   const handleDownload = async (noteId: number, title: string, ext: string) => {
     try {
-      const res = await api.get(`/library/notes/download/${noteId}`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const res = await api.get(`/library/notes/download/${noteId}`);
+      
+      const pdfReq = await fetch(res.data.url);
+      if (!pdfReq.ok) throw new Error("Network response failed.");
+      const blob = await pdfReq.blob();
+      
+      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = blobUrl;
       link.setAttribute('download', `${title}.${ext}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(blobUrl);
     } catch (error) { showFlash("This scroll is sealed or lost to time.", 'error'); }
   };
 

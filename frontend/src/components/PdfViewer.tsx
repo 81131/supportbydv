@@ -48,15 +48,23 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ noteId, title, onClose }) => {
   const [ttsError, setTtsError]         = useState<string | null>(null);
   const audioRef                         = useRef<HTMLAudioElement>(null);
 
-  // Load PDF blob
   useEffect(() => {
     let url = '';
     (async () => {
       try {
-        const res = await api.get(`/library/notes/download/${noteId}`, { responseType: 'blob' });
-        url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+        const res = await api.get(`/library/notes/download/${noteId}`);
+        // Now returns a JSON object containing the presigned Cloudflare URL
+        const presignedUrl = res.data.url;
+        
+        // Fetch the object directly via the frontend to secure it into a blob
+        const pdfReq = await fetch(presignedUrl);
+        if (!pdfReq.ok) throw new Error("Failed to retrieve scroll from vault.");
+        const pdfBlob = await pdfReq.blob();
+        
+        url = URL.createObjectURL(pdfBlob);
         setBlobUrl(url);
-      } catch {
+      } catch (err) {
+        console.error("Failed to load PDF:", err);
         setPdfError('Could not load this scroll. It may be sealed or lost to time.');
       } finally {
         setIsLoadingPdf(false);

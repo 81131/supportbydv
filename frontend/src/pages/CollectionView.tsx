@@ -110,14 +110,20 @@ const CollectionView: React.FC = () => {
     }
   };
 
-  // ── Download (blob) ────────────────────────────────────────────────────────
+  // ── Download (url to blob) ────────────────────────────────────────────────────────
   const handleDownload = async (noteId: number, title: string, ext: string) => {
     try {
-      const res = await api.get(`/library/notes/download/${noteId}`, { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([res.data]));
+      const res = await api.get(`/library/notes/download/${noteId}`);
+      
+      const pdfReq = await fetch(res.data.url);
+      if (!pdfReq.ok) throw new Error("Network request failed.");
+      const blob = await pdfReq.blob();
+      
+      const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `${title}.${ext}`; a.click();
-      URL.revokeObjectURL(url);
+      a.href = blobUrl; a.download = `${title}.${ext}`;
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
     } catch { showFlash('Scroll sealed or lost to time.', 'error'); }
   };
 
