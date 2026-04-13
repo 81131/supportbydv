@@ -585,7 +585,7 @@ const AdminDashboard: React.FC = () => {
                            <p className="text-desc">Created: {new Date(t.created_at).toLocaleString()}</p>
                         </div>
                         <div>
-                           <span style={{ padding: '0.3rem 0.6rem', border: '1px solid var(--accent-gold)', borderRadius: 12, color: 'var(--accent-gold)', fontSize: '0.8rem', marginRight: '1rem' }}>{t.status.toUpperCase()}</span>
+                           <span style={{ padding: '0.2rem 0.5rem', background: 'rgba(212, 175, 55, 0.1)', color: 'var(--accent-gold)', borderRadius: 4, fontSize: '0.75rem', fontWeight: 'bold', marginRight: '1rem' }}>{t.status.toUpperCase()}</span>
                            <button className="btn-ghost" style={{ padding: '0.4rem 1rem' }} onClick={() => handleOpenTicket(t.id)}>
                              VIEW
                            </button>
