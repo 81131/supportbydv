@@ -35,7 +35,8 @@ import FloatingRaven from './components/FloatingRaven';
 import Footer from './components/Footer';
 import SubmitAd from './pages/SubmitAd';
 import BusinessContact from './pages/BusinessContact';
-
+import VideoUploader from './pages/VideoUploader';
+import VideoViewer from './pages/VideoViewer';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -70,13 +71,23 @@ function App() {
   };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      fetchNotifications();
-      fetchModules();
-    }
-    setIsLoading(false);
+    const initApp = async () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          // Validate session with backend to prevent ghost-auth after DB wipe
+          await api.get('/auth/me');
+          setUser(JSON.parse(storedUser));
+          fetchNotifications();
+          fetchModules();
+        } catch (error) {
+          localStorage.removeItem('user');
+          setUser(null);
+        }
+      }
+      setIsLoading(false);
+    };
+    initApp();
   }, []);
 
   const currentPath = window.location.pathname;
@@ -210,6 +221,7 @@ function App() {
               <>
                 <Link to="/admin-dashboard" className="nav-item" style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }} onClick={() => setIsMenuOpen(false)}>Small Council</Link>
                 <Link to="/create-module" className="nav-item" style={{ color: 'var(--accent-gold)' }} onClick={() => setIsMenuOpen(false)}>Forge Module</Link>
+                {user.role === 'noOne' && <Link to="/forge-video" className="nav-item" style={{ color: 'var(--accent-magenta)' }} onClick={() => setIsMenuOpen(false)}>Forge Video</Link>}
               </>
             )}
 
@@ -269,7 +281,7 @@ function App() {
 
         <div className="main-content">
           <Routes>
-            <Route path="/" element={<Home openModal={openModal} />} />
+            <Route path="/" element={<Home openModal={openModal} user={user} />} />
             <Route path="/semester/:semesterKey" element={<ProtectedRoute user={user}><Semester /></ProtectedRoute>} />
             <Route path="/module/:moduleId" element={<ProtectedRoute user={user}><ModuleView /></ProtectedRoute>} />
             <Route path="/module/:moduleId/:tab" element={<ProtectedRoute user={user}><ModuleView /></ProtectedRoute>} />
@@ -296,6 +308,8 @@ function App() {
             <Route path="/forbidden" element={<Forbidden />} />
             <Route path="/submit-ad" element={<SubmitAd />} />
             <Route path="/business-contact" element={<BusinessContact />} />
+            <Route path="/forge-video" element={<PrivilegedRoute user={user}><VideoUploader /></PrivilegedRoute>} />
+            <Route path="/videos/watch/:videoId" element={<ProtectedRoute user={user}><VideoViewer /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <FloatingRaven />

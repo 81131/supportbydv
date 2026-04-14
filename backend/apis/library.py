@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from models.user import User
+from models.user import User, UserRole
 from models.library import Note, Collection, CollectionNote, FavoriteNote, VisibilityEnum
 from pydantic import BaseModel
-from security import get_current_user
+from security import get_current_user, require_premium_access
 
 from storage import s3_client, R2_BUCKET_NAME
 
@@ -133,6 +133,9 @@ def download_single_note(
     if not note:
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
         
+    if note.is_premium and current_user.role.value not in ["premium_user", "admin", "noOne"]:
+        require_premium_access(current_user, db)
+        
     try:
         presigned_url = s3_client.generate_presigned_url(
             'get_object',
@@ -150,6 +153,10 @@ def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user:
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
+        
+    if note.is_premium and current_user.role.value not in ["premium_user", "admin", "noOne"]:
+        require_premium_access(current_user, db)
+
     if note.file_type != "pdf":
         raise HTTPException(status_code=400, detail="Only PDF scrolls can be read aloud.")
     try:

@@ -3,14 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import QuizDisplayer from '../components/QuizDisplayer';
 import NoteDisplayer from '../components/NoteDisplayer';
 import CollectionDisplayer from '../components/CollectionDisplayer';
-import { Swords, ScrollText, Library, Settings } from 'lucide-react';
+import VideoDisplayer from '../components/VideoDisplayer';
+import { Swords, ScrollText, Library, Settings, MonitorPlay } from 'lucide-react';
 import api, { API_BASE_URL } from '../api';
 import { AdWrapper } from '../components/AdWrapper';
 import ossaBg from '../assets/Ned_Stark_OSSA-bg.jpg';
 import wmtBg from '../assets/dragonglass_cave-WMT-bg.avif';
 import psBg from '../assets/Tyrion_PS-bg.avif';
 
-type TabType = 'quizzes' | 'notes' | 'collections';
+type TabType = 'quizzes' | 'notes' | 'collections' | 'videos';
 
 const ModuleView: React.FC = () => {
   const { moduleId, tab } = useParams<{ moduleId: string; tab?: string }>();
@@ -122,12 +123,20 @@ const ModuleView: React.FC = () => {
         >
           <Library size={20} /> Collections
         </button>
+
+        <button 
+          onClick={() => handleTabChange('videos')}
+          style={{ padding: '1rem 2rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'videos' ? '2px solid var(--accent-gold)' : '2px solid transparent', color: activeTab === 'videos' ? 'var(--accent-gold)' : 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}
+        >
+          <MonitorPlay size={20} /> Videos
+        </button>
       </div>
       
       <div style={{ flex: 1 }}>
         {activeTab === 'quizzes' && <QuizDisplayer moduleId={module.id} moduleShortName={module.code} />}
         {activeTab === 'notes' && <NoteDisplayer moduleId={module.id} />}
         {activeTab === 'collections' && <CollectionDisplayer moduleId={module.id} />}
+        {activeTab === 'videos' && <VideoDisplayer moduleId={module.id} user={user} />}
       </div>
     </AdWrapper>
   </div>

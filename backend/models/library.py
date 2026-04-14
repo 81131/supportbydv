@@ -43,6 +43,38 @@ class Note(Base):
     favorited_by = relationship("FavoriteNote", back_populates="note", cascade="all, delete-orphan")
     collection_links = relationship("CollectionNote", back_populates="note", cascade="all, delete-orphan")
 
+class Video(Base):
+    __tablename__ = "videos"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True, nullable=False)
+    description = Column(String, nullable=True)
+    
+    # Bunny.net Details
+    bunny_video_id = Column(String, unique=True, index=True, nullable=False)
+    
+    # Hierarchy & Organization
+    module_id = Column(Integer, ForeignKey("modules.id", ondelete="CASCADE"), nullable=False)
+    uploader_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    unit_id = Column(Integer, ForeignKey("lecture_units.id", ondelete="SET NULL"), nullable=True)
+    topic_ids = Column(String, nullable=True) # JSON-encoded array
+    
+    # Context Mapping
+    year = Column(Integer, nullable=False, default=2)
+    semester = Column(Integer, nullable=False, default=2)
+    
+    # Governance
+    is_premium = Column(Boolean, default=True) # Premium only by default
+    is_pinned = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    module = relationship("Module")
+    uploader = relationship("User")
+
 
 class Collection(Base):
     __tablename__ = "collections"

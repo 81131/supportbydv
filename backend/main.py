@@ -17,7 +17,7 @@ from apis.subscription import router as subscription_router
 from apis.ads import router as ads_router
 from apis.dashboard import router as dashboard_router
 from apis.support import router as support_router
-
+from apis import videos
 os.makedirs("uploads/modules", exist_ok=True)
 os.makedirs("uploads/notes", exist_ok=True)
 os.makedirs("uploads/badges", exist_ok=True)
@@ -117,48 +117,46 @@ def cleanup_orphaned_files():
     try:
         from models.library import Note
         from models.quiz import Question
+        from storage import s3_client, R2_BUCKET_NAME
+        import botocore
 
         deleted = 0
 
-        # ── Note files ─────────────────────────────────────────────────────────
-        valid_note_urls = {n.file_url for n in db.query(Note.file_url).all()}  # type: ignore[attr-defined]
-        notes_dir = "uploads/notes"
-        if os.path.isdir(notes_dir):
-            for fname in os.listdir(notes_dir):
-                fpath = os.path.join(notes_dir, fname)
-                if os.path.isfile(fpath) and fpath not in valid_note_urls:
-                    os.remove(fpath)
-                    deleted += 1
-                    print(f"Removed orphaned note file: {fname}")
+        # ── Gather Valid Links ────────────────────────────────────────────────
+        valid_note_urls = {n.file_url for n in db.query(Note.file_url).all() if n.file_url}
+        valid_res_urls = {q.image_url for q in db.query(Question.image_url).all() if q.image_url}
 
-        # ── Quiz resource images ───────────────────────────────────────────────
-        # image_url is stored as "/static/quiz_resources/<filename>"
-        valid_res_urls = {q.image_url for q in db.query(Question.image_url).all() if q.image_url}  # type: ignore[attr-defined]
-        quiz_res_dir = "uploads/quiz_resources"
-        if os.path.isdir(quiz_res_dir):
-            for fname in os.listdir(quiz_res_dir):
-                fpath = os.path.join(quiz_res_dir, fname)
-                static_url = f"/static/quiz_resources/{fname}"
-                if os.path.isfile(fpath) and static_url not in valid_res_urls:
-                    os.remove(fpath)
-                    deleted += 1
-                    print(f"Removed orphaned quiz image: {fname}")
+        # ── Helper to Sweep a Prefix ──────────────────────────────────────────
+        def sweep_prefix(prefix: str, valid_keys: set):
+            nonlocal deleted
+            paginator = s3_client.get_paginator('list_objects_v2')
+            try:
+                for page in paginator.paginate(Bucket=R2_BUCKET_NAME, Prefix=prefix):
+                    if 'Contents' in page:
+                        for obj in page['Contents']:
+                            key = obj['Key']
+                            # A folder object or valid key is skipped
+                            if key.endswith('/') or key in valid_keys:
+                                continue
+                            
+                            # Burn the orphan
+                            s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+                            deleted += 1
+                            print(f"Removed orphaned cloud object: {key}")
+            except botocore.exceptions.ClientError as err:
+                print(f"Cloud sweep error for {prefix}: {err}")
 
-        # ── Stray loose files in the uploads/ root (should never exist) ────────
-        for fname in os.listdir("uploads"):
-            fpath = os.path.join("uploads", fname)
-            if os.path.isfile(fpath):
-                os.remove(fpath)
-                deleted += 1
-                print(f"Removed stray root upload: {fname}")
+        # ── Execute Sweeps ────────────────────────────────────────────────────
+        sweep_prefix("notes/", valid_note_urls)
+        sweep_prefix("images/", valid_res_urls)
 
         if deleted == 0:
-            print("Citadel archives are clean — no orphaned files found.")
+            print("Citadel archives are clean — no orphaned files found in Cloudflare R2.")
         else:
-            print(f"Citadel cleanup complete — {deleted} orphaned file(s) removed.")
+            print(f"Citadel cloud cleanup complete — {deleted} orphaned object(s) removed.")
 
     except Exception as e:
-        print(f"Orphan cleanup warning: {e}")
+        print(f"Cloud orphan cleanup warning: {e}")
     finally:
         db.close()
 
@@ -248,6 +246,7 @@ app.include_router(subscription_router, dependencies=[Depends(verify_csrf)])
 app.include_router(ads_router)
 app.include_router(dashboard_router)
 app.include_router(support_router)
+app.include_router(videos.router, dependencies=[Depends(verify_csrf)])
 
 @app.get("/")
 def read_root():

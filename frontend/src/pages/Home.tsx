@@ -1,22 +1,44 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import ossaBg from '../assets/OSSA-bg.webp';
+import wmtBg from '../assets/WMT-bg.webp';
+import psBg from '../assets/PS-bg.webp';
 
-export default function Home({ openModal }: { openModal: (mode: 'login' | 'register') => void }) {
-  const [user, setUser] = useState<any>(null);
+// Inject our custom gallery scroll animation for the main feed
+const scrollKeyframes = `
+  @keyframes galleryScroll {
+    0% { transform: translateX(0); }
+    10% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .gallery-scroll::-webkit-scrollbar {
+    height: 6px;
+  }
+  .gallery-scroll::-webkit-scrollbar-thumb {
+    background: var(--accent-gold);
+    border-radius: 4px;
+  }
+  .gallery-scroll::-webkit-scrollbar-track {
+    background: var(--bg-deep);
+  }
+`;
+
+export default function Home({ openModal, user }: { openModal: (mode: 'login' | 'register') => void, user: any }) {
   const [feed, setFeed] = useState<any>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('user');
-    if (stored) {
-      setUser(JSON.parse(stored));
+    if (user) {
       api.get('/dashboard/feed').then(res => setFeed(res.data)).catch(console.error);
+    } else {
+      setFeed(null);
     }
-  }, []);
+  }, [user]);
 
   if (user) {
     return (
       <div className="page-container">
+        <style>{scrollKeyframes}</style>
         <h1 className="brand-font text-title" style={{ color: 'var(--accent-gold)' }}>The Citadel Feed</h1>
         <p className="text-desc" style={{ marginBottom: '2rem' }}>
           Personalized scrolls and tests for Year {user.current_year || 2}, Semester {user.current_semester || 2}. 
@@ -29,11 +51,14 @@ export default function Home({ openModal }: { openModal: (mode: 'login' | 'regis
               <section style={{ marginBottom: '2rem' }}>
                 <h2 className="brand-font" style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--border-dark)', paddingBottom:'0.5rem' }}>Latest Quizzes</h2>
                 {feed.quizzes.length === 0 ? <p className="text-muted">No quizzes available.</p> : (
-                  <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '1rem 0' }}>
+                  <div style={{ display: 'flex', gap: '1.5rem', overflowX: 'auto', padding: '1rem 0', scrollBehavior: 'smooth' }} className="gallery-scroll">
                     {feed.quizzes.map((q: any) => (
-                      <Link key={q.id} to={`/take-quiz/${q.id}`} className="card" style={{ minWidth: 200, padding: '1rem', border: q.is_premium ? '1px solid var(--accent-gold)' : '' }}>
-                        <h4 style={{ margin: '0 0 0.5rem' }}>{q.title}</h4>
-                        {q.is_premium && <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem' }}>★ Premium</span>}
+                      <Link key={q.id} to={`/take-quiz/${q.id}`} style={{ textDecoration: 'none', flex: '0 0 auto' }}>
+                        <div className="module-card" style={q.card_image_url ? { backgroundImage: `url(${api.defaults.baseURL?.replace('/api', '')}${q.card_image_url})` } : (q.module_code === 'OSSA' ? { backgroundImage: `url(${ossaBg})` } : q.module_code === 'WMT' ? { backgroundImage: `url(${wmtBg})` } : q.module_code === 'PS' ? { backgroundImage: `url(${psBg})` } : {})}>
+                          <h2 className="brand-font">{q.module_code}</h2>
+                          <p>{q.title}</p>
+                          {q.is_premium && <p style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-gold)' }}>★ Premium Quiz</p>}
+                        </div>
                       </Link>
                     ))}
                   </div>
@@ -45,11 +70,15 @@ export default function Home({ openModal }: { openModal: (mode: 'login' | 'regis
               <section style={{ marginBottom: '2rem' }}>
                 <h2 className="brand-font" style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--border-dark)', paddingBottom:'0.5rem' }}>New Scrolls</h2>
                 {feed.notes.length === 0 ? <p className="text-muted">No scrolls available.</p> : (
-                  <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '1rem 0' }}>
+                  <div style={{ display: 'flex', gap: '1.5rem', overflowX: 'auto', padding: '1rem 0', scrollBehavior: 'smooth' }} className="gallery-scroll">
                     {feed.notes.map((n: any) => (
-                      <Link key={n.id} to={`/notes/view/${n.id}`} className="card" style={{ minWidth: 200, padding: '1rem', border: n.is_premium ? '1px solid var(--accent-gold)' : '' }}>
-                        <h4 style={{ margin: '0 0 0.5rem' }}>{n.title}</h4>
-                        {n.is_premium && <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem' }}>★ Premium</span>}
+                      <Link key={n.id} to={`/notes/view/${n.id}`} style={{ textDecoration: 'none', flex: '0 0 auto' }}>
+                        <div className="module-card" style={n.card_image_url ? { backgroundImage: `url(${api.defaults.baseURL?.replace('/api', '')}${n.card_image_url})` } : (n.module_code === 'OSSA' ? { backgroundImage: `url(${ossaBg})` } : n.module_code === 'WMT' ? { backgroundImage: `url(${wmtBg})` } : n.module_code === 'PS' ? { backgroundImage: `url(${psBg})` } : {})}>
+                          <h2 className="brand-font">{n.module_code}</h2>
+                          <p>{n.title}</p>
+                          <p style={{ fontSize: '0.8rem', fontStyle: 'italic', marginTop: '0.5rem', color: 'var(--text-muted)' }}>By: {n.uploader_name}</p>
+                          {n.is_premium && <p style={{ fontSize: '0.8rem', marginTop: '0.3rem', color: 'var(--accent-gold)' }}>★ Premium Scroll</p>}
+                        </div>
                       </Link>
                     ))}
                   </div>
@@ -61,11 +90,14 @@ export default function Home({ openModal }: { openModal: (mode: 'login' | 'regis
               <section style={{ marginBottom: '2rem' }}>
                 <h2 className="brand-font" style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--border-dark)', paddingBottom:'0.5rem' }}>Public Archives</h2>
                 {feed.collections.length === 0 ? <p className="text-muted">No archives available.</p> : (
-                  <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '1rem 0' }}>
+                  <div style={{ display: 'flex', gap: '1.5rem', overflowX: 'auto', padding: '1rem 0', scrollBehavior: 'smooth' }} className="gallery-scroll">
                     {feed.collections.map((c: any) => (
-                      <Link key={c.id} to={`/collection/${c.id}`} className="card" style={{ minWidth: 200, padding: '1rem', border: c.is_premium ? '1px solid var(--accent-gold)' : '' }}>
-                        <h4 style={{ margin: '0 0 0.5rem' }}>{c.title}</h4>
-                        {c.is_premium && <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem' }}>★ Premium</span>}
+                      <Link key={c.id} to={`/collection/${c.id}`} style={{ textDecoration: 'none', flex: '0 0 auto' }}>
+                        <div className="module-card" style={c.card_image_url ? { backgroundImage: `url(${api.defaults.baseURL?.replace('/api', '')}${c.card_image_url})` } : (c.module_code === 'OSSA' ? { backgroundImage: `url(${ossaBg})` } : c.module_code === 'WMT' ? { backgroundImage: `url(${wmtBg})` } : c.module_code === 'PS' ? { backgroundImage: `url(${psBg})` } : {})}>
+                          <h2 className="brand-font">{c.module_code}</h2>
+                          <p>{c.title}</p>
+                          {c.is_premium && <p style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-gold)' }}>★ Vaulted Archive</p>}
+                        </div>
                       </Link>
                     ))}
                   </div>

@@ -2,14 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 
+// Roles that should never see ads or placeholders
+const AD_EXEMPT_ROLES = ['noOne', 'admin', 'premium_user'];
+
 export const AdWrapper: React.FC<{ children: React.ReactNode, semesterKey?: string }> = ({ children, semesterKey }) => {
   const [ads, setAds] = useState<any[]>([]);
 
+  // Determine if the current user is exempt from ads
+  const storedUser = localStorage.getItem('user');
+  const currentUser = storedUser ? JSON.parse(storedUser) : null;
+  const isAdExempt = currentUser && AD_EXEMPT_ROLES.includes(currentUser.role);
+
   useEffect(() => {
-    // Fetch targeted ads from backend
+    // Don't fetch ads at all for exempt users
+    if (isAdExempt) return;
     const params = semesterKey ? { semester_key: semesterKey } : {};
     api.get('/ads/active', { params }).then(res => setAds(res.data)).catch(() => {});
-  }, [semesterKey]);
+  }, [semesterKey, isAdExempt]);
+
+  // If exempt, render children directly with no ad layout overhead
+  if (isAdExempt) {
+    return <>{children}</>;
+  }
 
   // Organize ads by placement
   const getAd = (placement: string) => {
