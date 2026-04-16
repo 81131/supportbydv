@@ -127,6 +127,13 @@ def local_register(
                 detail="A man with this email is already known to the House."
             )
 
+        # bcrypt silently truncates at 72 bytes — reject anything over that with a clean message
+        if len(payload.password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 8 characters."
+            )
+
         # Ensure SUPER_ADMIN_EMAIL exists in environment to avoid 500
         super_admin = os.getenv("SUPER_ADMIN_EMAIL", "admin@example.com")
         assigned_role = UserRole.NO_ONE if payload.email == super_admin else UserRole.USER

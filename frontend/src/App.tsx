@@ -338,7 +338,18 @@ function App() {
                   </>
                 )}
                 <input type="email" placeholder="Email Address" className="auth-input" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                <input type="password" placeholder="Password" className="auth-input" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="password"
+                    placeholder={authMode === 'register' ? 'Password (min. 8 characters)' : 'Password'}
+                    className="auth-input"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={authMode === 'register' ? 8 : undefined}
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
                 <button type="submit" className="btn-primary" style={{ width: '100%' }}>{authMode === 'login' ? 'Enter the House' : 'Pledge Loyalty'}</button>
               </form>
 
