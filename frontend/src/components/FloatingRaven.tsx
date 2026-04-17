@@ -40,6 +40,16 @@ const FloatingRaven: React.FC = () => {
      endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeTicket?.messages, isOpen, activeTab, selectedUser, showDirectContact]);
 
+  // Hook into URL search params to auto-open tickets if navigated from a notification
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tId = params.get('ticketID');
+    if (tId) {
+      setIsOpen(true);
+      openTicket(parseInt(tId, 10));
+    }
+  }, [location.search]);
+
   useEffect(() => {
     fetchTickets();
     const inv = setInterval(fetchTickets, 10000);

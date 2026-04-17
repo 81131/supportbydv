@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { Bell } from 'lucide-react';
 import './App.css';
@@ -38,6 +38,69 @@ import BusinessContact from './pages/BusinessContact';
 import VideoUploader from './pages/VideoUploader';
 import VideoViewer from './pages/VideoViewer';
 
+// ── NotificationBell: lives inside <Router> so it can use useNavigate ─────────
+function NotificationBell({ notifications, onMarkRead, onRefresh }: {
+  notifications: any[];
+  onMarkRead: (id: number) => Promise<void>;
+  onRefresh: () => void;
+}) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const navigate = useNavigate();
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const handleClick = async (n: any) => {
+    // Always mark as read
+    if (!n.is_read) {
+      await onMarkRead(n.id);
+      onRefresh();
+    }
+    setShowDropdown(false);
+    // Navigate using React Router (SPA, no full reload)
+    if (n.destination_url) {
+      navigate(n.destination_url);
+    } else if (n.message && n.message.includes('essay') && n.quiz_id) {
+      navigate(`/review-essays/${n.quiz_id}`);
+    }
+  };
+
+  return (
+    <div className="notification-container" style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowDropdown(v => !v)}>
+      <Bell size={20} color="var(--accent-gold)" />
+      {unreadCount > 0 && (
+        <span className="notification-badge" style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', fontSize: '0.7rem', padding: '2px 5px', borderRadius: '50%' }}>
+          {unreadCount}
+        </span>
+      )}
+      {showDropdown && (
+        <div className="notifications-dropdown" style={{ position: 'absolute', top: '100%', right: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', padding: '1rem', width: '300px', zIndex: 100, borderRadius: '8px' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-gold)' }}>Ravens from the Citadel</h4>
+          {notifications.length === 0 ? (
+            <p style={{ fontSize: '0.9rem' }}>No new messages.</p>
+          ) : (
+            notifications.map(n => (
+              <div
+                key={n.id}
+                style={{
+                  padding: '8px', borderBottom: '1px solid var(--border-dark)', fontSize: '0.85rem',
+                  color: n.is_read ? 'var(--text-muted)' : 'var(--text-main)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'flex-start', gap: '0.5rem'
+                }}
+                onClick={e => { e.stopPropagation(); handleClick(n); }}
+              >
+                <span style={{ marginTop: '2px', fontSize: '0.6rem', color: n.is_read ? 'var(--text-muted)' : 'var(--accent-gold)' }}>●</span>
+                <span>{n.message}</span>
+                {n.destination_url && (
+                  <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--accent-gold)', whiteSpace: 'nowrap' }}>→</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,15 +113,18 @@ function App() {
   const [lastName, setLastName] = useState('');
   const [modules, setModules] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       const res = await api.get('/notifications');
       setNotifications(res.data);
     } catch (e) {
       console.error(e);
     }
+  }, []);
+
+  const markRead = async (id: number) => {
+    await api.put(`/notifications/${id}/read`);
   };
 
   const fetchModules = async () => {
@@ -75,7 +141,6 @@ function App() {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         try {
-          // Validate session with backend to prevent ghost-auth after DB wipe
           await api.get('/auth/me');
           setUser(JSON.parse(storedUser));
           fetchNotifications();
@@ -88,7 +153,14 @@ function App() {
       setIsLoading(false);
     };
     initApp();
-  }, []);
+  }, [fetchNotifications]);
+
+  // ── Poll for new notifications every 30s ───────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(fetchNotifications, 30_000);
+    return () => clearInterval(interval);
+  }, [user, fetchNotifications]);
 
   const currentPath = window.location.pathname;
   useEffect(() => {
@@ -229,40 +301,11 @@ function App() {
               <ThemeToggle />
               {user ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div className="notification-container" style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowNotifications(!showNotifications)}>
-                    <Bell size={20} color="var(--accent-gold)" />
-                    {notifications.filter(n => !n.is_read).length > 0 && (
-                      <span className="notification-badge" style={{ position: 'absolute', top: -5, right: -5, background: 'red', color: 'white', fontSize: '0.7rem', padding: '2px 5px', borderRadius: '50%' }}>
-                        {notifications.filter(n => !n.is_read).length}
-                      </span>
-                    )}
-                    {showNotifications && (
-                      <div className="notifications-dropdown" style={{ position: 'absolute', top: '100%', right: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', padding: '1rem', width: '250px', zIndex: 100, borderRadius: '8px' }}>
-                        <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-gold)' }}>Ravens from the Citadel</h4>
-                        {notifications.length === 0 ? <p style={{ fontSize: '0.9rem' }}>No new messages.</p> : (
-                          notifications.map(n => (
-                            <div key={n.id} style={{ padding: '8px', borderBottom: '1px solid var(--border-dark)', fontSize: '0.85rem', color: n.is_read ? 'var(--text-muted)' : 'var(--text-main)', cursor: 'pointer' }} onClick={async () => {
-                              if (!n.is_read) {
-                                await api.put(`/notifications/${n.id}/read`);
-                                fetchNotifications();
-                              }
-                              // Support generic destination urls from the backend
-                              if (n.destination_url) {
-                                window.location.href = n.destination_url;
-                              } 
-                              // Legacy manual overrides
-                              else if (n.message && n.message.includes('essay') && n.quiz_id) {
-                                window.location.href = `/review-essays/${n.quiz_id}`;
-                              }
-                              setShowNotifications(false);
-                            }}>
-                              {n.message}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <NotificationBell
+                    notifications={notifications}
+                    onMarkRead={markRead}
+                    onRefresh={fetchNotifications}
+                  />
                   <span className="text-desc" style={{ color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer' }}>
                     <Link to="/profile" style={{ color: 'var(--text-main)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setIsMenuOpen(false)}>
                       {user.first_name}

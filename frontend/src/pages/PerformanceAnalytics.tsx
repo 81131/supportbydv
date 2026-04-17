@@ -286,7 +286,7 @@ const PerformanceAnalytics = () => {
                                 <h3 className="brand-font" style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Accuracy Rating</h3>
                                 <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: 1 }}>{kpis!.total_accuracy_percentage.toFixed(1)}%</div>
                                 <div style={{ fontSize: '0.85rem', color: accDeltaIsPositive ? '#4caf50' : '#f44336', marginTop: '0.75rem', fontWeight: 'bold' }}>
-                                    {accDeltaIsPositive ? '▲' : '▼'} {Math.abs(parseFloat(accDelta))}% vs {peerGroup.toUpperCase()}
+                                    {accDeltaIsPositive ? '▲' : '▼'} {Math.abs(parseFloat(accDelta))}% {accDeltaIsPositive ? 'above' : 'below'} {peerGroup.toUpperCase()}
                                 </div>
                             </div>
 
@@ -295,7 +295,7 @@ const PerformanceAnalytics = () => {
                                 <h3 className="brand-font" style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Agility (Speed/Q)</h3>
                                 <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: 1 }}>{kpis!.avg_speed_per_question_seconds.toFixed(0)}s</div>
                                 <div style={{ fontSize: '0.85rem', color: speedDeltaIsPositive ? '#4caf50' : '#f44336', marginTop: '0.75rem', fontWeight: 'bold' }}>
-                                    {speedDeltaIsPositive ? '▲' : '▼'} {Math.abs(parseFloat(speedDelta))}s faster vs {peerGroup.toUpperCase()}
+                                    {speedDeltaIsPositive ? '▲' : '▼'} {Math.abs(parseFloat(speedDelta))}s {speedDeltaIsPositive ? 'faster' : 'slower'} vs {peerGroup.toUpperCase()}
                                 </div>
                             </div>
 

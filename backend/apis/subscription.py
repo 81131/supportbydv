@@ -85,7 +85,7 @@ async def submit_subscription_request(
     no_ones = db.query(User).filter(User.role == UserRole.NO_ONE).all()
     for admin in no_ones:
         msg = f"Scholar {current_user.first_name} requested an UPGRADE to {tier.value}. Please evaluate for partial refund." if is_upgrade else f"Scholar {current_user.first_name} submitted a new subscription request for {tier.value}."
-        notif = Notification(user_id=admin.id, message=msg)
+        notif = Notification(user_id=admin.id, message=msg, destination_url="/admin-dashboard/requests")
         db.add(notif)
     db.commit()
 
@@ -146,7 +146,7 @@ def approve_request(req_id: int, db: Session = Depends(get_db), current_user: Us
     db.add(sub)
     
     # Notify user
-    notif = Notification(user_id=req.user_id, message="Your Citadel subscription has been approved! The archives are open.")
+    notif = Notification(user_id=req.user_id, message="Your Citadel subscription has been approved! The archives are open.", destination_url="/subscriptions")
     db.add(notif)
     
     db.commit()
@@ -170,7 +170,7 @@ def reject_request(req_id: int, db: Session = Depends(get_db), current_user: Use
     req.reviewed_by = current_user.id
     
     # Notify user
-    notif = Notification(user_id=req.user_id, message="Your subscription request was declined. Please contact support.")
+    notif = Notification(user_id=req.user_id, message="Your subscription request was declined. Please contact support.", destination_url="/support")
     db.add(notif)
 
     db.commit()

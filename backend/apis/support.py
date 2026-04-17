@@ -85,7 +85,7 @@ def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_u
             # Notify admin
             admin = db.query(User).filter(User.role == UserRole.NO_ONE).first()
             if admin:
-                notif = Notification(user_id=admin.id, message=f"A new Support Ticket #{ticket.id} was auto-escalated to the Small Council.", destination_url="/admin-dashboard/support")
+                notif = Notification(user_id=admin.id, message=f"A new Support Ticket #{ticket.id} was auto-escalated to the Small Council.", destination_url=f"/admin-dashboard/support?ticketID={ticket.id}")
                 db.add(notif)
             
             db.commit()
@@ -94,7 +94,10 @@ def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_u
 
         return {"reply": reply_text}
     except Exception as e:
-        return {"reply": f"The Raven dropped the scroll. Error: {str(e)}"}
+        err_msg = str(e)
+        if "429" in err_msg or "Quota" in err_msg:
+            return {"reply": "The Ravens are currently overwhelmed with scrolls. Please try again in a few moments, or Escalate this issue to a Maester."}
+        return {"reply": f"The Raven dropped the scroll. Error: {err_msg}"}
 
 @router.post("/escalate", dependencies=[Depends(verify_csrf)])
 def escalate_to_admin(req: EscalateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -167,13 +170,13 @@ def create_direct_chat(req: DirectChatRequest, db: Session = Depends(get_db), cu
     
     # Notify if admin created it
     if current_user.role in [UserRole.NO_ONE, UserRole.ADMIN] and target_user_id != current_user.id:
-        notif = Notification(user_id=target_user_id, message="A Maester has reached out to you through the Raven.", destination_url="/support")
+        notif = Notification(user_id=target_user_id, message="A Maester has reached out to you through the Raven.", destination_url=f"/?ticketID={ticket.id}")
         db.add(notif)
     # Notify admin if user created it 
     elif current_user.role not in [UserRole.NO_ONE, UserRole.ADMIN]:
         admin = db.query(User).filter(User.role == UserRole.NO_ONE).first()
         if admin:
-            notif = Notification(user_id=admin.id, message=f"A new direct chat #{ticket.id} was opened by a user.", destination_url="/admin-dashboard/support")
+            notif = Notification(user_id=admin.id, message=f"A new direct chat #{ticket.id} was opened by a user.", destination_url=f"/admin-dashboard/support?ticketID={ticket.id}")
             db.add(notif)
             
     db.commit()
@@ -280,7 +283,7 @@ def reply_to_ticket(ticket_id: int, reply: TicketReply, db: Session = Depends(ge
     
     # If admin replies, notify user
     if current_user.role in [UserRole.NO_ONE, UserRole.ADMIN] and current_user.id != ticket.user_id:
-        notif = Notification(user_id=ticket.user_id, message=f"A Maester has replied to your Support Ticket #{ticket.id}.", destination_url="/support")
+        notif = Notification(user_id=ticket.user_id, message=f"A Maester has replied to your Support Ticket #{ticket.id}.", destination_url=f"/?ticketID={ticket.id}")
         db.add(notif)
     else:
         # If user replies, change status back to OPEN so admins see it as unread

@@ -844,7 +844,8 @@ def submit_and_grade_quiz(
         if creator and creator.id != current_user.id:
             essay_notification = Notification(
                 user_id=quiz.created_user_id,
-                message=f"A student submitted an essay in '{quiz.title}' — review required."
+                message=f"A student submitted an essay in '{quiz.title}' — review required.",
+                destination_url=f"/review-essays/{quiz.id}"
             )
             db.add(essay_notification)
     
@@ -949,7 +950,8 @@ def review_essay_question(
         
     notification = Notification(
         user_id=attempt.user_id,
-        message=msg
+        message=msg,
+        destination_url="/my-quizzes"
     )
     db.add(notification)
     db.commit()

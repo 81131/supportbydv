@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { 
   ShieldAlert, Users, ScrollText, Lock, Unlock, 
@@ -20,6 +20,7 @@ const AdminDashboard: React.FC = () => {
   const [ticketReply, setTicketReply] = useState("");
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'modules' | 'requests' | 'support' | 'ads' | 'business'>((tab as any) || 'users');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,10 +43,14 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (tab) {
       setActiveTab(tab as any);
+      const ticketIdStr = searchParams.get('ticketID');
+      if (tab === 'support' && ticketIdStr) {
+        handleOpenTicket(parseInt(ticketIdStr, 10));
+      }
     } else {
       setActiveTab('users');
     }
-  }, [tab]);
+  }, [tab, searchParams]);
 
   useEffect(() => {
     let interval: number;
