@@ -16,10 +16,12 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
 
   const [sortOrder, setSortOrder] = useState<'newest' | 'nameAsc' | 'nameDesc'>('newest');
   const [filterVerified, setFilterVerified] = useState(false);
-  const [filterRecommended, setFilterRecommended] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialRecommended = searchParams.get('recommended') === 'true';
+
+  const [filterRecommended, setFilterRecommended] = useState(initialRecommended);
   const [filterNoOne, setFilterNoOne] = useState(false);
   const [filterMyUploads, setFilterMyUploads] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
   const initialUnitId = searchParams.get('unitId') || '';
   const initialTopicId = searchParams.get('topicId') || '';
 

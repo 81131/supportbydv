@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, BookOpen, Pencil, Trash2, BadgeCheck, VenetianMask, Award, Pin, Filter, Crown } from 'lucide-react';
 import api from '../api';
 
@@ -12,10 +12,13 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [sortOrder, setSortOrder] = useState<'newest' | 'nameAsc' | 'nameDesc'>('newest');
   const [filterVerified, setFilterVerified] = useState(false);
-  const [filterRecommended, setFilterRecommended] = useState(false);
+  
+  const initialRecommended = searchParams.get('recommended') === 'true';
+  const [filterRecommended, setFilterRecommended] = useState(initialRecommended);
   const [filterNoOne, setFilterNoOne] = useState(false);
 
   const [expandedAnalytics, setExpandedAnalytics] = useState<Record<number, any>>({});
