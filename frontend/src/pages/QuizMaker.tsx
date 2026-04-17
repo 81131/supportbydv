@@ -32,6 +32,11 @@ const QuizMaker = () => {
   const [topicModalUnitId, setTopicModalUnitId] = useState<number | null>(null);
   const [topicModalQuestionIndex, setTopicModalQuestionIndex] = useState<number | null>(null);
 
+  // JSON Import State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [importError, setImportError] = useState('');
+
   // Drag state for the Scroll Layout pill reordering
   const dragPillIndex = useRef<number | null>(null);
   const [dragOverPillIndex, setDragOverPillIndex] = useState<number | null>(null);
@@ -141,6 +146,117 @@ const QuizMaker = () => {
   const handlePillDragEnd = () => {
     dragPillIndex.current = null;
     setDragOverPillIndex(null);
+  };
+
+  const handleImportJson = () => {
+    setImportError('');
+    try {
+      const parsed = JSON.parse(importJsonText);
+      if (!Array.isArray(parsed)) {
+        setImportError("JSON must be an array of question objects. Example: [{...}, {...}]");
+        return;
+      }
+
+      const newQuestions: Question[] = [];
+      let errorList: string[] = [];
+
+      parsed.forEach((item, index) => {
+        const qn = index + 1;
+        const qType = (item.type || item.Type || '').toUpperCase() as QuestionType;
+        const qText = item.text || item.Text || item.question || item.Question || '';
+
+        if (!qType || !['MCQ', 'CHECKBOX', 'NUMBER', 'SHORT_TEXT', 'ESSAY', 'DRAG_DROP', 'FILL_BLANK'].includes(qType)) {
+          errorList.push(`Question ${qn}: Invalid or missing 'type'. Allowed: MCQ, CHECKBOX, NUMBER, SHORT_TEXT, ESSAY, DRAG_DROP, FILL_BLANK.`);
+          return;
+        }
+        if (!qText.trim()) {
+          errorList.push(`Question ${qn}: Missing 'text' / 'question'.`);
+          return;
+        }
+
+        let newQ: Question = {
+          id: Date.now() + Math.random(),
+          type: qType,
+          text: qText,
+          marks: item.marks ? Number(item.marks) : 1,
+          negativeMarks: item.negativeMarks ? Number(item.negativeMarks) : 0,
+          unitId: null,
+          topicIds: []
+        };
+
+        if (qType === 'MCQ' || qType === 'CHECKBOX') {
+          const rawOptions = item.options || item.Options || [];
+          if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
+            // Support dynamic keys like "Answer 1", "Answer 2"
+            const extractedOptions = Object.keys(item)
+              .filter(k => k.toLowerCase().startsWith('answer ') || k.toLowerCase().startsWith('option '))
+              .sort()
+              .map(k => String(item[k]));
+            
+            if (extractedOptions.length === 0) {
+              errorList.push(`Question ${qn} (${qType}): Missing 'options' array or 'Answer X' fields.`);
+              return;
+            }
+            rawOptions.push(...extractedOptions);
+          }
+          
+          const rawCorrect = item.correctOption || item.CorrectOption || item.correctOptions || item.CorrectAnswer || item.correctAnswer;
+          
+          let correctFlags = 0;
+          const mappedOptions = rawOptions.map((optStr: any) => {
+            const strOpt = String(optStr);
+            let isCorrect = false;
+            if (Array.isArray(rawCorrect)) {
+              isCorrect = rawCorrect.map(String).includes(strOpt);
+            } else if (rawCorrect !== undefined) {
+              isCorrect = (String(rawCorrect) === strOpt);
+            }
+            if (isCorrect) correctFlags++;
+            return { text: strOpt, isCorrect };
+          });
+
+          if (correctFlags === 0) {
+             errorList.push(`Question ${qn} (${qType}): No option directly matches the correct answer ('${rawCorrect}'). Check quotes/capitalization.`);
+             return;
+          }
+
+          newQ.options = mappedOptions;
+        } else if (qType === 'NUMBER') {
+           const cNum = item.correctNumber !== undefined ? item.correctNumber : item.correctAnswer;
+           if (cNum === undefined || isNaN(Number(cNum))) {
+              errorList.push(`Question ${qn} (NUMBER): Missing valid 'correctNumber' or 'correctAnswer'.`);
+              return;
+           }
+           newQ.correctNumber = Number(cNum);
+        } else if (qType === 'SHORT_TEXT' || qType === 'ESSAY') {
+           newQ.correctText = item.correctText || item.correctAnswer || '';
+           if (qType === 'SHORT_TEXT' && !newQ.correctText) {
+              errorList.push(`Question ${qn} (SHORT_TEXT): Missing 'correctText' or 'correctAnswer'.`);
+              return;
+           }
+        } else if (qType === 'DRAG_DROP' || qType === 'FILL_BLANK') {
+           const rawOptions = item.options || item.Options || [];
+           if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
+              errorList.push(`Question ${qn} (${qType}): Missing 'options' array for items/blanks.`);
+              return;
+           }
+           newQ.options = rawOptions.map(opt => ({text: String(opt), isCorrect: true}));
+        }
+
+        newQuestions.push(newQ);
+      });
+
+      if (errorList.length > 0) {
+        setImportError("Abnormalities found:\n" + errorList.join('\n'));
+        return;
+      }
+
+      setQuestions(prev => [...prev, ...newQuestions]);
+      setShowImportModal(false);
+      setImportJsonText('');
+    } catch (err: any) {
+      setImportError(`Invalid JSON format: ${err.message}`);
+    }
   };
 
   const submitAddTopic = async (e: React.FormEvent) => {
@@ -537,7 +653,10 @@ const QuizMaker = () => {
 
         {/* Add Question */}
         <div className="module-section" style={{ borderStyle: 'dashed', textAlign: 'center', marginBottom: '2rem' }}>
-          <p className="text-title" style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>Add a Question</p>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '1.5rem', position: 'relative' }}>
+            <p className="text-title" style={{ color: 'var(--text-muted)', margin: 0 }}>Add a Question</p>
+            <button onClick={() => { setImportJsonText(''); setImportError(''); setShowImportModal(true); }} className="btn-ghost-gold" style={{ position: 'absolute', right: 0 }}><FileText size={16} style={{marginRight: '0.4rem'}}/> Bulk Import (JSON)</button>
+          </div>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => addQuestion('MCQ')} className="btn-ghost-gold"><CheckCircle2 size={18} /> MCQ</button>
             <button onClick={() => addQuestion('CHECKBOX')} className="btn-ghost-gold"><CheckSquare size={18} /> Checkbox</button>
@@ -681,6 +800,55 @@ const QuizMaker = () => {
               </div>
               <button type="submit" className="btn-solid-gold" style={{marginTop: '0.5rem', justifyContent: 'center'}}>Add Topic</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="modal-overlay" onClick={() => setShowImportModal(false)} style={{ zIndex: 1100 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', width: '90%' }}>
+            <button className="close-btn" onClick={() => setShowImportModal(false)}>✕</button>
+            <h2 className="brand-font" style={{ marginBottom: '1rem', color: 'var(--accent-gold)' }}>Bulk Import Questions</h2>
+            
+            <div style={{ marginBottom: '1rem', background: 'var(--bg-deep)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-dark)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              <p style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: 'var(--text-main)' }}>Sample Valid JSON:</p>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#a8b2d1' }}>
+{`[
+  {
+    "type": "MCQ",
+    "text": "What is the capital of Westeros?",
+    "options": ["Winterfell", "King's Landing", "Oldtown"],
+    "correctAnswer": "King's Landing",
+    "marks": 2
+  },
+  {
+    "Type": "MCQ", 
+    "Question": "Who is the mother of dragons?",
+    "Answer 1": "Sansa", 
+    "Answer 2": "Daenerys", 
+    "CorrectAnswer": "Daenerys"
+  }
+]`}
+              </pre>
+            </div>
+
+            <textarea 
+              className="auth-input" 
+              placeholder="Paste your JSON array here..." 
+              value={importJsonText} 
+              onChange={e => setImportJsonText(e.target.value)} 
+              style={{ minHeight: '200px', fontFamily: 'monospace', fontSize: '0.85rem' }} 
+            />
+
+            {importError && (
+              <div style={{ marginTop: '1rem', padding: '0.8rem', background: 'rgba(231, 76, 60, 0.1)', color: 'var(--accent-red)', borderRadius: '4px', border: '1px solid rgba(231, 76, 60, 0.3)', whiteSpace: 'pre-wrap', fontSize: '0.85rem', maxHeight: '150px', overflowY: 'auto' }}>
+                {importError}
+              </div>
+            )}
+
+            <button onClick={handleImportJson} className="btn-solid-gold" style={{marginTop: '1rem', width: '100%', justifyContent: 'center'}}>
+              Analyze & Import
+            </button>
           </div>
         </div>
       )}
