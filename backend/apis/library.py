@@ -65,14 +65,24 @@ async def upload_note(
     # 3. Generate a safe object key
     safe_filename = f"notes/user_{current_user.id}_mod_{module_id}_{file.filename}"
     
-    # 4. Save the file to Cloudflare R2
-    try:
+    # 4. Read file content into memory NOW (before handing off to thread)
+    #    We must do this in the async context before spawning a thread.
+    file_bytes = await file.read()
+    
+    import io, asyncio
+
+    def _upload_to_r2():
+        """Runs in a thread pool — keeps the event loop free during the entire S3 transfer."""
         s3_client.upload_fileobj(
-            file.file, 
-            R2_BUCKET_NAME, 
+            io.BytesIO(file_bytes),
+            R2_BUCKET_NAME,
             safe_filename,
-            ExtraArgs={'ContentType': file.content_type}
+            ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'}
         )
+
+    # 5. Upload to Cloudflare R2 without blocking the event loop
+    try:
+        await asyncio.to_thread(_upload_to_r2)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload to the clouds: {str(e)}")
         
