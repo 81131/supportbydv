@@ -37,6 +37,7 @@ body.light-theme {
   
   /* Reduce overlay opacity for cards in light theme */
   --overlay-opacity: 0.2;
+  color-scheme: light;
 }
 
 /* --- BASE STYLES --- */
@@ -50,6 +51,7 @@ html, body {
   color: var(--text-main);
   font-family: var(--font-reading);
   transition: background-color 0.4s ease, color 0.4s ease; 
+  color-scheme: dark;
 }
 
 .app-container {
@@ -272,6 +274,7 @@ body.light-theme .hero-subtitle {
   box-sizing: border-box;
   transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
 }
+
 
 /* Quiz Maker Text Area specific fix for light mode */
 body.light-theme .auth-input[style*="min-height"] {
@@ -781,4 +784,76 @@ body.light-theme .notifications-dropdown {
   display: flex;
   justify-content: center;
   padding: 10px 0;
+}
+
+/* --- Ad Calendar Grid --- */
+.ad-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background-color: var(--border-dark);
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ad-calendar-header {
+  background-color: var(--bg-deep);
+  color: var(--accent-gold);
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.ad-calendar-cell {
+  background-color: var(--bg-surface);
+  min-height: 100px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.ad-calendar-cell.empty {
+  background-color: var(--bg-deep);
+}
+
+.ad-calendar-cell.today {
+  background-color: rgba(212, 175, 55, 0.05);
+}
+
+.ad-calendar-date {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.ad-calendar-cell.today .ad-calendar-date {
+  color: var(--accent-gold);
+}
+
+.ad-calendar-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.ad-calendar-event {
+  color: white;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.ad-calendar-event:hover {
+  opacity: 1;
 }

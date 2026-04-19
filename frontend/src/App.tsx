@@ -141,8 +141,11 @@ function App() {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         try {
-          await api.get('/auth/me');
-          setUser(JSON.parse(storedUser));
+          const res = await api.get('/auth/me');
+          const updatedUser = res.data;
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          setUser(updatedUser);
+          window.dispatchEvent(new Event('user-updated'));
           fetchNotifications();
           fetchModules();
         } catch (error) {

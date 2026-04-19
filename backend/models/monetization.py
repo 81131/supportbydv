@@ -26,6 +26,7 @@ class AdCampaign(Base):
     end_date = Column(DateTime(timezone=True), nullable=True) # duration
     is_active = Column(Boolean, default=True)
     target_semester = Column(String, nullable=True) # e.g. "Y1S1", or null for global
+    click_count = Column(Integer, default=0)  # Analytics: total ad clicks
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class SubscriptionTier(enum.Enum):

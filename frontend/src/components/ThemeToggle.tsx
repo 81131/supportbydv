@@ -20,6 +20,7 @@ const ThemeToggle: React.FC = () => {
       localStorage.setItem('theme', 'light');
     }
     setIsLight(!isLight);
+    window.dispatchEvent(new Event('theme-updated'));
   };
 
   return (

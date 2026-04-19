@@ -149,6 +149,12 @@ def approve_request(req_id: int, db: Session = Depends(get_db), current_user: Us
     notif = Notification(user_id=req.user_id, message="Your Citadel subscription has been approved! The archives are open.", destination_url="/subscriptions")
     db.add(notif)
     
+    # Upgrade user role
+    target_user = db.query(User).filter(User.id == req.user_id).first()
+    if target_user and target_user.role not in [UserRole.ADMIN, UserRole.NO_ONE, UserRole.PREMIUM_USER]:
+        target_user.role = UserRole.PREMIUM_USER
+
+    
     db.commit()
     return {"message": "Subscription approved."}
 
