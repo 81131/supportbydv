@@ -47,6 +47,11 @@ const EditModule: React.FC = () => {
   const [activeUnitForTopic, setActiveUnitForTopic] = useState<number | null>(null);
   const [newTopicName, setNewTopicName] = useState('');
 
+  // Bulk Import
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  const [bulkImportJson, setBulkImportJson] = useState('');
+  const [bulkImportError, setBulkImportError] = useState('');
+
   useEffect(() => {
     const fetchModule = async () => {
       try {
@@ -208,6 +213,28 @@ const EditModule: React.FC = () => {
       setUnits(units.map(u => u.id === uId ? { ...u, topics: u.topics.filter(t => t.id !== tId) } : u));
   };
 
+  const handleBulkImportUnits = async () => {
+    setBulkImportError('');
+    try {
+      const parsed = JSON.parse(bulkImportJson);
+      if (!Array.isArray(parsed)) {
+        setBulkImportError("JSON must be an array of unit objects.");
+        return;
+      }
+      
+      await api.post(`/modules/${id}/units/bulk`, parsed);
+      
+      // Refresh units
+      const res = await api.get(`/modules/${id}/units-with-topics`);
+      setUnits(res.data);
+      setShowBulkImportModal(false);
+      setBulkImportJson('');
+      alert("Units bulk imported successfully.");
+    } catch (err: any) {
+      setBulkImportError(`Import failed: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
   if (isLoading) return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Consulting the archives... ⏳</div>;
 
   return (
@@ -315,7 +342,10 @@ const EditModule: React.FC = () => {
         <div className="module-section" style={{ marginTop: '2rem' }}>
            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem' }}>
               <h2 className="text-title">Lecture Units &amp; Topics</h2>
-              <button onClick={handleAddUnit} className="btn-ghost-gold"><Plus size={16}/> Add Unit</button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={() => { setBulkImportError(''); setBulkImportJson(''); setShowBulkImportModal(true); }} className="btn-ghost-gold"><Upload size={16}/> Bulk Import JSON</button>
+                  <button onClick={handleAddUnit} className="btn-ghost-gold"><Plus size={16}/> Add Unit</button>
+              </div>
            </div>
            
            {units.length === 0 ? (
@@ -377,6 +407,53 @@ const EditModule: React.FC = () => {
               </div>
               <button type="submit" className="btn-solid-gold" style={{marginTop: '0.5rem', justifyContent: 'center'}}>Add Topic</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showBulkImportModal && (
+        <div className="modal-overlay" onClick={() => setShowBulkImportModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', width: '90%' }}>
+            <button className="close-btn" onClick={() => setShowBulkImportModal(false)}>✕</button>
+            <h2 className="brand-font" style={{ marginBottom: '1rem', color: 'var(--accent-gold)' }}>Bulk Import Units</h2>
+            
+            <div style={{ marginBottom: '1rem', background: 'var(--bg-deep)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-dark)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              <p style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: 'var(--text-main)' }}>Sample Valid JSON:</p>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#a8b2d1' }}>
+{`[
+  {
+    "unit_identifier": "U1",
+    "name": "Kinematics",
+    "topics": [
+      { "name": "Velocity" },
+      { "name": "Acceleration" }
+    ]
+  },
+  {
+    "unit_identifier": "U2",
+    "name": "Dynamics"
+  }
+]`}
+              </pre>
+            </div>
+
+            <textarea 
+              className="auth-input" 
+              placeholder="Paste your JSON array here..." 
+              value={bulkImportJson} 
+              onChange={e => setBulkImportJson(e.target.value)} 
+              style={{ minHeight: '200px', fontFamily: 'monospace', fontSize: '0.85rem' }} 
+            />
+
+            {bulkImportError && (
+              <div style={{ marginTop: '1rem', padding: '0.8rem', background: 'rgba(231, 76, 60, 0.1)', color: 'var(--accent-red)', borderRadius: '4px', border: '1px solid rgba(231, 76, 60, 0.3)', whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
+                {bulkImportError}
+              </div>
+            )}
+
+            <button onClick={handleBulkImportUnits} className="btn-solid-gold" style={{marginTop: '1rem', width: '100%', justifyContent: 'center'}}>
+              Import Units & Topics
+            </button>
           </div>
         </div>
       )}

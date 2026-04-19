@@ -11,7 +11,7 @@ from models.user import User, UserRole
 from models.quiz import Quiz
 from models.attempts import QuizAttempt
 from models.library import Note, Collection
-from security import create_access_token, create_refresh_token, get_password_hash, verify_password, get_current_user 
+from security import create_access_token, create_refresh_token, get_password_hash, verify_password, get_current_user, verify_csrf 
 from pydantic import BaseModel
 from schemas.user import TokenPayload, UserResponse, UserRegister, UserLogin
 
@@ -251,7 +251,7 @@ async def get_me(db: AsyncSession = Depends(get_db), current_user: User = Depend
 
 from schemas.user import ProfileUpdateRequest
 
-@router.patch("/profile", response_model=UserResponse)
+@router.patch("/profile", response_model=UserResponse, dependencies=[Depends(verify_csrf)])
 async def update_profile(
     payload: ProfileUpdateRequest,
     db: AsyncSession = Depends(get_db),

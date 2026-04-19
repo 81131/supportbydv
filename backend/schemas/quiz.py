@@ -63,3 +63,11 @@ class LectureTopicCreate(BaseModel):
 class LectureUnitCreate(BaseModel):
     unit_identifier: str
     name: str
+
+class TopicBulkCreate(BaseModel):
+    name: str
+
+class UnitBulkCreate(BaseModel):
+    unit_identifier: str
+    name: str
+    topics: Optional[List[TopicBulkCreate]] = []

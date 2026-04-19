@@ -14,8 +14,7 @@ from security import get_current_user, require_noOne
 
 router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
 
-SLIP_DIR = "uploads/payment_slips"
-os.makedirs(SLIP_DIR, exist_ok=True)
+from storage import get_s3_client, R2_BUCKET_NAME
 
 
 # -------------------------------------------------------------
@@ -58,14 +57,21 @@ async def submit_subscription_request(
                 if tier == SubscriptionTier.BEGINNER and sub.module_id == module_id:
                     raise HTTPException(status_code=400, detail="You already have an Active pass for this module.")
 
-    # Save payment slip
+    # Save payment slip to R2
     ext = slip.filename.split(".")[-1].lower() if "." in slip.filename else "png"
-    safe_name = f"slip_{current_user.id}_{datetime.utcnow().timestamp()}.{ext}"
-    file_path = os.path.join(SLIP_DIR, safe_name)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(slip.file, buffer)
+    safe_name = f"payment_slips/slip_{current_user.id}_{int(datetime.utcnow().timestamp())}.{ext}"
+    
+    file_bytes = await slip.read()
+    import io
+    async with get_s3_client() as client:
+        await client.upload_fileobj(
+            io.BytesIO(file_bytes),
+            R2_BUCKET_NAME,
+            safe_name,
+            ExtraArgs={'ContentType': slip.content_type or 'image/png'}
+        )
 
-    slip_url = f"/static/payment_slips/{safe_name}"
+    slip_url = safe_name
 
     req = SubscriptionRequest(
         user_id=current_user.id,
@@ -105,11 +111,20 @@ async def get_pending_requests(
 ):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Forbidden.")
-    return (await db.execute(
+    requests = (await db.execute(
         select(SubscriptionRequest)
         .filter(SubscriptionRequest.status == SubscriptionStatus.PENDING)
         .order_by(SubscriptionRequest.created_at.desc())
     )).scalars().all()
+    
+    result_list = []
+    async with get_s3_client() as client:
+        for req in requests:
+            req_dict = {c.name: getattr(req, c.name) for c in req.__table__.columns}
+            if req.payment_slip_url and not req.payment_slip_url.startswith("http") and not req.payment_slip_url.startswith("/static/"):
+                req_dict["payment_slip_url"] = await client.generate_presigned_url('get_object', Params={'Bucket': R2_BUCKET_NAME, 'Key': req.payment_slip_url}, ExpiresIn=3600)
+            result_list.append(req_dict)
+    return result_list
 
 
 @router.get("/requests/all")
@@ -119,9 +134,18 @@ async def get_all_requests(
 ):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Forbidden.")
-    return (await db.execute(
+    requests = (await db.execute(
         select(SubscriptionRequest).order_by(SubscriptionRequest.created_at.desc())
     )).scalars().all()
+    
+    result_list = []
+    async with get_s3_client() as client:
+        for req in requests:
+            req_dict = {c.name: getattr(req, c.name) for c in req.__table__.columns}
+            if req.payment_slip_url and not req.payment_slip_url.startswith("http") and not req.payment_slip_url.startswith("/static/"):
+                req_dict["payment_slip_url"] = await client.generate_presigned_url('get_object', Params={'Bucket': R2_BUCKET_NAME, 'Key': req.payment_slip_url}, ExpiresIn=3600)
+            result_list.append(req_dict)
+    return result_list
 
 
 # -------------------------------------------------------------

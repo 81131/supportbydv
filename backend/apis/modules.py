@@ -3,9 +3,10 @@ import shutil
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from database import get_db
 from models.quiz import Module, LectureUnit, LectureTopic, Question
-from schemas.quiz import LectureUnitCreate, LectureTopicCreate
+from schemas.quiz import LectureUnitCreate, LectureTopicCreate, UnitBulkCreate
 from models.user import User, UserRole
 from security import get_current_user
 import json
@@ -123,7 +124,11 @@ async def delete_module(module_id: int, db: AsyncSession = Depends(get_db), curr
 
 @router.get("/{module_id}/units-with-topics")
 async def get_units_with_topics(module_id: int, db: AsyncSession = Depends(get_db)):
-    units = (await db.execute(select(LectureUnit).filter(LectureUnit.module_id == module_id))).scalars().all()
+    units = (await db.execute(
+        select(LectureUnit)
+        .options(selectinload(LectureUnit.topics))
+        .filter(LectureUnit.module_id == module_id)
+    )).scalars().all()
     res = []
     for u in units:
         topics_list = [{"id": t.id, "name": t.name} for t in u.topics]
@@ -143,6 +148,27 @@ async def create_unit(module_id: int, unit_in: LectureUnitCreate, db: AsyncSessi
     await db.commit()
     await db.refresh(new_u)
     return new_u
+
+@router.post("/{module_id}/units/bulk", status_code=status.HTTP_201_CREATED)
+async def bulk_create_units(module_id: int, units_in: list[UnitBulkCreate], db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
+    
+    # Verify module exists
+    mod = (await db.execute(select(Module).filter(Module.id == module_id))).scalars().first()
+    if not mod:
+        raise HTTPException(status_code=404, detail="Module not found.")
+        
+    for u_in in units_in:
+        new_u = LectureUnit(module_id=module_id, unit_identifier=u_in.unit_identifier, name=u_in.name)
+        db.add(new_u)
+        await db.flush() # flush to get unit id
+        if u_in.topics:
+            for t_in in u_in.topics:
+                new_t = LectureTopic(unit_id=new_u.id, name=t_in.name)
+                db.add(new_t)
+                
+    await db.commit()
+    return {"message": f"{len(units_in)} units forged successfully."}
 
 @router.put("/units/{unit_id}")
 async def update_unit(unit_id: int, unit_in: LectureUnitCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):

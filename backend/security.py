@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from passlib.context import CryptContext
 from database import get_db
 from models.user import User, UserRole
@@ -43,7 +44,7 @@ def create_refresh_token(data: dict):
     return encoded_jwt
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
     # Read the token from the 'access_token' cookie
     token = request.cookies.get("access_token")
     
@@ -64,13 +65,13 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     except JWTError:
         raise credentials_exception
         
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user = (await db.execute(select(User).filter(User.id == int(user_id)))).scalars().first()
     if user is None:
         raise credentials_exception
         
     return user
 
-def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+async def get_current_user_optional(request: Request, db: AsyncSession = Depends(get_db)):
     token = request.cookies.get("access_token")
     if not token:
         return None
@@ -79,7 +80,7 @@ def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
         user_id: str = payload.get("sub")
         if user_id is None:
             return None
-        return db.query(User).filter(User.id == int(user_id)).first()
+        return (await db.execute(select(User).filter(User.id == int(user_id)))).scalars().first()
     except JWTError:
         return None
 
@@ -107,7 +108,7 @@ def require_noOne(user: User = Depends(get_current_user)):
         )
     return user
 
-def require_premium_access(user: User, db: Session, module_id: int = None, semester_key: str = None):
+async def require_premium_access(user: User, db: AsyncSession, module_id: int = None, semester_key: str = None):
     """
     Checks if a user is permitted to view premium content associated with a specific module or semester.
     Returns True if allowed, or raises 403.
@@ -118,11 +119,11 @@ def require_premium_access(user: User, db: Session, module_id: int = None, semes
     
     # 2. Check active subscriptions
     now = datetime.utcnow()
-    active_subs = db.query(UserSubscription).filter(
+    active_subs = (await db.execute(select(UserSubscription).filter(
         UserSubscription.user_id == user.id,
         UserSubscription.is_active == True,
         UserSubscription.expiry_date > now
-    ).all()
+    ))).scalars().all()
     
     for sub in active_subs:
         if sub.tier == SubscriptionTier.ADVANCED:

@@ -822,11 +822,20 @@ const QuizMaker = () => {
     "marks": 2
   },
   {
-    "Type": "MCQ", 
-    "Question": "Who is the mother of dragons?",
-    "Answer 1": "Sansa", 
-    "Answer 2": "Daenerys", 
-    "CorrectAnswer": "Daenerys"
+    "type": "CHECKBOX", 
+    "text": "Which of these are Stark direwolves?",
+    "options": ["Ghost", "Nymeria", "Balerion", "Summer"],
+    "correctAnswer": ["Ghost", "Nymeria", "Summer"]
+  },
+  {
+    "type": "ESSAY",
+    "text": "Describe the political implications of the Red Wedding.",
+    "correctAnswer": "Rubric: Mention betrayal of guest right, shifting alliances..."
+  },
+  {
+    "type": "DRAG_DROP",
+    "text": "The wall was built by ___ using ___.",
+    "options": ["Bran the Builder", "Ice and Magic"]
   }
 ]`}
               </pre>

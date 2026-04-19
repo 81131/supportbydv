@@ -3,6 +3,7 @@ import shutil
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from database import get_db
 from models.quiz import Quiz, Question, AnswerOption, QuestionType
 from models.attempts import QuizAttempt, QuestionAttempt
@@ -117,7 +118,7 @@ async def get_my_analytics(
     """Fetch V3 Performance Matrices comparing student vs dynamically calculated cohort peers with deep filtering."""
     
     # 1. Base Query for ALL Completed Attempts globally to figure out question difficulties and top users globally
-    all_completed = (await db.execute(select(func.count(QuizAttempt.id)).filter(QuizAttempt.status == "COMPLETED"))).scalars().all()
+    all_completed = (await db.execute(select(QuizAttempt).options(selectinload(QuizAttempt.question_attempts)).filter(QuizAttempt.status == "COMPLETED"))).scalars().all()
     
     # 1a. Figure out global question difficulties
     # difficulty_map: question_id -> 'easy'|'medium'|'hard'
@@ -174,7 +175,7 @@ async def get_my_analytics(
         my_percentile = 100
         
     # 2. Filter My Attempts based on timeframe, module_id, attempt_type
-    stmt = select(QuizAttempt).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
+    stmt = select(QuizAttempt).options(selectinload(QuizAttempt.question_attempts)).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
     
     now = datetime.utcnow()
     if timeframe == '7d': stmt = stmt.filter(QuizAttempt.created_at >= now - timedelta(days=7))
@@ -461,7 +462,11 @@ async def get_single_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
     
     questions_list = []
     # Filter questions by current quiz version
-    current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version))).scalars().all()
+    current_questions = (await db.execute(
+        select(Question)
+        .options(selectinload(Question.options))
+        .filter(Question.quiz_id == quiz_id, Question.version == quiz.version)
+    )).scalars().all()
     
     for q in current_questions:
         options_list = [{"text": opt.text, "is_correct": opt.is_correct} for opt in q.options]
@@ -576,7 +581,11 @@ async def get_safe_quiz_for_taking(quiz_id: int, db: AsyncSession = Depends(get_
     
     safe_questions = []
     # Only fetch questions for the CURRENT version of the quiz
-    current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version))).scalars().all()
+    current_questions = (await db.execute(
+        select(Question)
+        .options(selectinload(Question.options))
+        .filter(Question.quiz_id == quiz_id, Question.version == quiz.version)
+    )).scalars().all()
     
     for q in current_questions:
         options_list = [{"id": opt.id, "text": opt.text} for opt in q.options] 
@@ -586,7 +595,7 @@ async def get_safe_quiz_for_taking(quiz_id: int, db: AsyncSession = Depends(get_
         })
 
     # Fetch Draft Attempt
-    attempt = (await db.execute(select(QuizAttempt).filter(
+    attempt = (await db.execute(select(QuizAttempt).options(selectinload(QuizAttempt.question_attempts)).filter(
         QuizAttempt.quiz_id == quiz_id, 
         QuizAttempt.user_id == current_user.id,
         QuizAttempt.status == "IN_PROGRESS"
@@ -636,7 +645,7 @@ async def start_quiz_attempt(quiz_id: int, db: AsyncSession = Depends(get_db), c
     if not quiz:
         raise HTTPException(status_code=404, detail="Scroll not found.")
         
-    attempt = (await db.execute(select(QuizAttempt).filter(
+    attempt = (await db.execute(select(QuizAttempt).options(selectinload(QuizAttempt.question_attempts)).filter(
         QuizAttempt.quiz_id == quiz_id, 
         QuizAttempt.user_id == current_user.id,
         QuizAttempt.status == "IN_PROGRESS"
@@ -676,7 +685,7 @@ async def submit_and_grade_quiz(
     student_answers = {ans.question_id: ans for ans in submission.answers}
     
     # Check for existing IN_PROGRESS attempt
-    attempt = (await db.execute(select(QuizAttempt).filter(
+    attempt = (await db.execute(select(QuizAttempt).options(selectinload(QuizAttempt.question_attempts)).filter(
         QuizAttempt.quiz_id == quiz_id, 
         QuizAttempt.user_id == current_user.id,
         QuizAttempt.status == "IN_PROGRESS"
@@ -707,7 +716,11 @@ async def submit_and_grade_quiz(
         await db.flush()
 
     total_score = 0.0
-    current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version))).scalars().all()
+    current_questions = (await db.execute(
+        select(Question)
+        .options(selectinload(Question.options))
+        .filter(Question.quiz_id == quiz_id, Question.version == quiz.version)
+    )).scalars().all()
     max_score = sum([q.marks for q in current_questions])
     review_details = []
 
@@ -894,7 +907,11 @@ async def toggle_quiz_governance(
 
 @router.get("/{quiz_id}/analytics")
 async def get_quiz_analytics(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id))).scalars().first()
+    quiz = (await db.execute(
+        select(Quiz)
+        .options(selectinload(Quiz.questions))
+        .filter(Quiz.id == quiz_id)
+    )).scalars().first()
     if not quiz: raise HTTPException(status_code=404, detail="Scroll not found")
     if current_user.id != quiz.created_user_id and current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Unauthorized")

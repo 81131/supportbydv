@@ -50,7 +50,20 @@ async def get_active_ads(semester_key: Optional[str] = None, db: AsyncSession = 
             continue
             
         active_list.append(ad)
-    return active_list
+        
+    result_list = []
+    async with get_s3_client() as client:
+        for ad in active_list:
+            ad_dict = {c.name: getattr(ad, c.name) for c in ad.__table__.columns}
+            
+            if ad.light_image_url and not ad.light_image_url.startswith("http") and not ad.light_image_url.startswith("/static/"):
+                ad_dict["light_image_url"] = await client.generate_presigned_url('get_object', Params={'Bucket': R2_BUCKET_NAME, 'Key': ad.light_image_url}, ExpiresIn=3600)
+            if ad.dark_image_url and not ad.dark_image_url.startswith("http") and not ad.dark_image_url.startswith("/static/"):
+                ad_dict["dark_image_url"] = await client.generate_presigned_url('get_object', Params={'Bucket': R2_BUCKET_NAME, 'Key': ad.dark_image_url}, ExpiresIn=3600)
+                
+            result_list.append(ad_dict)
+
+    return result_list
 
 @router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(verify_csrf)])
 async def create_ad(ad_in: AdCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
@@ -126,10 +139,9 @@ import os
 import shutil
 from fastapi import UploadFile, File, Form
 
-AD_DIR = "uploads/ads"
-os.makedirs(AD_DIR, exist_ok=True)
+from storage import get_s3_client, R2_BUCKET_NAME
 
-@router.post("/campaigns/deploy")
+@router.post("/campaigns/deploy", dependencies=[Depends(verify_csrf)])
 async def deploy_campaign(
     request_id: int = Form(...),
     title: str = Form(...),
@@ -147,17 +159,24 @@ async def deploy_campaign(
     if not req:
         raise HTTPException(status_code=404, detail="Ad request not found")
 
-    def save_img(f: UploadFile):
+    async def save_img_to_r2(f: UploadFile):
         if not f: return None
         ext = f.filename.split(".")[-1].lower() if "." in f.filename else "png"
-        safe_name = f"ad_{req.id}_{int(datetime.utcnow().timestamp())}_{f.filename}"
-        path = os.path.join(AD_DIR, safe_name)
-        with open(path, "wb") as buffer:
-            shutil.copyfileobj(f.file, buffer)
-        return f"/static/ads/{safe_name}"
+        safe_name = f"ads/ad_{req.id}_{int(datetime.utcnow().timestamp())}.{ext}"
+        
+        file_bytes = await f.read()
+        import io
+        async with get_s3_client() as client:
+            await client.upload_fileobj(
+                io.BytesIO(file_bytes),
+                R2_BUCKET_NAME,
+                safe_name,
+                ExtraArgs={'ContentType': f.content_type or 'image/png'}
+            )
+        return safe_name
 
-    light_url = save_img(light_image)
-    dark_url = save_img(dark_image)
+    light_url = await save_img_to_r2(light_image)
+    dark_url = await save_img_to_r2(dark_image)
 
     from models.monetization import AdPlacement
     try:

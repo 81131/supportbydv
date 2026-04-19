@@ -140,7 +140,7 @@ async def download_single_note(
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
         
     if note.is_premium and current_user.role.value not in ["premium_user", "admin", "noOne"]:
-        require_premium_access(current_user, db)
+        await require_premium_access(current_user, db)
         
     try:
         async with get_s3_client() as client:
@@ -162,7 +162,7 @@ async def extract_note_text(note_id: int, db: AsyncSession = Depends(get_db), cu
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
         
     if note.is_premium and current_user.role.value not in ["premium_user", "admin", "noOne"]:
-        require_premium_access(current_user, db)
+        await require_premium_access(current_user, db)
 
     if note.file_type != "pdf":
         raise HTTPException(status_code=400, detail="Only PDF scrolls can be read aloud.")

@@ -142,7 +142,7 @@ class DirectChatRequest(BaseModel):
     user_id: Optional[int] = None # Admin needs to pass user_id they are initiating chat with
     message: str
 
-@router.post("/tickets/direct")
+@router.post("/tickets/direct", dependencies=[Depends(verify_csrf)])
 async def create_direct_chat(req: DirectChatRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # If user creates it, the user_id is themselves. If admin creates it, they might pass a target user_id.
     target_user_id = current_user.id
@@ -183,7 +183,7 @@ async def create_direct_chat(req: DirectChatRequest, db: AsyncSession = Depends(
     await db.commit()
     return {"message": "Direct chat created", "ticket_id": ticket.id}
 
-@router.put("/tickets/{ticket_id}/resolve")
+@router.put("/tickets/{ticket_id}/resolve", dependencies=[Depends(verify_csrf)])
 async def resolve_ticket(ticket_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticket = (await db.execute(select(SupportTicket).filter(SupportTicket.id == ticket_id))).scalars().first()
     if not ticket:
