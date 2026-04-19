@@ -1,7 +1,8 @@
 import os
 import shutil
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from database import get_db
 from models.quiz import Module, LectureUnit, LectureTopic, Question
 from schemas.quiz import LectureUnitCreate, LectureTopicCreate
@@ -12,8 +13,8 @@ import json
 router = APIRouter(prefix="/modules", tags=["Modules"])
 
 @router.get("")
-def get_all_modules(db: Session = Depends(get_db)):
-    return db.query(Module).all()
+async def get_all_modules(db: AsyncSession = Depends(get_db)):
+    return (await db.execute(select(Module))).scalars().all()
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_module(
@@ -24,13 +25,13 @@ async def create_module(
     module_phrase: str = Form(None),
     card_image: UploadFile = File(None),
     banner_image: UploadFile = File(None),
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Only the Small Council can forge new modules.")
     
-    existing = db.query(Module).filter(Module.code == code).first()
+    existing = (await db.execute(select(Module).filter(Module.code == code))).scalars().first()
     if existing:
         raise HTTPException(status_code=400, detail="A module with this code already exists in the archives.")
         
@@ -55,8 +56,8 @@ async def create_module(
         card_image_url=card_url, banner_image_url=banner_url, module_phrase=module_phrase
     )
     db.add(new_module)
-    db.commit()
-    db.refresh(new_module)
+    await db.commit()
+    await db.refresh(new_module)
     return new_module
 
 @router.put("/{module_id}")
@@ -69,18 +70,18 @@ async def update_module(
     module_phrase: str = Form(None),
     card_image: UploadFile = File(None),
     banner_image: UploadFile = File(None),
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Only the Small Council can modify modules.")
         
-    module = db.query(Module).filter(Module.id == module_id).first()
+    module = (await db.execute(select(Module).filter(Module.id == module_id))).scalars().first()
     if not module:
         raise HTTPException(status_code=404, detail="Module not found.")
         
     if module.code != code:
-        existing = db.query(Module).filter(Module.code == code).first()
+        existing = (await db.execute(select(Module).filter(Module.code == code))).scalars().first()
         if existing:
             raise HTTPException(status_code=400, detail="A module with this code already exists in the archives.")
             
@@ -105,24 +106,24 @@ async def update_module(
             shutil.copyfileobj(banner_image.file, buffer)
         module.banner_image_url = f"/static/modules/{safe_b_name}"
         
-    db.commit()
+    await db.commit()
     return module
 
 @router.delete("/{module_id}")
-async def delete_module(module_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_module(module_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Unauthorized")
-    module = db.query(Module).filter(Module.id == module_id).first()
+    module = (await db.execute(select(Module).filter(Module.id == module_id))).scalars().first()
     if not module: raise HTTPException(status_code=404)
     db.delete(module)
-    db.commit()
+    await db.commit()
     return {"message": "Module deleted"}
 
 # --- Lecture Units ---
 
 @router.get("/{module_id}/units-with-topics")
-def get_units_with_topics(module_id: int, db: Session = Depends(get_db)):
-    units = db.query(LectureUnit).filter(LectureUnit.module_id == module_id).all()
+async def get_units_with_topics(module_id: int, db: AsyncSession = Depends(get_db)):
+    units = (await db.execute(select(LectureUnit).filter(LectureUnit.module_id == module_id))).scalars().all()
     res = []
     for u in units:
         topics_list = [{"id": t.id, "name": t.name} for t in u.topics]
@@ -135,64 +136,64 @@ def get_units_with_topics(module_id: int, db: Session = Depends(get_db)):
     return res
 
 @router.post("/{module_id}/units")
-def create_unit(module_id: int, unit_in: LectureUnitCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_unit(module_id: int, unit_in: LectureUnitCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
     new_u = LectureUnit(module_id=module_id, unit_identifier=unit_in.unit_identifier, name=unit_in.name)
     db.add(new_u)
-    db.commit()
-    db.refresh(new_u)
+    await db.commit()
+    await db.refresh(new_u)
     return new_u
 
 @router.put("/units/{unit_id}")
-def update_unit(unit_id: int, unit_in: LectureUnitCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_unit(unit_id: int, unit_in: LectureUnitCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
-    unit = db.query(LectureUnit).filter(LectureUnit.id == unit_id).first()
+    unit = (await db.execute(select(LectureUnit).filter(LectureUnit.id == unit_id))).scalars().first()
     if not unit: raise HTTPException(status_code=404)
     unit.unit_identifier = unit_in.unit_identifier
     unit.name = unit_in.name
-    db.commit()
+    await db.commit()
     return unit
 
 @router.delete("/units/{unit_id}")
-def delete_unit(unit_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
-    unit = db.query(LectureUnit).filter(LectureUnit.id == unit_id).first()
+    unit = (await db.execute(select(LectureUnit).filter(LectureUnit.id == unit_id))).scalars().first()
     if not unit: raise HTTPException(status_code=404)
     # Nullify unit_id in questions
-    questions = db.query(Question).filter(Question.unit_id == unit_id).all()
+    questions = (await db.execute(select(Question).filter(Question.unit_id == unit_id))).scalars().all()
     for q in questions: q.unit_id = None
     db.delete(unit)
-    db.commit()
+    await db.commit()
     return {"message": "Unit deleted"}
 
 # --- Lecture Topics ---
 
 @router.post("/units/{unit_id}/topics")
-def create_topic(unit_id: int, topic_in: LectureTopicCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_topic(unit_id: int, topic_in: LectureTopicCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Any authenticated user can create a topic!
     new_t = LectureTopic(unit_id=unit_id, name=topic_in.name)
     db.add(new_t)
-    db.commit()
-    db.refresh(new_t)
+    await db.commit()
+    await db.refresh(new_t)
     return new_t
 
 @router.put("/topics/{topic_id}")
-def update_topic(topic_id: int, topic_in: LectureTopicCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_topic(topic_id: int, topic_in: LectureTopicCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
-    topic = db.query(LectureTopic).filter(LectureTopic.id == topic_id).first()
+    topic = (await db.execute(select(LectureTopic).filter(LectureTopic.id == topic_id))).scalars().first()
     if not topic: raise HTTPException(status_code=404)
     topic.name = topic_in.name
-    db.commit()
+    await db.commit()
     return topic
 
 @router.delete("/topics/{topic_id}")
-def delete_topic(topic_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
-    topic = db.query(LectureTopic).filter(LectureTopic.id == topic_id).first()
+    topic = (await db.execute(select(LectureTopic).filter(LectureTopic.id == topic_id))).scalars().first()
     if not topic: raise HTTPException(status_code=404)
     
     # Safely remove this topic ID from all questions' topic_ids
-    questions = db.query(Question).filter(Question.topic_ids.isnot(None)).all()
+    questions = (await db.execute(select(Question).filter(Question.topic_ids.isnot(None)))).scalars().all()
     for q in questions:
         try:
             t_ids = json.loads(q.topic_ids)
@@ -203,6 +204,6 @@ def delete_topic(topic_id: int, db: Session = Depends(get_db), current_user: Use
             pass
             
     db.delete(topic)
-    db.commit()
+    await db.commit()
     return {"message": "Topic deleted securely"}
 

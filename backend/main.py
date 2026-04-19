@@ -33,139 +33,55 @@ from sqlalchemy import text
 # Import your API routers
 from apis.auth import router as auth_router
 
-# --- IMPROVED: Retry loop to wait for PostgreSQL ---
-def wait_for_db():
-    import sys
-    print("⏳ Connecting to database...")
-    max_retries = 20
-    for i in range(max_retries):
+# Alembic handles migrations now, wait_for_db removed.
+
+async def initialize_achievements():
+    from sqlalchemy import select
+    async with SessionLocal() as db:
         try:
-            # Build the database tables
-            models.Base.metadata.create_all(bind=engine)
-            # Safe migration: add frame_name column to achievements if it doesn't exist yet
-            with engine.connect() as conn:
-                conn.execute(text(
-                    "ALTER TABLE achievements ADD COLUMN IF NOT EXISTS frame_name VARCHAR"
-                ))
-                conn.execute(text(
-                    "ALTER TABLE collection_notes ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
-                ))
-                conn.execute(text(
-                    "ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS target_semester VARCHAR"
-                ))
-                conn.execute(text(
-                    "ALTER TABLE ad_submission_requests ADD COLUMN IF NOT EXISTS target_semester VARCHAR"
-                ))
-                conn.commit()
-            print("Database connected and tables created!")
-            return
-        except OperationalError as e:
-            print(f"Database not ready, waiting 2 seconds... (Attempt {i+1}/{max_retries})")
-            if i == max_retries - 1:
-                print(f"FATAL: Could not connect to database after {max_retries} attempts.")
-                print(f"Error: {e}")
-                sys.exit(3) # Exit with code 3 so Docker can restart it if needed
-            time.sleep(2)
-
-wait_for_db()
-# ---------------------------------------------
-
-def initialize_achievements():
-    db = SessionLocal()
-    try:
-        no_one_badge = db.query(Achievement).filter(Achievement.name == "No One").first()
-        if not no_one_badge:
-            no_one_badge = Achievement(
-                name="No One",
-                description="Valar Morghulis. You are no one.",
-                badge_image_url="/static/badges/NoOne.png",
-                frame_name="frame-no-one",
-                condition="Awarded to the ultimate shadow of the Citadel."
-            )
-            db.add(no_one_badge)
-            db.commit()
-            db.refresh(no_one_badge)
-            
-        no_one_users = db.query(User).filter(User.role == UserRole.NO_ONE).all()
-        for u in no_one_users:
-            has_badge = db.query(UserAchievement).filter(
-                UserAchievement.user_id == u.id,
-                UserAchievement.achievement_id == no_one_badge.id
-            ).first()
-            if not has_badge:
-                ua = UserAchievement(
-                    user_id=u.id,
-                    achievement_id=no_one_badge.id,
-                    priority=1,
-                    is_valid=True
+            result = await db.execute(select(Achievement).filter(Achievement.name == "No One"))
+            no_one_badge = result.scalars().first()
+            if not no_one_badge:
+                no_one_badge = Achievement(
+                    name="No One",
+                    description="Valar Morghulis. You are no one.",
+                    badge_image_url="/static/badges/NoOne.png",
+                    frame_name="frame-no-one",
+                    condition="Awarded to the ultimate shadow of the Citadel."
                 )
-                db.add(ua)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Achievement init error: {e}")
-    finally:
-        db.close()
+                db.add(no_one_badge)
+                await db.commit()
+                await db.refresh(no_one_badge)
+                
+            result = await db.execute(select(User).filter(User.role == UserRole.NO_ONE))
+            no_one_users = result.scalars().all()
+            for u in no_one_users:
+                res = await db.execute(select(UserAchievement).filter(
+                    UserAchievement.user_id == u.id,
+                    UserAchievement.achievement_id == no_one_badge.id
+                ))
+                has_badge = res.scalars().first()
+                if not has_badge:
+                    ua = UserAchievement(
+                        user_id=u.id,
+                        achievement_id=no_one_badge.id,
+                        priority=1,
+                        is_valid=True
+                    )
+                    db.add(ua)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            print(f"Achievement init error: {e}")
 
-def cleanup_orphaned_files():
-    """
-    On every startup, delete uploaded files that have no corresponding database record.
-    Handles: (1) DB reset via 'docker compose down -v', (2) files left over from failed
-    deletes, (3) orphaned quiz-resource images from versioned question updates.
-    """
-    db = SessionLocal()
-    try:
-        from models.library import Note
-        from models.quiz import Question
-        from storage import s3_client, R2_BUCKET_NAME
-        import botocore
-
-        deleted = 0
-
-        # ── Gather Valid Links ────────────────────────────────────────────────
-        valid_note_urls = {n.file_url for n in db.query(Note.file_url).all() if n.file_url}
-        valid_res_urls = {q.image_url for q in db.query(Question.image_url).all() if q.image_url}
-
-        # ── Helper to Sweep a Prefix ──────────────────────────────────────────
-        def sweep_prefix(prefix: str, valid_keys: set):
-            nonlocal deleted
-            paginator = s3_client.get_paginator('list_objects_v2')
-            try:
-                for page in paginator.paginate(Bucket=R2_BUCKET_NAME, Prefix=prefix):
-                    if 'Contents' in page:
-                        for obj in page['Contents']:
-                            key = obj['Key']
-                            # A folder object or valid key is skipped
-                            if key.endswith('/') or key in valid_keys:
-                                continue
-                            
-                            # Burn the orphan
-                            s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
-                            deleted += 1
-                            print(f"Removed orphaned cloud object: {key}")
-            except botocore.exceptions.ClientError as err:
-                print(f"Cloud sweep error for {prefix}: {err}")
-
-        # ── Execute Sweeps ────────────────────────────────────────────────────
-        sweep_prefix("notes/", valid_note_urls)
-        sweep_prefix("images/", valid_res_urls)
-
-        if deleted == 0:
-            print("Citadel archives are clean — no orphaned files found in Cloudflare R2.")
-        else:
-            print(f"Citadel cloud cleanup complete — {deleted} orphaned object(s) removed.")
-
-    except Exception as e:
-        print(f"Cloud orphan cleanup warning: {e}")
-    finally:
-        db.close()
-
+import asyncio
+from tasks import cleanup_orphaned_files_task
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    initialize_modules()
-    initialize_achievements()
-    cleanup_orphaned_files()
+    await initialize_modules()
+    await initialize_achievements()
+    asyncio.create_task(cleanup_orphaned_files_task())
     print("The Citadel's modules and badges have been forged in the database!")
     yield
 
@@ -185,52 +101,52 @@ if _os.getenv("DEV_MODE") == "true":
 
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
-def initialize_modules():
-    db = SessionLocal()
-    try:
-        default_modules = [
-            {
-                "name": "Operating System & System Administration", "code": "OSSA", "year": 2, "semester": 2,
-                "card_image_url": "/static/modules/OSSA-bg.webp",
-                "banner_image_url": "/static/modules/Ned_Stark_OSSA-bg.jpg",
-                "module_phrase": "A LANister always pings his local network."
-            },
-            {
-                "name": "Web and Mobile Technologies", "code": "WMT", "year": 2, "semester": 2,
-                "card_image_url": "/static/modules/WMT-bg.webp",
-                "banner_image_url": "/static/modules/dragonglass_cave-WMT-bg.avif",
-                "module_phrase": "Ours is the Frontend."
-            },
-            {
-                "name": "Professional Skills", "code": "PS", "year": 2, "semester": 2,
-                "card_image_url": "/static/modules/PS-bg.webp",
-                "banner_image_url": "/static/modules/Tyrion_PS-bg.avif",
-                "module_phrase": "I drink and I manage projects."
-            },
-        ]
+async def initialize_modules():
+    from sqlalchemy import select, text
+    async with SessionLocal() as db:
+        try:
+            default_modules = [
+                {
+                    "name": "Operating System & System Administration", "code": "OSSA", "year": 2, "semester": 2,
+                    "card_image_url": "/static/modules/OSSA-bg.webp",
+                    "banner_image_url": "/static/modules/Ned_Stark_OSSA-bg.jpg",
+                    "module_phrase": "A LANister always pings his local network."
+                },
+                {
+                    "name": "Web and Mobile Technologies", "code": "WMT", "year": 2, "semester": 2,
+                    "card_image_url": "/static/modules/WMT-bg.webp",
+                    "banner_image_url": "/static/modules/dragonglass_cave-WMT-bg.avif",
+                    "module_phrase": "Ours is the Frontend."
+                },
+                {
+                    "name": "Professional Skills", "code": "PS", "year": 2, "semester": 2,
+                    "card_image_url": "/static/modules/PS-bg.webp",
+                    "banner_image_url": "/static/modules/Tyrion_PS-bg.avif",
+                    "module_phrase": "I drink and I manage projects."
+                },
+            ]
 
-        for mod_data in default_modules:
-            existing = db.query(Module).filter(Module.code == mod_data["code"]).first()
-            if not existing:
-                new_module = Module(**mod_data)
-                db.add(new_module)
-            else:
-                if existing.card_image_url is None:
-                    existing.card_image_url = mod_data.get("card_image_url")
-                if existing.banner_image_url is None:
-                    existing.banner_image_url = mod_data.get("banner_image_url")
-                if existing.module_phrase is None:
-                    existing.module_phrase = mod_data.get("module_phrase")
-        
-        db.commit()
-        # Reset the PostgreSQL sequence to sync with actual max(id)
-        db.execute(text("SELECT setval('modules_id_seq', coalesce((SELECT MAX(id) FROM modules), 1))"))
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Module init error: {e}")
-    finally:
-        db.close()
+            for mod_data in default_modules:
+                res = await db.execute(select(Module).filter(Module.code == mod_data["code"]))
+                existing = res.scalars().first()
+                if not existing:
+                    new_module = Module(**mod_data)
+                    db.add(new_module)
+                else:
+                    if existing.card_image_url is None:
+                        existing.card_image_url = mod_data.get("card_image_url")
+                    if existing.banner_image_url is None:
+                        existing.banner_image_url = mod_data.get("banner_image_url")
+                    if existing.module_phrase is None:
+                        existing.module_phrase = mod_data.get("module_phrase")
+            
+            await db.commit()
+            # Reset the PostgreSQL sequence to sync with actual max(id)
+            await db.execute(text("SELECT setval('modules_id_seq', coalesce((SELECT MAX(id) FROM modules), 1))"))
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            print(f"Module init error: {e}")
 
 # Connect the routers to the main app
 app.include_router(auth_router)

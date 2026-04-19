@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, case
 from database import get_db
 from models.user import User, UserAchievement
 from models.attempts import QuizAttempt
@@ -13,17 +13,19 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 # ── Shared helpers ─────────────────────────────────────────────────────────
 
-def _get_ordered_achievements(user_id: int, db: Session):
-    return db.query(UserAchievement).filter(
-        UserAchievement.user_id == user_id,
-        UserAchievement.is_valid == True
-    ).order_by(
-        case(
-            (UserAchievement.priority == 0, 99999),
-            else_=UserAchievement.priority
-        ).asc(),
-        UserAchievement.achieved_at.desc()
-    ).all()
+async def _get_ordered_achievements(user_id: int, db: AsyncSession):
+    return (await db.execute(
+        select(UserAchievement).filter(
+            UserAchievement.user_id == user_id,
+            UserAchievement.is_valid == True
+        ).order_by(
+            case(
+                (UserAchievement.priority == 0, 99999),
+                else_=UserAchievement.priority
+            ).asc(),
+            UserAchievement.achieved_at.desc()
+        )
+    )).scalars().all()
 
 
 def _serialize_achievements(achievements_db):
@@ -37,7 +39,7 @@ def _serialize_achievements(achievements_db):
             "frame_name": ua.achievement.frame_name,
             "condition": ua.achievement.condition,
             "achieved_at": ua.achieved_at,
-            "priority": ua.priority
+            "priority": ua.priority,
         })
     return out
 
@@ -45,47 +47,54 @@ def _serialize_achievements(achievements_db):
 # ── Public profile endpoint ─────────────────────────────────────────────────
 
 @router.get("/{user_id}/public")
-def get_public_profile(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
+async def get_public_profile(user_id: int, db: AsyncSession = Depends(get_db)):
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    points_subquery = db.query(
-        QuizAttempt.user_id,
-        func.sum(QuizAttempt.total_marks).label("total_score"),
-        func.sum(QuizAttempt.time_consumed_seconds).label("total_time")
-    ).filter(QuizAttempt.user_id == user_id).group_by(QuizAttempt.user_id).first()
+    # Per-user score stats
+    score_row = (await db.execute(
+        select(
+            func.sum(QuizAttempt.total_marks).label("total_score"),
+            func.sum(QuizAttempt.time_consumed_seconds).label("total_time"),
+        ).filter(QuizAttempt.user_id == user_id)
+    )).first()
 
-    created_subquery = db.query(
-        func.count(Quiz.id).label("quizzes_created")
-    ).filter(Quiz.created_user_id == user_id, Quiz.is_deleted == False).first()
+    quiz_count_row = (await db.execute(
+        select(func.count(Quiz.id).label("quizzes_created"))
+        .filter(Quiz.created_user_id == user_id, Quiz.is_deleted == False)
+    )).first()
 
-    total_score = float(points_subquery.total_score if points_subquery and points_subquery.total_score else 0)
-    total_time = int(points_subquery.total_time if points_subquery and points_subquery.total_time else 0)
-    quizzes_made = int(created_subquery.quizzes_created if created_subquery and created_subquery.quizzes_created else 0)
+    total_score = float(score_row.total_score if score_row and score_row.total_score else 0)
+    total_time = int(score_row.total_time if score_row and score_row.total_time else 0)
+    quizzes_made = int(quiz_count_row.quizzes_created if quiz_count_row and quiz_count_row.quizzes_created else 0)
 
-    all_points = db.query(
-        QuizAttempt.user_id,
-        func.sum(QuizAttempt.total_marks).label("total_score")
-    ).group_by(QuizAttempt.user_id).subquery()
+    # Global ranking
+    all_points_sub = (
+        select(QuizAttempt.user_id, func.sum(QuizAttempt.total_marks).label("total_score"))
+        .group_by(QuizAttempt.user_id)
+        .subquery()
+    )
+    all_created_sub = (
+        select(Quiz.created_user_id.label("user_id"), func.count(Quiz.id).label("quizzes_created"))
+        .filter(Quiz.is_deleted == False)
+        .group_by(Quiz.created_user_id)
+        .subquery()
+    )
 
-    all_created = db.query(
-        Quiz.created_user_id.label("user_id"),
-        func.count(Quiz.id).label("quizzes_created")
-    ).filter(Quiz.is_deleted == False).group_by(Quiz.created_user_id).subquery()
-
-    ranked_users = db.query(
-        User.id,
-        func.coalesce(all_points.c.total_score, 0).label("global_score"),
-        func.coalesce(all_created.c.quizzes_created, 0).label("quizzes_made")
-    ).outerjoin(
-        all_points, User.id == all_points.c.user_id
-    ).outerjoin(
-        all_created, User.id == all_created.c.user_id
-    ).order_by(
-        func.coalesce(all_points.c.total_score, 0).desc(),
-        func.coalesce(all_created.c.quizzes_created, 0).desc()
-    ).all()
+    ranked_stmt = (
+        select(
+            User.id,
+            func.coalesce(all_points_sub.c.total_score, 0).label("global_score"),
+        )
+        .outerjoin(all_points_sub, User.id == all_points_sub.c.user_id)
+        .outerjoin(all_created_sub, User.id == all_created_sub.c.user_id)
+        .order_by(
+            func.coalesce(all_points_sub.c.total_score, 0).desc(),
+            func.coalesce(all_created_sub.c.quizzes_created, 0).desc(),
+        )
+    )
+    ranked_users = (await db.execute(ranked_stmt)).all()
 
     global_rank = 0
     for idx, row in enumerate(ranked_users, start=1):
@@ -93,7 +102,7 @@ def get_public_profile(user_id: int, db: Session = Depends(get_db)):
             global_rank = idx
             break
 
-    achievements_out = _serialize_achievements(_get_ordered_achievements(user_id, db))
+    achievements_out = _serialize_achievements(await _get_ordered_achievements(user_id, db))
 
     return {
         "user": {
@@ -101,34 +110,34 @@ def get_public_profile(user_id: int, db: Session = Depends(get_db)):
             "first_name": user.first_name,
             "last_name": user.last_name,
             "picture": user.picture,
-            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
             "bio": user.bio,
             "linkedin_url": user.linkedin_url,
             "github_url": user.github_url,
             "instagram_url": user.instagram_url,
             "facebook_url": user.facebook_url,
             "public_email": user.public_email,
-            "created_at": user.created_at
+            "created_at": user.created_at,
         },
         "stats": {
             "global_rank": global_rank,
             "total_score": total_score,
             "total_time": total_time,
-            "quizzes_created": quizzes_made
+            "quizzes_created": quizzes_made,
         },
-        "achievements": achievements_out
+        "achievements": achievements_out,
     }
 
 
 # ── My Achievements endpoints (authenticated) ───────────────────────────────
 
 @router.get("/me/achievements")
-def get_my_achievements(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+async def get_my_achievements(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Returns the authenticated user's own achievements (ordered by priority)."""
-    return _serialize_achievements(_get_ordered_achievements(current_user.id, db))
+    return _serialize_achievements(await _get_ordered_achievements(current_user.id, db))
 
 
 class PriorityUpdate(BaseModel):
@@ -136,21 +145,23 @@ class PriorityUpdate(BaseModel):
 
 
 @router.patch("/me/achievements/{ua_id}/priority")
-def update_achievement_priority(
+async def update_achievement_priority(
     ua_id: int,
     payload: PriorityUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update display priority for one of the current user's achievements."""
-    ua = db.query(UserAchievement).filter(
-        UserAchievement.id == ua_id,
-        UserAchievement.user_id == current_user.id
-    ).first()
+    ua = (await db.execute(
+        select(UserAchievement).filter(
+            UserAchievement.id == ua_id,
+            UserAchievement.user_id == current_user.id,
+        )
+    )).scalars().first()
     if not ua:
         raise HTTPException(status_code=404, detail="Achievement not found")
     if not (0 <= payload.priority <= 10):
         raise HTTPException(status_code=422, detail="Priority must be between 0 and 10")
     ua.priority = payload.priority
-    db.commit()
+    await db.commit()
     return {"ua_id": ua_id, "priority": ua.priority}

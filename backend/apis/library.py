@@ -4,14 +4,15 @@ import io
 import zipfile
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from database import get_db
 from models.user import User, UserRole
 from models.library import Note, Collection, CollectionNote, FavoriteNote, VisibilityEnum
 from pydantic import BaseModel
 from security import get_current_user, require_premium_access
 
-from storage import s3_client, R2_BUCKET_NAME
+from storage import get_s3_client, R2_BUCKET_NAME
 
 router = APIRouter(prefix="/library", tags=["Grand Library"])
 
@@ -37,7 +38,7 @@ async def upload_note(
     topic_ids: str = Form(None),
     file: UploadFile = File(...),
     is_premium: bool = Form(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Saves the physical file and logs it in the database."""
@@ -65,24 +66,19 @@ async def upload_note(
     # 3. Generate a safe object key
     safe_filename = f"notes/user_{current_user.id}_mod_{module_id}_{file.filename}"
     
-    # 4. Read file content into memory NOW (before handing off to thread)
-    #    We must do this in the async context before spawning a thread.
+    # 4. Read file content into memory
     file_bytes = await file.read()
-    
-    import io, asyncio
-
-    def _upload_to_r2():
-        """Runs in a thread pool — keeps the event loop free during the entire S3 transfer."""
-        s3_client.upload_fileobj(
-            io.BytesIO(file_bytes),
-            R2_BUCKET_NAME,
-            safe_filename,
-            ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'}
-        )
+    import io
 
     # 5. Upload to Cloudflare R2 without blocking the event loop
     try:
-        await asyncio.to_thread(_upload_to_r2)
+        async with get_s3_client() as client:
+            await client.upload_fileobj(
+                io.BytesIO(file_bytes),
+                R2_BUCKET_NAME,
+                safe_filename,
+                ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'}
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload to the clouds: {str(e)}")
         
@@ -99,19 +95,19 @@ async def upload_note(
         topic_ids=topic_ids
     )
     db.add(new_note)
-    db.commit()
-    db.refresh(new_note)
+    await db.commit()
+    await db.refresh(new_note)
     
     return {"message": "Scroll safely stored in the archives.", "note_id": new_note.id}
 
 @router.delete("/notes/{note_id}")
-def hard_delete_note(
+async def hard_delete_note(
     note_id: int, 
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     """The Hard Delete: Destroys the DB record (cascading) AND the physical file."""
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
     
     if not note:
         raise HTTPException(status_code=404, detail="Scroll not found.")
@@ -121,25 +117,25 @@ def hard_delete_note(
 
     # 1. Destroy the object in R2
     try:
-        s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
-    except Exception as e:
-        # We might log this, but continue dropping the DB record
+        async with get_s3_client() as client:
+            await client.delete_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+    except Exception:
         pass
 
     # 2. Destroy the DB record (SQLAlchemy will automatically cascade and delete favorites/collection links!)
     db.delete(note)
-    db.commit()
+    await db.commit()
     
     return {"message": "Scroll burned and erased from all collections."}
 
 @router.get("/notes/download/{note_id}")
-def download_single_note(
+async def download_single_note(
     note_id: int, 
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     """Serves the file to the user."""
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
     if not note:
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
         
@@ -147,20 +143,21 @@ def download_single_note(
         require_premium_access(current_user, db)
         
     try:
-        presigned_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': R2_BUCKET_NAME, 'Key': note.file_url},
-            ExpiresIn=900
-        )
+        async with get_s3_client() as client:
+            presigned_url = await client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': R2_BUCKET_NAME, 'Key': note.file_url},
+                ExpiresIn=900
+            )
         return {"url": presigned_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch scroll: {str(e)}")
 
 @router.get("/notes/text/{note_id}")
-def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def extract_note_text(note_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Extracts and returns plain text from a PDF scroll for read-aloud."""
     from pypdf import PdfReader
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
     if not note:
         raise HTTPException(status_code=404, detail="Scroll has been lost to time.")
         
@@ -170,9 +167,10 @@ def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user:
     if note.file_type != "pdf":
         raise HTTPException(status_code=400, detail="Only PDF scrolls can be read aloud.")
     try:
-        # Fetch file from R2 directly into memory
-        response = s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
-        pdf_stream = io.BytesIO(response['Body'].read())
+        async with get_s3_client() as client:
+            response = await client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+            pdf_bytes = await response['Body'].read()
+        pdf_stream = io.BytesIO(pdf_bytes)
         reader = PdfReader(pdf_stream)
         pages_text = []
         for page in reader.pages:
@@ -190,16 +188,16 @@ def extract_note_text(note_id: int, db: Session = Depends(get_db), current_user:
 
 # ─── Note metadata (for permalink page) ───────────────────────────────────────
 @router.get("/notes/{note_id}/info")
-def get_note_info(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_note_info(note_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Returns public metadata for a single note — used by the NoteViewer permalink page."""
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
     if not note:
         raise HTTPException(status_code=404, detail="Scroll not found.")
-    uploader = db.query(User).filter(User.id == note.uploader_id).first()
+    uploader = (await db.execute(select(User).filter(User.id == note.uploader_id))).scalars().first()
     uploader_name = f"{uploader.first_name} {uploader.last_name}".strip() if uploader else "Unknown Scholar"
-    is_fav = db.query(FavoriteNote).filter(
+    is_fav = (await db.execute(select(FavoriteNote).filter(
         FavoriteNote.note_id == note_id, FavoriteNote.user_id == current_user.id
-    ).first() is not None
+    ))).scalars().first() is not None
     return {
         "id": note.id, "title": note.title, "description": note.description,
         "file_type": note.file_type, "uploader_id": note.uploader_id,
@@ -222,7 +220,7 @@ async def text_to_speech_note(
     note_id: int,
     voice: str = "en-US-JennyNeural",
     rate: str = "+0%",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Generates an MP3 audio file for the note using Microsoft Edge Neural TTS."""
@@ -236,7 +234,7 @@ async def text_to_speech_note(
     if rate not in ALLOWED_TTS_RATES:
         rate = "+0%"
 
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
     if not note or not os.path.exists(note.file_url):
         raise HTTPException(status_code=404, detail="Scroll not found.")
     if note.file_type != "pdf":
@@ -285,22 +283,26 @@ async def text_to_speech_note(
 # 🗂️ COLLECTIONS & DYNAMIC ZIP STREAMING
 # ==========================================
 @router.get("/collections/{collection_id}/zip")
-def download_collection_as_zip(collection_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def download_collection_as_zip(collection_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     
     # Check if they are downloading their "Favorites"
     if collection_id == 'favorites':
-        linked_notes = db.query(Note).join(FavoriteNote).filter(FavoriteNote.user_id == current_user.id).all()
+        fav_links = (await db.execute(select(FavoriteNote).filter(FavoriteNote.user_id == current_user.id))).scalars().all()
+        note_ids = [f.note_id for f in fav_links]
+        linked_notes = (await db.execute(select(Note).filter(Note.id.in_(note_ids)))).scalars().all()
         collection_title = "Liked_Scrolls"
     else:
         # Otherwise, handle a normal collection
         col_id_int = int(collection_id)
-        collection = db.query(Collection).filter(Collection.id == col_id_int).first()
+        collection = (await db.execute(select(Collection).filter(Collection.id == col_id_int))).scalars().first()
         if not collection: raise HTTPException(status_code=404, detail="Collection not found.")
         
         if collection.visibility == VisibilityEnum.PRIVATE and collection.creator_id != current_user.id and current_user.role.value != "noOne":
             raise HTTPException(status_code=403, detail="This archive is sealed.")
             
-        linked_notes = db.query(Note).join(CollectionNote).filter(CollectionNote.collection_id == col_id_int).all()
+        coll_links = (await db.execute(select(CollectionNote).filter(CollectionNote.collection_id == col_id_int))).scalars().all()
+        note_ids_c = [cl.note_id for cl in coll_links]
+        linked_notes = (await db.execute(select(Note).filter(Note.id.in_(note_ids_c)))).scalars().all()
         collection_title = collection.title
 
     if not linked_notes: raise HTTPException(status_code=400, detail="This collection is empty.")
@@ -309,8 +311,9 @@ def download_collection_as_zip(collection_id: str, db: Session = Depends(get_db)
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for note in linked_notes:
             try:
-                response = s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
-                file_bytes = response['Body'].read()
+                async with get_s3_client() as client:
+                    response = await client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+                    file_bytes = await response['Body'].read()
                 zip_file.writestr(f"{note.title}.{note.file_type}", file_bytes)
             except Exception:
                 pass  # Skip files that got lost in the void
@@ -324,27 +327,26 @@ def download_collection_as_zip(collection_id: str, db: Session = Depends(get_db)
 
 # 👇 Ensure you are passing current_user in!
 @router.get("/notes/module/{module_id}")
-def get_notes_by_module(
+async def get_notes_by_module(
     module_id: int, 
     unitId: int = None,
     topicId: int = None,
     recommended: str = None,
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Note).filter(Note.module_id == module_id)
+    stmt = select(Note).filter(Note.module_id == module_id)
     if unitId:
-        query = query.filter(Note.unit_id == unitId)
+        stmt = stmt.filter(Note.unit_id == unitId)
     if topicId:
-        query = query.filter(Note.topic_ids.like(f"%{topicId}%"))
+        stmt = stmt.filter(Note.topic_ids.like(f"%{topicId}%"))
     if recommended == 'true':
-        query = query.filter(Note.is_recommended == True)
-        
-    notes = query.all()
+        stmt = stmt.filter(Note.is_recommended == True)
+    notes = (await db.execute(stmt)).scalars().all()
     
     result = []
     for n in notes:
-        uploader = db.query(User).filter(User.id == n.uploader_id).first()
+        uploader = (await db.execute(select(User).filter(User.id == n.uploader_id))).scalars().first()
         
         if uploader and hasattr(uploader.role, 'value'): creator_role = uploader.role.value
         elif uploader: creator_role = str(uploader.role).replace('UserRole.', '')
@@ -353,10 +355,10 @@ def get_notes_by_module(
         uploader_name = f"{uploader.first_name} {uploader.last_name}" if uploader else "Unknown Scholar"
         
         # 👇 NEW: Check if the current user has favorited this scroll!
-        is_fav = db.query(FavoriteNote).filter(
+        is_fav = (await db.execute(select(FavoriteNote).filter(
             FavoriteNote.note_id == n.id, 
             FavoriteNote.user_id == current_user.id
-        ).first() is not None
+        ))).scalars().first() is not None
             
         result.append({
             "id": n.id, "title": n.title, "description": n.description,
@@ -373,12 +375,12 @@ def get_notes_by_module(
 from typing import Optional
 
 @router.get("/collections")
-def get_all_collections(module_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_all_collections(module_id: Optional[int] = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = []
     
     # 1. Inject the "Virtual" Favorites Collection ONLY if not filtering by module
     if module_id is None:
-        fav_count = db.query(FavoriteNote).filter(FavoriteNote.user_id == current_user.id).count()
+        fav_count = (await db.execute(select(func.count(FavoriteNote.id)).filter(FavoriteNote.user_id == current_user.id))).scalar() or 0
         result.append({
             "id": "favorites", # 👈 String ID!
             "title": "Liked Scrolls",
@@ -396,23 +398,21 @@ def get_all_collections(module_id: Optional[int] = None, db: Session = Depends(g
     # 2. Fetch Public + User's Private Collections
     is_admin = current_user.role.value in ["admin", "noOne"]
     
-    query = db.query(Collection).filter(
-        (Collection.visibility == VisibilityEnum.PUBLIC) | 
+    stmt = select(Collection).filter(
+        (Collection.visibility == VisibilityEnum.PUBLIC) |
         (Collection.creator_id == current_user.id)
     )
-    
     if not is_admin:
-        query = query.filter(Collection.is_hidden == False)
-        
+        stmt = stmt.filter(Collection.is_hidden == False)
     if module_id is not None:
-        query = query.filter(Collection.module_id == module_id)
-        
-    cols = query.order_by(Collection.id.desc()).all()
+        stmt = stmt.filter(Collection.module_id == module_id)
+    stmt = stmt.order_by(Collection.id.desc())
+    cols = (await db.execute(stmt)).scalars().all()
 
     for c in cols:
-        creator = db.query(User).filter(User.id == c.creator_id).first()
+        creator = (await db.execute(select(User).filter(User.id == c.creator_id))).scalars().first()
         creator_role = creator.role.value if creator and hasattr(creator.role, 'value') else "user"
-        note_count = db.query(CollectionNote).filter(CollectionNote.collection_id == c.id).count()
+        note_count = (await db.execute(select(CollectionNote).filter(CollectionNote.collection_id == c.id))).scalar() or 0
         
         result.append({
             "id": c.id, "title": c.title, "description": c.description,
@@ -433,30 +433,30 @@ class GovernanceToggle(BaseModel):
     is_premium: bool = None
 
 @router.put("/notes/{note_id}/governance")
-def toggle_note_governance(
+async def toggle_note_governance(
     note_id: int, flags: GovernanceToggle, 
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     if current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="Only No One possesses this power.")
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
     if flags.is_pinned is not None: note.is_pinned = flags.is_pinned
     if flags.is_recommended is not None: note.is_recommended = flags.is_recommended
     if flags.is_premium is not None: note.is_premium = flags.is_premium
-    db.commit()
+    await db.commit()
     return {"message": "Scroll governance updated."}
 
 @router.put("/collections/{collection_id}/governance")
-def toggle_collection_governance(
+async def toggle_collection_governance(
     collection_id: int, flags: GovernanceToggle, 
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     if current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="Only No One possesses this power.")
-    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    collection = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if flags.is_pinned is not None: collection.is_pinned = flags.is_pinned
     if flags.is_recommended is not None: collection.is_recommended = flags.is_recommended
-    db.commit()
+    await db.commit()
     return {"message": "Archive governance updated."}
 
 
@@ -470,21 +470,21 @@ class CollectionCreate(BaseModel):
     is_premium: bool = False
 
 @router.post("/notes/{note_id}/favorite")
-def toggle_favorite(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def toggle_favorite(note_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Toggles the heart icon."""
-    existing = db.query(FavoriteNote).filter(FavoriteNote.note_id == note_id, FavoriteNote.user_id == current_user.id).first()
+    existing = (await db.execute(select(FavoriteNote).filter(FavoriteNote.note_id == note_id, FavoriteNote.user_id == current_user.id))).scalars().first()
     if existing:
         db.delete(existing)
-        db.commit()
+        await db.commit()
         return {"message": "Removed from favorites.", "is_favorited": False}
     
     new_fav = FavoriteNote(note_id=note_id, user_id=current_user.id)
     db.add(new_fav)
-    db.commit()
+    await db.commit()
     return {"message": "Added to favorites.", "is_favorited": True}
 
 @router.post("/collections")
-def create_collection(data: CollectionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Forges a new archive."""
     if data.is_premium and current_user.role != UserRole.NO_ONE:
         raise HTTPException(status_code=403, detail="Only No One can create premium content.")
@@ -501,31 +501,36 @@ def create_collection(data: CollectionCreate, db: Session = Depends(get_db), cur
         is_premium=data.is_premium
     )
     db.add(new_col)
-    db.commit()
-    db.refresh(new_col)
+    await db.commit()
+    await db.refresh(new_col)
     return {"id": new_col.id, "title": new_col.title, "visibility": new_col.visibility.value}
 
 @router.post("/collections/{collection_id}/notes/{note_id}")
-def add_note_to_collection(collection_id: int, note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_note_to_collection(collection_id: int, note_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Links a scroll to a specific archive."""
-    col = db.query(Collection).filter(Collection.id == collection_id, Collection.creator_id == current_user.id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id, Collection.creator_id == current_user.id))).scalars().first()
     if not col: raise HTTPException(status_code=403, detail="Not your archive.")
         
-    exists = db.query(CollectionNote).filter_by(collection_id=collection_id, note_id=note_id).first()
+    exists = (await db.execute(select(CollectionNote).filter(
+        CollectionNote.collection_id == collection_id,
+        CollectionNote.note_id == note_id
+    ))).scalars().first()
     if not exists:
         db.add(CollectionNote(collection_id=collection_id, note_id=note_id))
-        db.commit()
+        await db.commit()
     return {"message": "Scroll safely stored in your archive."}
 
 @router.get("/notes/favorites/me")
-def get_my_favorite_notes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_my_favorite_notes(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetches all scrolls the user has favorited."""
     # Join Note with FavoriteNote where user_id matches
-    fav_notes = db.query(Note).join(FavoriteNote).filter(FavoriteNote.user_id == current_user.id).all()
+    fav_links = (await db.execute(select(FavoriteNote).filter(FavoriteNote.user_id == current_user.id))).scalars().all()
+    fav_note_ids = [f.note_id for f in fav_links]
+    fav_notes = (await db.execute(select(Note).filter(Note.id.in_(fav_note_ids)))).scalars().all()
     
     result = []
     for n in fav_notes:
-        uploader = db.query(User).filter(User.id == n.uploader_id).first()
+        uploader = (await db.execute(select(User).filter(User.id == n.uploader_id))).scalars().first()
         if uploader and hasattr(uploader.role, 'value'): creator_role = uploader.role.value
         elif uploader: creator_role = str(uploader.role).replace('UserRole.', '')
         else: creator_role = "user"
@@ -542,14 +547,14 @@ def get_my_favorite_notes(db: Session = Depends(get_db), current_user: User = De
 # ⚠️  IMPORTANT: /collections/me MUST be registered BEFORE /collections/{collection_id}
 # otherwise FastAPI captures "me" as collection_id (int) → 422 Unprocessable Entity.
 @router.get("/collections/me")
-def get_my_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_my_collections(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetches the user's personal vaults AND injects the Virtual Favorites Archive."""
     
     # 1. Fetch physical collections
-    cols = db.query(Collection).filter(Collection.creator_id == current_user.id).order_by(Collection.id.desc()).all()
+    cols = (await db.execute(select(Collection).filter(Collection.creator_id == current_user.id).order_by(Collection.id.desc()))).scalars().all()
     
     # 2. Count their favorites to show on the card
-    fav_count = db.query(FavoriteNote).filter(FavoriteNote.user_id == current_user.id).count()
+    fav_count = (await db.execute(select(func.count(FavoriteNote.id)).filter(FavoriteNote.user_id == current_user.id))).scalar() or 0
 
     # 3. Inject the "Virtual" Favorites Collection at the very top!
     result = [{
@@ -567,7 +572,7 @@ def get_my_collections(db: Session = Depends(get_db), current_user: User = Depen
 
     # 4. Append their real collections
     for c in cols:
-        note_count = db.query(CollectionNote).filter(CollectionNote.collection_id == c.id).count()
+        note_count = (await db.execute(select(func.count(CollectionNote.id)).filter(CollectionNote.collection_id == c.id))).scalar() or 0
         result.append({
             "id": c.id, 
             "title": c.title, 
@@ -584,15 +589,15 @@ def get_my_collections(db: Session = Depends(get_db), current_user: User = Depen
     return result
 
 @router.get("/collections/{collection_id}")
-def get_collection_detail(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_collection_detail(collection_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Returns metadata for a single collection, including creator info."""
-    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if not col:
         raise HTTPException(status_code=404, detail="Archive not found.")
     if col.visibility == VisibilityEnum.PRIVATE and col.creator_id != current_user.id and current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="This archive is sealed.")
-    creator = db.query(User).filter(User.id == col.creator_id).first()
-    note_count = db.query(CollectionNote).filter(CollectionNote.collection_id == col.id).count()
+    creator = (await db.execute(select(User).filter(User.id == col.creator_id))).scalars().first()
+    note_count = (await db.execute(select(CollectionNote).filter(CollectionNote.collection_id == col.id))).scalar() or 0
     return {
         "id": col.id, "title": col.title, "description": col.description,
         "visibility": col.visibility.value,
@@ -605,31 +610,22 @@ def get_collection_detail(collection_id: int, db: Session = Depends(get_db), cur
     }
 
 @router.get("/collections/{collection_id}/notes")
-def get_notes_in_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_notes_in_collection(collection_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetches all scrolls stored inside a specific archive."""
     # 1. Verify the collection exists and the user is allowed to see it
-    collection = db.query(Collection).filter(Collection.id == collection_id).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Archive not found.")
-        
-    if collection.visibility == VisibilityEnum.PRIVATE and collection.creator_id != current_user.id and current_user.role.value != "noOne":
-        raise HTTPException(status_code=403, detail="This archive is sealed.")
-
-    # 2. Fetch the notes ordered by sort_order
-    links = (
-        db.query(CollectionNote)
+    links = (await db.execute(
+        select(CollectionNote)
         .filter(CollectionNote.collection_id == collection_id)
         .order_by(CollectionNote.sort_order.asc(), CollectionNote.id.asc())
-        .all()
-    )
+    )).scalars().all()
 
     result = []
     for link in links:
         n = link.note
         if not n:
             continue
-        is_fav = db.query(FavoriteNote).filter(FavoriteNote.note_id == n.id, FavoriteNote.user_id == current_user.id).first() is not None
-        uploader = db.query(User).filter(User.id == n.uploader_id).first()
+        is_fav = (await db.execute(select(FavoriteNote).filter(FavoriteNote.note_id == n.id, FavoriteNote.user_id == current_user.id))).scalars().first() is not None
+        uploader = (await db.execute(select(User).filter(User.id == n.uploader_id))).scalars().first()
         creator_name = uploader.first_name if uploader else "Scholar"
         result.append({
             "id": n.id, "title": n.title, "description": n.description,
@@ -639,36 +635,42 @@ def get_notes_in_collection(collection_id: int, db: Session = Depends(get_db), c
     return result
 
 @router.delete("/collections/{collection_id}/notes/{note_id}")
-def remove_note_from_collection(collection_id: int, note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def remove_note_from_collection(collection_id: int, note_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Removes a scroll from an archive (owner only)."""
-    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if not col:
         raise HTTPException(status_code=404, detail="Archive not found.")
     if col.creator_id != current_user.id and current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="Not your archive.")
-    link = db.query(CollectionNote).filter_by(collection_id=collection_id, note_id=note_id).first()
+    link = (await db.execute(select(CollectionNote).filter(
+        CollectionNote.collection_id == collection_id,
+        CollectionNote.note_id == note_id
+    ))).scalars().first()
     if not link:
         raise HTTPException(status_code=404, detail="Scroll not in this archive.")
     db.delete(link)
-    db.commit()
+    await db.commit()
     return {"message": "Scroll removed from archive."}
 
 class NoteReorderRequest(BaseModel):
     note_ids: list[int]  # ordered list of note IDs, from first to last
 
 @router.patch("/collections/{collection_id}/notes/reorder")
-def reorder_notes_in_collection(collection_id: int, data: NoteReorderRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def reorder_notes_in_collection(collection_id: int, data: NoteReorderRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Updates the sort_order for notes in a collection (owner only)."""
-    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if not col:
         raise HTTPException(status_code=404, detail="Archive not found.")
     if col.creator_id != current_user.id and current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="Not your archive.")
     for idx, note_id in enumerate(data.note_ids):
-        link = db.query(CollectionNote).filter_by(collection_id=collection_id, note_id=note_id).first()
+        link = (await db.execute(select(CollectionNote).filter(
+            CollectionNote.collection_id == collection_id,
+            CollectionNote.note_id == note_id
+        ))).scalars().first()
         if link:
             link.sort_order = idx
-    db.commit()
+    await db.commit()
     return {"message": "Order saved."}
 
 
@@ -679,33 +681,33 @@ class VisibilityUpdate(BaseModel):
     visibility: str
 
 @router.put("/collections/{collection_id}/visibility")
-def update_collection_visibility(
+async def update_collection_visibility(
     collection_id: int, data: VisibilityUpdate, 
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if not col: raise HTTPException(status_code=404, detail="Archive not found.")
     
     if col.creator_id != current_user.id and current_user.role.value not in ["admin", "noOne"]:
         raise HTTPException(status_code=403, detail="Not your archive.")
     
     col.visibility = VisibilityEnum.PUBLIC if data.visibility == 'public' else VisibilityEnum.PRIVATE
-    db.commit()
+    await db.commit()
     return {"message": "Visibility updated."}
 
 @router.put("/collections/{collection_id}/hide")
-def toggle_collection_hidden(
+async def toggle_collection_hidden(
     collection_id: int, 
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     if current_user.role.value not in ["admin", "noOne"]:
         raise HTTPException(status_code=403, detail="Only Admins can hide archives.")
     
-    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if not col: raise HTTPException(status_code=404, detail="Archive not found.")
     
     col.is_hidden = not col.is_hidden
-    db.commit()
+    await db.commit()
     return {"message": "Archive hidden status toggled."}
 
 
@@ -718,12 +720,12 @@ class CollectionEditRequest(BaseModel):
     semester: Optional[int] = None
 
 @router.patch("/collections/{collection_id}/edit")
-def edit_collection(
+async def edit_collection(
     collection_id: int, data: CollectionEditRequest,
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Update archive metadata (title, description, module, year, semester, visibility)."""
-    col = db.query(Collection).filter(Collection.id == collection_id).first()
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
     if not col:
         raise HTTPException(status_code=404, detail="Archive not found.")
     if col.creator_id != current_user.id and current_user.role.value not in ["admin", "noOne"]:
@@ -740,5 +742,5 @@ def edit_collection(
         col.year = data.year
     if data.semester is not None:
         col.semester = data.semester
-    db.commit()
+    await db.commit()
     return {"message": "Archive updated successfully."}

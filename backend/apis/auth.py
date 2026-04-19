@@ -1,16 +1,17 @@
 import os
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.sql import func
 from google.oauth2 import id_token
-from google.auth.transport import requests
+from google.auth.transport import requests as google_requests
 from database import get_db
 from models.user import User, UserRole
 from models.quiz import Quiz
 from models.attempts import QuizAttempt
 from models.library import Note, Collection
-from security import create_access_token, get_password_hash, verify_password, get_current_user 
+from security import create_access_token, create_refresh_token, get_password_hash, verify_password, get_current_user 
 from pydantic import BaseModel
 from schemas.user import TokenPayload, UserResponse, UserRegister, UserLogin
 
@@ -23,15 +24,15 @@ class AuthResponse(BaseModel):
     user: UserResponse
 
 @router.post("/google", response_model=AuthResponse)
-def google_auth(
+async def google_auth(
     payload: TokenPayload, 
     response: Response, 
-    db: Session = Depends(get_db)):
+    db: AsyncSession = Depends(get_db)):
     try:
         # 1. Verify Google's token
         id_info = id_token.verify_oauth2_token(
             payload.token, 
-            requests.Request(), 
+            google_requests.Request(), 
             GOOGLE_CLIENT_ID
         )
         
@@ -41,7 +42,8 @@ def google_auth(
         picture = id_info.get("picture", "") 
 
         # 2. Find or create the user
-        user = db.query(User).filter(User.email == email).first()
+        res = await db.execute(select(User).filter(User.email == email))
+        user = res.scalars().first()
 
         if user:
             if getattr(user, 'is_suspended', False):
@@ -74,24 +76,26 @@ def google_auth(
             )
             db.add(user)
             
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
 
-        # 3. Generate internal JWT
-        access_token = create_access_token(data={
+        # 3. Generate internal JWTs
+        token_data = {
             "sub": str(user.id),
             "role": user.role.value if hasattr(user.role, 'value') else str(user.role) # 👈 Prevents string/enum crashes
-        })      
-        
+        }
+        access_token = create_access_token(data=token_data)      
+        refresh_token = create_refresh_token(data=token_data)
+
         # 4. Set the HttpOnly Cookie (Auth)
         is_secure = os.getenv("APP_ENV") == "production"
+        # Access token lasts 15m (900s)
         response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            samesite="lax",
-            secure=is_secure, # Set to True when you host with HTTPS
-            max_age=604800 # 7 days
+            key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900
+        )
+        # Refresh token lasts 7 days
+        response.set_cookie(
+            key="refresh_token", value=refresh_token, httponly=True, samesite="lax", secure=is_secure, max_age=604800, path="/auth/refresh"
         )
         
         # 5. Set the CSRF Cookie (Not HttpOnly so React can read it)
@@ -102,7 +106,7 @@ def google_auth(
             httponly=False, 
             samesite="lax",
             secure=is_secure,
-            max_age=604800
+            max_age=900
         )
 
         return {"user": user}
@@ -114,13 +118,14 @@ def google_auth(
         )
 
 @router.post("/register", response_model=AuthResponse)
-def local_register(
+async def local_register(
     payload: UserRegister, 
     response: Response, 
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
-        user = db.query(User).filter(User.email == payload.email).first()
+        res = await db.execute(select(User).filter(User.email == payload.email))
+        user = res.scalars().first()
         if user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
@@ -147,33 +152,30 @@ def local_register(
             auth_provider="local"
         )
         db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
+        await db.commit()
+        await db.refresh(new_user)
 
-        access_token = create_access_token(data={
+        token_data = {
             "sub": str(new_user.id),
             "role": new_user.role.value if hasattr(new_user.role, 'value') else str(new_user.role)
-        })      
+        }
+        access_token = create_access_token(data=token_data)      
+        refresh_token = create_refresh_token(data=token_data)
         
         is_secure = os.getenv("APP_ENV") == "production"
         
+        # Access token 15 min
         response.set_cookie(
-            key="access_token", 
-            value=access_token, 
-            httponly=True, 
-            samesite="lax", 
-            secure=is_secure, 
-            max_age=604800
+            key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900
+        )
+        # Refresh token 7 days
+        response.set_cookie(
+            key="refresh_token", value=refresh_token, httponly=True, samesite="lax", secure=is_secure, max_age=604800, path="/auth/refresh"
         )
         
         csrf_token = secrets.token_hex(32)
         response.set_cookie(
-            key="csrftoken", 
-            value=csrf_token, 
-            httponly=False, 
-            samesite="lax", 
-            secure=is_secure, 
-            max_age=604800
+            key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=900
         )
 
         return {"user": new_user}
@@ -184,12 +186,14 @@ def local_register(
         raise HTTPException(status_code=500, detail=f"The Citadel's register is currently locked: {str(e)}")
 
 @router.post("/login", response_model=AuthResponse)
-def local_login(
+async def local_login(
     payload: UserLogin, 
     response: Response, 
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == payload.email).first()
+    res = await db.execute(select(User).filter(User.email == payload.email))
+    user = res.scalars().first()
+    
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
@@ -203,32 +207,37 @@ def local_login(
         )
 
     user.last_active_at = func.now()
-    db.commit()
+    await db.commit()
 
-    access_token = create_access_token(data={
+    token_data = {
         "sub": str(user.id),
         "role": user.role.value if hasattr(user.role, 'value') else str(user.role)
-    })      
+    }
+    access_token = create_access_token(data=token_data)      
+    refresh_token = create_refresh_token(data=token_data)
     
     is_secure = os.getenv("APP_ENV") == "production"
-    response.set_cookie(key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=604800)
+    response.set_cookie(key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900)
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="lax", secure=is_secure, max_age=604800, path="/auth/refresh")
+    
     csrf_token = secrets.token_hex(32)
-    response.set_cookie(key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=604800)
+    response.set_cookie(key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=900)
 
     return {"user": user}
 
 @router.post("/logout")
-def logout(response: Response):
+async def logout(response: Response):
     """
     Clears the authentication and CSRF cookies to end the session.
     """
     response.delete_cookie(key="access_token", path="/", httponly=True, samesite="lax")
+    response.delete_cookie(key="refresh_token", path="/auth/refresh", httponly=True, samesite="lax")
     response.delete_cookie(key="csrftoken", path="/", httponly=False, samesite="lax")
     return {"message": "You have left the Citadel. Your watch has ended."}
 
 
 @router.get("/me")
-def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_me(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Validates the current session cookie. Returns 401 if the user no longer exists in DB."""
     return {
         "id": current_user.id,
@@ -243,9 +252,9 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
 from schemas.user import ProfileUpdateRequest
 
 @router.patch("/profile", response_model=UserResponse)
-def update_profile(
+async def update_profile(
     payload: ProfileUpdateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Update the current user's display name and social links."""
@@ -260,31 +269,41 @@ def update_profile(
     if payload.current_year is not None: current_user.current_year = payload.current_year
     if payload.current_semester is not None: current_user.current_semester = payload.current_semester
     if payload.preferences is not None: current_user.preferences = payload.preferences
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 
 @router.get("/profile/stats")
-def get_profile_stats(
-    db: Session = Depends(get_db),
+async def get_profile_stats(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Return aggregate performance stats for the current user."""
     from models.quiz import Question
     uid = current_user.id
 
-    quizzes_taken    = db.query(QuizAttempt).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED").count()
-    quizzes_made     = db.query(Quiz).filter(Quiz.created_user_id == uid, Quiz.is_deleted == False).count()
-    notes_uploaded   = db.query(Note).filter(Note.uploader_id == uid).count()
-    collections_made = db.query(Collection).filter(Collection.creator_id == uid).count()
+    res_q_taken = await db.execute(select(func.count(QuizAttempt.id)).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED"))
+    quizzes_taken = res_q_taken.scalar() or 0
+
+    res_q_made = await db.execute(select(func.count(Quiz.id)).filter(Quiz.created_user_id == uid, Quiz.is_deleted == False))
+    quizzes_made = res_q_made.scalar() or 0
+
+    res_notes = await db.execute(select(func.count(Note.id)).filter(Note.uploader_id == uid))
+    notes_uploaded = res_notes.scalar() or 0
+
+    res_col = await db.execute(select(func.count(Collection.id)).filter(Collection.creator_id == uid))
+    collections_made = res_col.scalar() or 0
 
     # Compute score percentages from completed attempts
-    attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED").all()
+    res_attempts = await db.execute(select(QuizAttempt).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED"))
+    attempts = res_attempts.scalars().all()
+    
     scores = []
     for a in attempts:
         # Sum max marks for all questions in this quiz
-        max_marks = db.query(func.sum(Question.marks)).filter(Question.quiz_id == a.quiz_id).scalar() or 0
+        res_marks = await db.execute(select(func.sum(Question.marks)).filter(Question.quiz_id == a.quiz_id))
+        max_marks = res_marks.scalar() or 0
         if max_marks > 0:
             scores.append(round((a.total_marks / max_marks) * 100, 1))
 
@@ -300,3 +319,42 @@ def get_profile_stats(
         "best_score_pct":   best_score,
         "member_since":     current_user.created_at,
     }
+
+from jose import jwt, JWTError
+from security import SECRET_KEY, ALGORITHM
+
+@router.post("/refresh")
+async def refresh_token(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """Exchange a valid refresh token for a new access token."""
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token missing.")
+    
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type.")
+        
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload.")
+            
+        res = await db.execute(select(User).filter(User.id == int(user_id)))
+        user = res.scalars().first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found.")
+            
+        token_data = {
+            "sub": str(user.id),
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role)
+        }
+        new_access_token = create_access_token(data=token_data)
+        
+        is_secure = os.getenv("APP_ENV") == "production"
+        response.set_cookie(
+            key="access_token", value=new_access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900
+        )
+        return {"message": "Token refreshed successfully"}
+        
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token.")

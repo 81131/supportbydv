@@ -1,7 +1,8 @@
 import os
 import shutil
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from database import get_db
 from models.quiz import Quiz, Question, AnswerOption, QuestionType
 from models.attempts import QuizAttempt, QuestionAttempt
@@ -42,7 +43,7 @@ async def upload_quiz_resource(
     return {"message": "Resource uploaded successfully.", "file_url": f"/static/quiz_resources/{safe_filename}"}
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_quiz(quiz_in: QuizCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if getattr(quiz_in, "is_premium", False) and current_user.role != UserRole.NO_ONE:
         raise HTTPException(status_code=403, detail="Only No One can create premium content.")
         
@@ -61,7 +62,7 @@ def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user
         is_recommended=False
     )
     db.add(new_quiz)
-    db.flush() 
+    await db.flush() 
 
     for q_data in quiz_in.questions:
         import json
@@ -73,26 +74,26 @@ def create_quiz(quiz_in: QuizCreate, db: Session = Depends(get_db), current_user
             topic_ids=json.dumps(q_data.topic_ids) if q_data.topic_ids else None
         )
         db.add(new_question)
-        db.flush() 
+        await db.flush() 
         if q_data.options:
             for opt_data in q_data.options:
                 new_opt = AnswerOption(question_id=new_question.id, text=opt_data.text, is_correct=opt_data.is_correct)
                 db.add(new_opt)
 
-    db.commit()
-    db.refresh(new_quiz)
+    await db.commit()
+    await db.refresh(new_quiz)
     return {"message": "Scroll successfully forged!", "quiz_id": new_quiz.id}
 
 
 @router.get("/me")
-def get_my_quizzes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_my_quizzes(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch all scrolls forged by the current scholar."""
-    quizzes = db.query(Quiz).filter(Quiz.created_user_id == current_user.id).all()
+    quizzes = (await db.execute(select(Quiz).filter(Quiz.created_user_id == current_user.id))).scalars().all()
     # Attach question count and attempt count for the dashboard
     result = []
     for q in quizzes:
-        q_count = db.query(Question).filter(Question.quiz_id == q.id, Question.version == q.version).count()
-        a_count = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == q.id).count()
+        q_count = (await db.execute(select(func.count(Question.id)).filter(Question.quiz_id == q.id, Question.version == q.version))).scalar() or 0
+        a_count = (await db.execute(select(func.count(QuizAttempt.id)).filter(QuizAttempt.quiz_id == q.id))).scalar() or 0
         result.append({
             "id": q.id, "title": q.title, "description": q.description,
             "question_count": q_count, "attempt_count": a_count,
@@ -104,19 +105,19 @@ def get_my_quizzes(db: Session = Depends(get_db), current_user: User = Depends(g
 from datetime import datetime, timedelta
 
 @router.get("/analytics/me")
-def get_my_analytics(
+async def get_my_analytics(
     timeframe: str = 'all',
     peer_group: str = 'batch',
     module_id: str = 'all',
     difficulty: str = 'all',
     attempt_type: str = 'all',
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     """Fetch V3 Performance Matrices comparing student vs dynamically calculated cohort peers with deep filtering."""
     
     # 1. Base Query for ALL Completed Attempts globally to figure out question difficulties and top users globally
-    all_completed = db.query(QuizAttempt).filter(QuizAttempt.status == "COMPLETED").all()
+    all_completed = (await db.execute(select(func.count(QuizAttempt.id)).filter(QuizAttempt.status == "COMPLETED"))).scalars().all()
     
     # 1a. Figure out global question difficulties
     # difficulty_map: question_id -> 'easy'|'medium'|'hard'
@@ -127,7 +128,7 @@ def get_my_analytics(
     for a in all_completed:
         if a.user_id not in user_scores: user_scores[a.user_id] = {"earned": 0.0, "max": 0.0}
         user_scores[a.user_id]["earned"] += a.total_marks
-        qs = db.query(Question).filter(Question.quiz_id == a.quiz_id, Question.version == a.quiz_version).all()
+        qs = (await db.execute(select(Question).filter(Question.quiz_id == a.quiz_id, Question.version == a.quiz_version))).scalars().all()
         q_dict = { q.id: q.marks for q in qs }
         user_scores[a.user_id]["max"] += sum(q_dict.values())
         
@@ -173,14 +174,14 @@ def get_my_analytics(
         my_percentile = 100
         
     # 2. Filter My Attempts based on timeframe, module_id, attempt_type
-    query = db.query(QuizAttempt).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
+    stmt = select(QuizAttempt).filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
     
     now = datetime.utcnow()
-    if timeframe == '7d': query = query.filter(QuizAttempt.created_at >= now - timedelta(days=7))
-    elif timeframe == '30d': query = query.filter(QuizAttempt.created_at >= now - timedelta(days=30))
-    elif timeframe == 'semester': query = query.filter(QuizAttempt.created_at >= now - timedelta(days=120))
+    if timeframe == '7d': stmt = stmt.filter(QuizAttempt.created_at >= now - timedelta(days=7))
+    elif timeframe == '30d': stmt = stmt.filter(QuizAttempt.created_at >= now - timedelta(days=30))
+    elif timeframe == 'semester': stmt = stmt.filter(QuizAttempt.created_at >= now - timedelta(days=120))
     
-    my_attempts = query.order_by(QuizAttempt.created_at.asc()).all()
+    my_attempts = (await db.execute(stmt.order_by(QuizAttempt.created_at.asc()))).scalars().all()
     
     # 3. Calculate Comeback Rate (longitudinally over all my_attempts)
     comeback_opportunities = 0
@@ -188,7 +189,7 @@ def get_my_analytics(
     question_history = {} # q_id -> bool (was_fail)
     
     for a in my_attempts:
-        qs = db.query(Question).filter(Question.quiz_id == a.quiz_id, Question.version == a.quiz_version).all()
+        qs = (await db.execute(select(Question).filter(Question.quiz_id == a.quiz_id, Question.version == a.quiz_version))).scalars().all()
         q_dict = { q.id: q.marks for q in qs }
         for qa in a.question_attempts:
             max_m = q_dict.get(qa.question_id, 1.0)
@@ -205,7 +206,7 @@ def get_my_analytics(
     # Now deeply filter my_attempts
     filtered_my_attempts = []
     for a in my_attempts:
-        quiz = db.query(Quiz).filter(Quiz.id == a.quiz_id).first()
+        quiz = (await db.execute(select(Quiz).filter(Quiz.id == a.quiz_id))).scalars().first()
         if not quiz: continue
         if module_id != 'all' and str(quiz.module_id) != str(module_id): continue
         if attempt_type == 'first' and a.attempt_number > 1: continue
@@ -227,7 +228,7 @@ def get_my_analytics(
     for a, quiz in filtered_my_attempts:
         if a.created_at: unique_dates.add(a.created_at.date())
         
-        current_questions = db.query(Question).filter(Question.quiz_id == quiz.id, Question.version == a.quiz_version).all()
+        current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz.id, Question.version == a.quiz_version))).scalars().all()
         q_dict = { q.id: q for q in current_questions }
         
         if difficulty != 'all':
@@ -285,7 +286,7 @@ def get_my_analytics(
                     for t_id in t_ids:
                         from models.quiz import LectureTopic
                         if t_id not in topic_scores_acc:
-                            lt = db.query(LectureTopic).filter(LectureTopic.id == t_id).first()
+                            lt = (await db.execute(select(LectureTopic).filter(LectureTopic.id == t_id))).scalars().first()
                             topic_scores_acc[t_id] = {"earned": 0.0, "max": 0.0, "name": lt.name if lt else f"Topic {t_id}"}
                         topic_scores_acc[t_id]["earned"] += qa.marks_awarded
                         topic_scores_acc[t_id]["max"] += q_obj.marks
@@ -349,7 +350,7 @@ def get_my_analytics(
     peer_topic_acc = {}
     
     for a, quiz in filtered_my_attempts:
-        current_questions = db.query(Question).filter(Question.quiz_id == quiz.id, Question.version == a.quiz_version).all()
+        current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz.id, Question.version == a.quiz_version))).scalars().all()
         q_dict = { q.id: q for q in current_questions }
         if difficulty != 'all':
             valid_q_ids = [q.id for q in current_questions if difficulty_map.get(q.id, 'medium') == difficulty]
@@ -379,7 +380,7 @@ def get_my_analytics(
                         for t_id in t_ids:
                             if t_id not in peer_topic_acc:
                                 from models.quiz import LectureTopic
-                                lt = db.query(LectureTopic).filter(LectureTopic.id == t_id).first()
+                                lt = (await db.execute(select(LectureTopic).filter(LectureTopic.id == t_id))).scalars().first()
                                 peer_topic_acc[t_id] = {"earned": 0.0, "max": 0.0, "name": lt.name if lt else f"Topic {t_id}"}
                             peer_topic_acc[t_id]["earned"] += pqa.marks_awarded
                             peer_topic_acc[t_id]["max"] += q_obj.marks
@@ -414,13 +415,13 @@ def get_my_analytics(
     }
 
 @router.get("/module/{module_id}")
-def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
-    quizzes = db.query(Quiz).filter(Quiz.module_id == module_id, Quiz.is_deleted == False, Quiz.is_published == True).offset(offset).limit(limit).all()
+async def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db: AsyncSession = Depends(get_db)):
+    quizzes = (await db.execute(select(Quiz).filter(Quiz.module_id == module_id, Quiz.is_deleted == False, Quiz.is_published == True).offset(offset).limit(limit))).scalars().all()
     
     result = []
     for q in quizzes:
         # 1. Fetch creator to extract the role securely
-        creator = db.query(User).filter(User.id == q.created_user_id).first()
+        creator = (await db.execute(select(User).filter(User.id == q.created_user_id))).scalars().first()
         
         # 2. Safely extract the role (Handling SQLAlchemy Enum weirdness)
         if creator and hasattr(creator.role, 'value'):
@@ -450,17 +451,17 @@ def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db:
     return result
 
 @router.get("/{quiz_id}")
-def get_single_quiz(quiz_id: int, db: Session = Depends(get_db)):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+async def get_single_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     
-    creator = db.query(User).filter(User.id == quiz.created_user_id).first()
+    creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
     creator_role = creator.role.value if creator else "user"
     
     questions_list = []
     # Filter questions by current quiz version
-    current_questions = db.query(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version).all()
+    current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version))).scalars().all()
     
     for q in current_questions:
         options_list = [{"text": opt.text, "is_correct": opt.is_correct} for opt in q.options]
@@ -499,8 +500,8 @@ def get_single_quiz(quiz_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{quiz_id}")
-def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+async def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     if quiz.created_user_id != current_user.id: 
@@ -519,7 +520,7 @@ def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: Session = Depends(get_db)
     quiz.version = quiz.version + 1  
     
     # 2. Add new versions of these questions (Protecting history)
-    db.flush() 
+    await db.flush() 
 
     for q_data in quiz_in.questions:
         import json
@@ -537,26 +538,26 @@ def update_quiz(quiz_id: int, quiz_in: QuizCreate, db: Session = Depends(get_db)
             version=quiz.version # 👈 Link to this specific version!
         )
         db.add(new_question)
-        db.flush() 
+        await db.flush() 
         if q_data.options:
             for opt_data in q_data.options:
                 new_opt = AnswerOption(question_id=new_question.id, text=opt_data.text, is_correct=opt_data.is_correct)
                 db.add(new_opt)
     
-    db.commit()
+    await db.commit()
     return {"message": "Scroll successfully revised! Old attempts remain valid for past versions."}
 
 
 @router.delete("/{quiz_id}")
-def delete_quiz(quiz_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     if not (quiz.created_user_id == current_user.id or current_user.role == UserRole.ADMIN or current_user.role == UserRole.NO_ONE):
         raise HTTPException(status_code=403, detail="Unauthorized.")
     
     quiz.is_deleted = True
-    db.commit()
+    await db.commit()
     return {"message": "Scroll deleted."}
 
 
@@ -565,17 +566,17 @@ def delete_quiz(quiz_id: int, db: Session = Depends(get_db), current_user: User 
 # ==========================================
 
 @router.get("/{quiz_id}/take")
-def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+async def get_safe_quiz_for_taking(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     
-    creator = db.query(User).filter(User.id == quiz.created_user_id).first()
+    creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
     creator_role = creator.role.value if creator else "user"
     
     safe_questions = []
     # Only fetch questions for the CURRENT version of the quiz
-    current_questions = db.query(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version).all()
+    current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version))).scalars().all()
     
     for q in current_questions:
         options_list = [{"id": opt.id, "text": opt.text} for opt in q.options] 
@@ -585,11 +586,11 @@ def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), curren
         })
 
     # Fetch Draft Attempt
-    attempt = db.query(QuizAttempt).filter(
+    attempt = (await db.execute(select(QuizAttempt).filter(
         QuizAttempt.quiz_id == quiz_id, 
         QuizAttempt.user_id == current_user.id,
         QuizAttempt.status == "IN_PROGRESS"
-    ).first()
+    ))).scalars().first()
     
     draft_answers = {}
     time_consumed = 0
@@ -630,19 +631,19 @@ def get_safe_quiz_for_taking(quiz_id: int, db: Session = Depends(get_db), curren
     }
 
 @router.post("/{quiz_id}/start")
-def start_quiz_attempt(quiz_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+async def start_quiz_attempt(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Scroll not found.")
         
-    attempt = db.query(QuizAttempt).filter(
+    attempt = (await db.execute(select(QuizAttempt).filter(
         QuizAttempt.quiz_id == quiz_id, 
         QuizAttempt.user_id == current_user.id,
         QuizAttempt.status == "IN_PROGRESS"
-    ).first()
+    ))).scalars().first()
     
     if not attempt:
-        past_attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED").count()
+        past_attempts = (await db.execute(select(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED"))).scalar() or 0
         attempt = QuizAttempt(
             user_id=current_user.id, 
             quiz_id=quiz.id, 
@@ -653,8 +654,8 @@ def start_quiz_attempt(quiz_id: int, db: Session = Depends(get_db), current_user
             status="IN_PROGRESS"
         )
         db.add(attempt)
-        db.commit()
-        db.refresh(attempt)
+        await db.commit()
+        await db.refresh(attempt)
         
     return {
         "message": "Attempt started.",
@@ -662,24 +663,24 @@ def start_quiz_attempt(quiz_id: int, db: Session = Depends(get_db), current_user
     }
 
 @router.post("/{quiz_id}/submit")
-def submit_and_grade_quiz(
+async def submit_and_grade_quiz(
     quiz_id: int, 
     submission: QuizSubmission, 
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False).first()
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
 
     student_answers = {ans.question_id: ans for ans in submission.answers}
     
     # Check for existing IN_PROGRESS attempt
-    attempt = db.query(QuizAttempt).filter(
+    attempt = (await db.execute(select(QuizAttempt).filter(
         QuizAttempt.quiz_id == quiz_id, 
         QuizAttempt.user_id == current_user.id,
         QuizAttempt.status == "IN_PROGRESS"
-    ).first()
+    ))).scalars().first()
 
     import datetime
     from datetime import timezone
@@ -700,11 +701,13 @@ def submit_and_grade_quiz(
                     server_time_consumed = max_seconds # Cap at max
         
         attempt.time_consumed_seconds = server_time_consumed
-        db.query(QuestionAttempt).filter(QuestionAttempt.quiz_attempt_id == attempt.id).delete()
-        db.flush()
+        existing_qattempts = (await db.execute(select(QuestionAttempt).filter(QuestionAttempt.quiz_attempt_id == attempt.id))).scalars().all()
+        for qa in existing_qattempts:
+            await db.delete(qa)
+        await db.flush()
 
     total_score = 0.0
-    current_questions = db.query(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version).all()
+    current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz_id, Question.version == quiz.version))).scalars().all()
     max_score = sum([q.marks for q in current_questions])
     review_details = []
 
@@ -831,7 +834,7 @@ def submit_and_grade_quiz(
         })
 
     if submission.is_draft:
-        db.commit()
+        await db.commit()
         return {"message": "Draft saved."}
 
     attempt.total_marks = total_score
@@ -840,7 +843,7 @@ def submit_and_grade_quiz(
     # Send essay review notification to quiz creator if any essay questions exist
     has_essays = any(rev["type"] == "ESSAY" for rev in review_details)
     if has_essays:
-        creator = db.query(User).filter(User.id == quiz.created_user_id).first()
+        creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
         if creator and creator.id != current_user.id:
             essay_notification = Notification(
                 user_id=quiz.created_user_id,
@@ -849,7 +852,7 @@ def submit_and_grade_quiz(
             )
             db.add(essay_notification)
     
-    db.commit()
+    await db.commit()
 
     return {
         "message": "Trial complete.",
@@ -866,16 +869,16 @@ class GovernanceToggle(BaseModel):
     is_premium: bool = None
 
 @router.put("/{quiz_id}/governance")
-def toggle_quiz_governance(
+async def toggle_quiz_governance(
     quiz_id: int, 
     flags: GovernanceToggle, 
-    db: Session = Depends(get_db), 
+    db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="Only No One possesses this power.")
         
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id))).scalars().first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Scroll not found.")
         
@@ -886,17 +889,17 @@ def toggle_quiz_governance(
     if flags.is_premium is not None:
         quiz.is_premium = flags.is_premium
         
-    db.commit()
+    await db.commit()
     return {"message": "The Citadel's archives have been updated."}
 
 @router.get("/{quiz_id}/analytics")
-def get_quiz_analytics(quiz_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+async def get_quiz_analytics(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id))).scalars().first()
     if not quiz: raise HTTPException(status_code=404, detail="Scroll not found")
     if current_user.id != quiz.created_user_id and current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Unauthorized")
         
-    attempts = db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).all()
+    attempts = (await db.execute(select(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id))).scalars().all()
     total_attempts = len(attempts)
     if total_attempts == 0:
         return {"total_attempts": 0, "pass_rate": 0, "highest_failure_question": None}
@@ -908,7 +911,13 @@ def get_quiz_analytics(quiz_id: int, db: Session = Depends(get_db), current_user
     pass_rate = (passes / total_attempts) * 100
     
     # Identify hardest question
-    q_attempts = db.query(QuestionAttempt.question_id, func.avg(QuestionAttempt.marks_awarded).label("avg_marks")).join(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).group_by(QuestionAttempt.question_id).all()
+    q_attempts_stmt = (
+        select(QuestionAttempt.question_id, func.avg(QuestionAttempt.marks_awarded).label("avg_marks"))
+        .join(QuizAttempt, QuestionAttempt.quiz_attempt_id == QuizAttempt.id)
+        .filter(QuizAttempt.quiz_id == quiz_id)
+        .group_by(QuestionAttempt.question_id)
+    )
+    q_attempts = (await db.execute(q_attempts_stmt)).all()
     
     hardest_q_id = min(q_attempts, key=lambda x: x.avg_marks)[0] if q_attempts else None
     
@@ -924,17 +933,17 @@ class ReviewSubmission(BaseModel):
     feedback: str = ""
 
 @router.post("/review")
-def review_essay_question(
+async def review_essay_question(
     submission: ReviewSubmission,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    q_attempt = db.query(QuestionAttempt).filter(QuestionAttempt.id == submission.question_attempt_id).first()
+    q_attempt = (await db.execute(select(QuestionAttempt).filter(QuestionAttempt.id == submission.question_attempt_id))).scalars().first()
     if not q_attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
         
-    attempt = db.query(QuizAttempt).filter(QuizAttempt.id == q_attempt.quiz_attempt_id).first()
-    quiz = db.query(Quiz).filter(Quiz.id == attempt.quiz_id).first()
+    attempt = (await db.execute(select(QuizAttempt).filter(QuizAttempt.id == q_attempt.quiz_attempt_id))).scalars().first()
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == attempt.quiz_id))).scalars().first()
     
     if not quiz or (quiz.created_user_id != current_user.id and current_user.role.value != "noOne"):
         raise HTTPException(status_code=403, detail="Unauthorized to review")
@@ -954,29 +963,34 @@ def review_essay_question(
         destination_url="/my-quizzes"
     )
     db.add(notification)
-    db.commit()
+    await db.commit()
     
     return {"message": "The Raven has been sent to the student."}
 
 @router.get("/{quiz_id}/review-tasks")
-def get_review_tasks(quiz_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_review_tasks(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch essay questions that need manual grading for a specific quiz."""
-    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id))).scalars().first()
     if not quiz: raise HTTPException(status_code=404, detail="Quiz not found.")
     if quiz.created_user_id != current_user.id and current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="You did not forge this trial.")
 
     # Find all question attempts for essay questions that haven't been reviewed
     # We join Question to filter for ESSAY type
-    tasks = db.query(QuestionAttempt).join(Question).filter(
-        Question.quiz_id == quiz_id,
-        Question.type == QuestionType.ESSAY,
-        QuestionAttempt.needs_manual_review == True
-    ).all()
+    tasks_stmt = (
+        select(QuestionAttempt)
+        .join(Question, QuestionAttempt.question_id == Question.id)
+        .filter(
+            Question.quiz_id == quiz_id,
+            Question.type == QuestionType.ESSAY,
+            QuestionAttempt.needs_manual_review == True,
+        )
+    )
+    tasks = (await db.execute(tasks_stmt)).scalars().all()
 
     result = []
     for t in tasks:
-        student = db.query(User).filter(User.id == t.quiz_attempt.user_id).first()
+        student = (await db.execute(select(User).filter(User.id == t.quiz_attempt.user_id))).scalars().first()
         result.append({
             "id": t.id,
             "question_text": t.question.text,

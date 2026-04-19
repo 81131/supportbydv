@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from datetime import datetime
 from typing import Optional
 
@@ -25,13 +26,13 @@ class AdCreate(BaseModel):
     target_semester: Optional[str] = None
 
 @router.get("/active")
-def get_active_ads(semester_key: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_active_ads(semester_key: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Fetch currently active ads"""
     now = datetime.utcnow()
     # If end_date is present, verify we haven't passed it
-    ads = db.query(AdCampaign).filter(
+    ads = (await db.execute(select(AdCampaign).filter(
         AdCampaign.is_active == True,
-    ).all()
+    ))).scalars().all()
     
     # Filter memory (easier to handle null end_dates)
     active_list = []
@@ -52,24 +53,24 @@ def get_active_ads(semester_key: Optional[str] = None, db: Session = Depends(get
     return active_list
 
 @router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(verify_csrf)])
-def create_ad(ad_in: AdCreate, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+async def create_ad(ad_in: AdCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
     """Only NoOne can create ads."""
     new_ad = AdCampaign(**ad_in.dict())
     db.add(new_ad)
-    db.commit()
-    db.refresh(new_ad)
+    await db.commit()
+    await db.refresh(new_ad)
     return new_ad
 
 @router.get("/campaigns/all")
-def get_all_campaigns(db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
-    return db.query(AdCampaign).order_by(AdCampaign.created_at.desc()).all()
+async def get_all_campaigns(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
+    return (await db.execute(select(AdCampaign).order_by(AdCampaign.created_at.desc()))).scalars().all()
 
 @router.put("/campaigns/{ad_id}/cancel", dependencies=[Depends(verify_csrf)])
-def cancel_campaign(ad_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
-    ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
+async def cancel_campaign(ad_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
+    ad = (await db.execute(select(AdCampaign).filter(AdCampaign.id == ad_id))).scalars().first()
     if not ad: raise HTTPException(status_code=404, detail="Ad not found")
     ad.is_active = False
-    db.commit()
+    await db.commit()
     return {"message": "Campaign termianted."}
 
 class AdSubmission(BaseModel):
@@ -81,16 +82,16 @@ class AdSubmission(BaseModel):
     additional_details: Optional[str] = None
 
 @router.post("/request", status_code=status.HTTP_201_CREATED)
-def submit_ad_request(submission: AdSubmission, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_current_user_optional)):
+async def submit_ad_request(submission: AdSubmission, db: AsyncSession = Depends(get_db), current_user: Optional[User] = Depends(get_current_user_optional)):
     """Public endpoint for submitting an ad inquiry."""
     req = AdSubmissionRequest(**submission.dict())
     if current_user:
         req.user_id = current_user.id
     db.add(req)
-    db.flush()  # Get req.id before committing
+    await db.flush()  # Get req.id before committing
 
     # Notify all NoOne/Super Admins
-    noones = db.query(User).filter(User.role == UserRole.NO_ONE).all()
+    noones = (await db.execute(select(User).filter(User.role == UserRole.NO_ONE))).scalars().all()
     for admin in noones:
         notif = Notification(
             user_id=admin.id,
@@ -107,18 +108,18 @@ def submit_ad_request(submission: AdSubmission, db: Session = Depends(get_db), c
             destination_url="/about"
         ))
 
-    db.commit()
+    await db.commit()
     return {"message": "Request submitted successfully. The Maesters will contact you."}
 
 @router.get("/requests/all")
-def get_all_ad_requests(db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+async def get_all_ad_requests(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
     """Return ALL ad requests for admin management and filtering."""
-    return db.query(AdSubmissionRequest).order_by(AdSubmissionRequest.created_at.desc()).all()
+    return (await db.execute(select(AdSubmissionRequest).order_by(AdSubmissionRequest.created_at.desc()))).scalars().all()
 
 @router.get("/requests/pending")
-def get_pending_ad_requests(db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+async def get_pending_ad_requests(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
     """Only NoOne can view these."""
-    reqs = db.query(AdSubmissionRequest).filter(AdSubmissionRequest.status == "pending").order_by(AdSubmissionRequest.created_at.desc()).all()
+    reqs = (await db.execute(select(AdSubmissionRequest).filter(AdSubmissionRequest.status == "pending").order_by(AdSubmissionRequest.created_at.desc()))).scalars().all()
     return reqs
 
 import os
@@ -139,10 +140,10 @@ async def deploy_campaign(
     target_semester: Optional[str] = Form(None),
     light_image: UploadFile = File(...),
     dark_image: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_noOne)
 ):
-    req = db.query(AdSubmissionRequest).filter(AdSubmissionRequest.id == request_id).first()
+    req = (await db.execute(select(AdSubmissionRequest).filter(AdSubmissionRequest.id == request_id))).scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Ad request not found")
 
@@ -182,12 +183,12 @@ async def deploy_campaign(
         notif = Notification(user_id=req.user_id, message="Your Ad Campaign was launched by the Small Council. It is now active on the Citadel.", destination_url="/about")
         db.add(notif)
 
-    db.commit()
+    await db.commit()
     return {"message": "Ad campaign deployed successfully!"}
 
 @router.put("/requests/{req_id}/reject", dependencies=[Depends(verify_csrf)])
-def reject_ad_request(req_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
-    req = db.query(AdSubmissionRequest).filter(AdSubmissionRequest.id == req_id).first()
+async def reject_ad_request(req_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
+    req = (await db.execute(select(AdSubmissionRequest).filter(AdSubmissionRequest.id == req_id))).scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Ad request not found")
     req.status = "rejected"
@@ -196,13 +197,13 @@ def reject_ad_request(req_id: int, db: Session = Depends(get_db), current_user: 
         notif = Notification(user_id=req.user_id, message="Your Ad Campaign was declined by the Small Council.", destination_url="/about")
         db.add(notif)
         
-    db.commit()
+    await db.commit()
     return {"message": "Ad campaign rejected."}
 @router.post("/campaigns/{ad_id}/click")
-def record_ad_click(ad_id: int, db: Session = Depends(get_db)):
+async def record_ad_click(ad_id: int, db: AsyncSession = Depends(get_db)):
     """Increment click counter for analytics (public endpoint)."""
-    ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
+    ad = (await db.execute(select(AdCampaign).filter(AdCampaign.id == ad_id))).scalars().first()
     if ad:
         ad.click_count = (ad.click_count or 0) + 1
-        db.commit()
+        await db.commit()
     return {"ok": True}

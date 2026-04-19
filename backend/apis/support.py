@@ -1,7 +1,8 @@
 import google.generativeai as genai
 import os
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from pydantic import BaseModel
 from typing import List, Optional
 import json
@@ -46,7 +47,7 @@ class EscalateRequest(BaseModel):
     chat_history: str # JSON Dump
 
 @router.post("/chat", dependencies=[Depends(verify_csrf)])
-def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if not api_key:
         return {"reply": "The maesters have not configured the Raven network (API key missing)."}
         
@@ -61,7 +62,7 @@ def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_u
             
         chat = model_instance.start_chat(history=formatted_history)
         
-        subs = db.query(UserSubscription).filter(UserSubscription.user_id == current_user.id).all()
+        subs = (await db.execute(select(UserSubscription).filter(UserSubscription.user_id == current_user.id))).scalars().all()
         sub_desc = ", ".join([s.tier.value for s in subs]) if subs else "None"
         
         context = f"User Context:\nName: {current_user.first_name} {current_user.last_name}\nRole: {current_user.role.value}\nActive Subscriptions: {sub_desc}"
@@ -76,19 +77,19 @@ def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_u
                 status=TicketStatus.OPEN
             )
             db.add(ticket)
-            db.commit()
-            db.refresh(ticket)
+            await db.commit()
+            await db.refresh(ticket)
             
             # Initial User entry
             msg_user = TicketMessage(ticket_id=ticket.id, sender_id=current_user.id, is_bot=0, content=req.message)
             db.add(msg_user)
             # Notify admin
-            admin = db.query(User).filter(User.role == UserRole.NO_ONE).first()
+            admin = (await db.execute(select(User).filter(User.role == UserRole.NO_ONE))).scalars().first()
             if admin:
                 notif = Notification(user_id=admin.id, message=f"A new Support Ticket #{ticket.id} was auto-escalated to the Small Council.", destination_url=f"/admin-dashboard/support?ticketID={ticket.id}")
                 db.add(notif)
             
-            db.commit()
+            await db.commit()
             
             return {"reply": "I am unable to assist you further. I have automatically dispatched a scroll to the Small Council. A Maester will review our chat and reply soon. (A Support Ticket has been created)", "escalated": True, "ticket_id": ticket.id}
 
@@ -100,7 +101,7 @@ def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_current_u
         return {"reply": f"The Raven dropped the scroll. Error: {err_msg}"}
 
 @router.post("/escalate", dependencies=[Depends(verify_csrf)])
-def escalate_to_admin(req: EscalateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def escalate_to_admin(req: EscalateRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticket = SupportTicket(
         user_id=current_user.id,
         category=req.category,
@@ -108,8 +109,8 @@ def escalate_to_admin(req: EscalateRequest, db: Session = Depends(get_db), curre
         status=TicketStatus.OPEN
     )
     db.add(ticket)
-    db.commit()
-    db.refresh(ticket)
+    await db.commit()
+    await db.refresh(ticket)
     
     # Initialize first message
     msg = TicketMessage(
@@ -119,22 +120,22 @@ def escalate_to_admin(req: EscalateRequest, db: Session = Depends(get_db), curre
         content=req.description
     )
     db.add(msg)
-    db.commit()
+    await db.commit()
     return {"message": "Escalation request submitted. The Small Council will review it.", "ticket_id": ticket.id}
 
 @router.get("/tickets/me")
-def get_my_tickets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    tickets = db.query(SupportTicket).filter(SupportTicket.user_id == current_user.id).order_by(SupportTicket.created_at.desc()).all()
+async def get_my_tickets(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    tickets = (await db.execute(select(SupportTicket).filter(SupportTicket.user_id == current_user.id).order_by(SupportTicket.created_at.desc()))).scalars().all()
     return [{"id": t.id, "status": t.status.value, "category": t.category, "created_at": t.created_at} for t in tickets]
 
 @router.get("/tickets/all")
-def get_all_tickets(category: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_all_tickets(category: Optional[str] = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.NO_ONE, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Forbidden")
-    query = db.query(SupportTicket)
+    stmt = select(SupportTicket)
     if category:
-        query = query.filter(SupportTicket.category == category)
-    tickets = query.order_by(SupportTicket.created_at.desc()).all()
+        stmt = stmt.filter(SupportTicket.category == category)
+    tickets = (await db.execute(stmt.order_by(SupportTicket.created_at.desc()))).scalars().all()
     return [{"id": t.id, "status": t.status.value, "category": t.category, "created_at": t.created_at, "user_id": t.user_id} for t in tickets]
 
 class DirectChatRequest(BaseModel):
@@ -142,7 +143,7 @@ class DirectChatRequest(BaseModel):
     message: str
 
 @router.post("/tickets/direct")
-def create_direct_chat(req: DirectChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_direct_chat(req: DirectChatRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # If user creates it, the user_id is themselves. If admin creates it, they might pass a target user_id.
     target_user_id = current_user.id
     if current_user.role in [UserRole.NO_ONE, UserRole.ADMIN] and req.user_id:
@@ -157,8 +158,8 @@ def create_direct_chat(req: DirectChatRequest, db: Session = Depends(get_db), cu
         status=TicketStatus.OPEN
     )
     db.add(ticket)
-    db.commit()
-    db.refresh(ticket)
+    await db.commit()
+    await db.refresh(ticket)
     
     msg = TicketMessage(
         ticket_id=ticket.id,
@@ -174,17 +175,17 @@ def create_direct_chat(req: DirectChatRequest, db: Session = Depends(get_db), cu
         db.add(notif)
     # Notify admin if user created it 
     elif current_user.role not in [UserRole.NO_ONE, UserRole.ADMIN]:
-        admin = db.query(User).filter(User.role == UserRole.NO_ONE).first()
+        admin = (await db.execute(select(User).filter(User.role == UserRole.NO_ONE))).scalars().first()
         if admin:
             notif = Notification(user_id=admin.id, message=f"A new direct chat #{ticket.id} was opened by a user.", destination_url=f"/admin-dashboard/support?ticketID={ticket.id}")
             db.add(notif)
             
-    db.commit()
+    await db.commit()
     return {"message": "Direct chat created", "ticket_id": ticket.id}
 
 @router.put("/tickets/{ticket_id}/resolve")
-def resolve_ticket(ticket_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+async def resolve_ticket(ticket_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ticket = (await db.execute(select(SupportTicket).filter(SupportTicket.id == ticket_id))).scalars().first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
         
@@ -200,7 +201,7 @@ def resolve_ticket(ticket_id: int, db: Session = Depends(get_db), current_user: 
         content="[TICKET CLOSED] This issue has been marked as resolved."
     )
     db.add(msg)
-    db.commit()
+    await db.commit()
     
     return {"message": "Ticket resolved."}
 
@@ -211,20 +212,20 @@ class BusinessContact(BaseModel):
     message: str
 
 @router.get("/tickets/{ticket_id}")
-def get_ticket_details(ticket_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+async def get_ticket_details(ticket_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ticket = (await db.execute(select(SupportTicket).filter(SupportTicket.id == ticket_id))).scalars().first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
         
     if current_user.role not in [UserRole.NO_ONE, UserRole.ADMIN] and ticket.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
         
-    messages = db.query(TicketMessage).filter(TicketMessage.ticket_id == ticket_id).order_by(TicketMessage.created_at.asc()).all()
+    messages = (await db.execute(select(TicketMessage).filter(TicketMessage.ticket_id == ticket_id).order_by(TicketMessage.created_at.asc()))).scalars().all()
     
     if current_user.role in [UserRole.NO_ONE, UserRole.ADMIN]:
         if ticket.status == TicketStatus.OPEN:
             ticket.status = TicketStatus.IN_PROGRESS
-            db.commit()
+            await db.commit()
             
     # We enrich messages with sender details
     res_messages = []
@@ -233,7 +234,7 @@ def get_ticket_details(ticket_id: int, db: Session = Depends(get_db), current_us
         if m.is_bot:
             sender_role = "bot"
         elif m.sender_id:
-            sender = db.query(User).filter(User.id == m.sender_id).first()
+            sender = (await db.execute(select(User).filter(User.id == m.sender_id))).scalars().first()
             if sender and sender.role in [UserRole.NO_ONE, UserRole.ADMIN]:
                 sender_role = "admin"
         
@@ -244,7 +245,7 @@ def get_ticket_details(ticket_id: int, db: Session = Depends(get_db), current_us
             "sender_role": sender_role
         })
         
-    user = db.query(User).filter(User.id == ticket.user_id).first()
+    user = (await db.execute(select(User).filter(User.id == ticket.user_id))).scalars().first()
     
     return {
         "ticket": {
@@ -265,8 +266,8 @@ class TicketReply(BaseModel):
     content: str
     
 @router.post("/tickets/{ticket_id}/reply", dependencies=[Depends(verify_csrf)])
-def reply_to_ticket(ticket_id: int, reply: TicketReply, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+async def reply_to_ticket(ticket_id: int, reply: TicketReply, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ticket = (await db.execute(select(SupportTicket).filter(SupportTicket.id == ticket_id))).scalars().first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
         
@@ -289,28 +290,28 @@ def reply_to_ticket(ticket_id: int, reply: TicketReply, db: Session = Depends(ge
         # If user replies, change status back to OPEN so admins see it as unread
         ticket.status = TicketStatus.OPEN
         
-    db.commit()
+    await db.commit()
     return {"message": "Reply sent."}
 
 @router.post("/business-contact", status_code=status.HTTP_201_CREATED)
-def submit_business_contact(contact: BusinessContact, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_current_user_optional)):
+async def submit_business_contact(contact: BusinessContact, db: AsyncSession = Depends(get_db), current_user: Optional[User] = Depends(get_current_user_optional)):
     """Public endpoint for business contacts."""
     req = BusinessContactRequest(**contact.dict())
     if current_user:
         req.user_id = current_user.id
     db.add(req)
-    db.commit()
+    await db.commit()
     return {"message": "Message sent! We will echo a raven to you shortly."}
 
 @router.get("/business/pending")
-def get_pending_business(db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
+async def get_pending_business(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
     """Only NoOne can view these."""
-    reqs = db.query(BusinessContactRequest).filter(BusinessContactRequest.status == "unread").order_by(BusinessContactRequest.created_at.desc()).all()
+    reqs = (await db.execute(select(BusinessContactRequest).filter(BusinessContactRequest.status == "unread").order_by(BusinessContactRequest.created_at.desc()))).scalars().all()
     return reqs
 
 @router.put("/business/{req_id}/approve", dependencies=[Depends(verify_csrf)])
-def approve_business_request(req_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
-    req = db.query(BusinessContactRequest).filter(BusinessContactRequest.id == req_id).first()
+async def approve_business_request(req_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
+    req = (await db.execute(select(BusinessContactRequest).filter(BusinessContactRequest.id == req_id))).scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Business request not found")
     req.status = "read"
@@ -319,12 +320,12 @@ def approve_business_request(req_id: int, db: Session = Depends(get_db), current
         notif = Notification(user_id=req.user_id, message="Your Business Inquiry was reviewed by the Small Council. We will contact you soon.", destination_url="/support/business-contact")
         db.add(notif)
         
-    db.commit()
+    await db.commit()
     return {"message": "Business inquiry approved."}
 
 @router.put("/business/{req_id}/reject", dependencies=[Depends(verify_csrf)])
-def reject_business_request(req_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_noOne)):
-    req = db.query(BusinessContactRequest).filter(BusinessContactRequest.id == req_id).first()
+async def reject_business_request(req_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_noOne)):
+    req = (await db.execute(select(BusinessContactRequest).filter(BusinessContactRequest.id == req_id))).scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Business request not found")
     req.status = "archived"
@@ -333,6 +334,6 @@ def reject_business_request(req_id: int, db: Session = Depends(get_db), current_
         notif = Notification(user_id=req.user_id, message="Your Business Inquiry was declined by the Small Council.", destination_url="/support/business-contact")
         db.add(notif)
         
-    db.commit()
+    await db.commit()
     return {"message": "Business inquiry rejected."}
 

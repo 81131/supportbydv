@@ -1,5 +1,5 @@
 import os
-import boto3
+import aioboto3
 from botocore.config import Config
 from dotenv import load_dotenv
 
@@ -10,11 +10,14 @@ R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "supportbydv-dev")
 
-s3_client = boto3.client(
-    "s3",
-    endpoint_url=R2_ENDPOINT_URL,
-    aws_access_key_id=R2_ACCESS_KEY_ID,
-    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-    config=Config(signature_version="s3v4"),
-    region_name="auto"
-)
+session = aioboto3.Session()
+
+def get_s3_client():
+    return session.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=R2_ACCESS_KEY_ID,
+        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+        config=Config(signature_version="s3v4"),
+        region_name="auto"
+    )

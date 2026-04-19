@@ -4,7 +4,8 @@ import time
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from sqlalchemy import desc
 
 from database import get_db
@@ -43,7 +44,7 @@ class VideoResponse(BaseModel):
         from_attributes = True
 
 @router.post("/upload", response_model=VideoResponse)
-def add_video_link(data: VideoCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_video_link(data: VideoCreateRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Only NoOne can link a new video from Bunny to the system."""
     if current_user.role != UserRole.NO_ONE:
         raise HTTPException(status_code=403, detail="Only No One can weave the visual archives.")
@@ -59,20 +60,20 @@ def add_video_link(data: VideoCreateRequest, db: Session = Depends(get_db), curr
         uploader_id=current_user.id
     )
     db.add(new_video)
-    db.commit()
-    db.refresh(new_video)
+    await db.commit()
+    await db.refresh(new_video)
     return new_video
 
 @router.get("/module/{module_id}", response_model=List[VideoResponse])
-def get_videos_for_module(module_id: int, db: Session = Depends(get_db)):
+async def get_videos_for_module(module_id: int, db: AsyncSession = Depends(get_db)):
     """Fetch all available videos for a specific module."""
-    videos = db.query(Video).filter(Video.module_id == module_id).order_by(desc(Video.created_at)).all()
+    videos = (await db.execute(select(Video).filter(Video.module_id == module_id).order_by(desc(Video.created_at)))).scalars().all()
     return videos
 
 @router.get("/stream/{video_id}")
-def generate_stream_url(video_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def generate_stream_url(video_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Generates the SHA256 hashed playback token for the Bunny Net iframe."""
-    video = db.query(Video).filter(Video.id == video_id).first()
+    video = (await db.execute(select(Video).filter(Video.id == video_id))).scalars().first()
     if not video:
         raise HTTPException(status_code=404, detail="Video scroll not found.")
         
@@ -99,11 +100,11 @@ def generate_stream_url(video_id: int, db: Session = Depends(get_db), current_us
     }
 
 @router.delete("/{video_id}")
-def delete_video_link(video_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_video_link(video_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.NO_ONE:
         raise HTTPException(status_code=403, detail="Unworthy.")
-    video = db.query(Video).filter(Video.id == video_id).first()
+    video = (await db.execute(select(Video).filter(Video.id == video_id))).scalars().first()
     if video:
         db.delete(video)
-        db.commit()
+        await db.commit()
     return {"status": "Archived."}
