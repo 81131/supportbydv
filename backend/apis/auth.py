@@ -208,6 +208,7 @@ async def local_login(
 
     user.last_active_at = func.now()
     await db.commit()
+    await db.refresh(user)
 
     token_data = {
         "sub": str(user.id),

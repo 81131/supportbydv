@@ -44,7 +44,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (originalRequest.url === '/auth/refresh') {
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        window.location.href = '/';
+        return Promise.reject(error);
+      }
+
+      if (originalRequest.url === '/auth/login' || originalRequest.url === '/auth/google' || originalRequest.url === '/auth/register') {
         return Promise.reject(error);
       }
 
