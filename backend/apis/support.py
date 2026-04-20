@@ -227,6 +227,13 @@ async def get_ticket_details(ticket_id: int, db: AsyncSession = Depends(get_db),
             ticket.status = TicketStatus.IN_PROGRESS
             await db.commit()
             
+    # Pre-fetch all sender users in a single query
+    sender_ids = {m.sender_id for m in messages if m.sender_id}
+    senders_map = {}
+    if sender_ids:
+        senders = (await db.execute(select(User).filter(User.id.in_(sender_ids)))).scalars().all()
+        senders_map = {s.id: s for s in senders}
+
     # We enrich messages with sender details
     res_messages = []
     for m in messages:
@@ -234,7 +241,7 @@ async def get_ticket_details(ticket_id: int, db: AsyncSession = Depends(get_db),
         if m.is_bot:
             sender_role = "bot"
         elif m.sender_id:
-            sender = (await db.execute(select(User).filter(User.id == m.sender_id))).scalars().first()
+            sender = senders_map.get(m.sender_id)
             if sender and sender.role in [UserRole.NO_ONE, UserRole.ADMIN]:
                 sender_role = "admin"
         

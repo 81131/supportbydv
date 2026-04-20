@@ -39,11 +39,6 @@ export default function Home({ openModal, user }: { openModal: (mode: 'login' | 
     return (
       <div className="page-container">
         <style>{scrollKeyframes}</style>
-        <h1 className="brand-font text-title" style={{ color: 'var(--accent-gold)' }}>The Citadel Feed</h1>
-        <p className="text-desc" style={{ marginBottom: '2rem' }}>
-          Personalized scrolls and tests for Year {user.current_year || 2}, Semester {user.current_semester || 2}. 
-          (Update your preferences in your Profile).
-        </p>
 
         {!feed ? <p>Loading the ravens...</p> : (
           <>

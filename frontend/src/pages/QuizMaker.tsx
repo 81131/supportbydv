@@ -893,11 +893,31 @@ const QuizMaker = () => {
       )}
 
       {showImportModal && (
-        <div className="modal-overlay" onClick={() => setShowImportModal(false)} style={{ zIndex: 1100 }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', width: '90%' }}>
-            <button className="close-btn" onClick={() => setShowImportModal(false)}>✕</button>
-            <h2 className="brand-font" style={{ marginBottom: '1rem', color: 'var(--accent-gold)' }}>Bulk Import Questions</h2>
-            
+        <div
+          className="modal-overlay"
+          onClick={() => setShowImportModal(false)}
+          style={{ zIndex: 1100, alignItems: 'flex-start', overflowY: 'auto', padding: '2rem 1rem' }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '650px', width: '90%',
+              maxHeight: '90vh',
+              display: 'flex', flexDirection: 'column',
+              padding: 0,
+              margin: 'auto'
+            }}
+          >
+            {/* Sticky Header */}
+            <div style={{ padding: '1.5rem 2rem 1rem', borderBottom: '1px solid var(--border-dark)', flexShrink: 0, position: 'relative' }}>
+              <button className="close-btn" onClick={() => setShowImportModal(false)}>✕</button>
+              <h2 className="brand-font" style={{ marginBottom: 0, color: 'var(--accent-gold)' }}>Bulk Import Questions</h2>
+            </div>
+
+            {/* Scrollable Body */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '1.5rem 2rem' }}>
+
             <div style={{ marginBottom: '1rem', background: 'var(--bg-deep)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-dark)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               <p style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: 'var(--text-main)' }}>Sample Valid JSON:</p>
               <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#a8b2d1' }}>
@@ -1039,9 +1059,14 @@ IMPORTANT RULES:
               </div>
             )}
 
-            <button onClick={handleImportJson} className="btn-solid-gold" style={{marginTop: '1rem', width: '100%', justifyContent: 'center'}}>
-              Analyze & Import
-            </button>
+            </div>{/* end scrollable body */}
+
+            {/* Sticky Footer */}
+            <div style={{ padding: '1rem 2rem', borderTop: '1px solid var(--border-dark)', flexShrink: 0 }}>
+              <button onClick={handleImportJson} className="btn-solid-gold" style={{ width: '100%', justifyContent: 'center' }}>
+                Analyze &amp; Import
+              </button>
+            </div>
           </div>
         </div>
       )}

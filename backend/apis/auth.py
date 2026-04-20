@@ -89,7 +89,7 @@ async def google_auth(
 
         # 4. Set the HttpOnly Cookie (Auth)
         is_secure = os.getenv("APP_ENV") == "production"
-        # Access token lasts 15m (900s)
+        # Access token lasts 3 hours (10800s)
         response.set_cookie(
             key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=10800
         )
@@ -106,7 +106,7 @@ async def google_auth(
             httponly=False, 
             samesite="lax",
             secure=is_secure,
-            max_age=900
+            max_age=10800
         )
 
         return {"user": user}
@@ -355,6 +355,12 @@ async def refresh_token(request: Request, response: Response, db: AsyncSession =
         response.set_cookie(
             key="access_token", value=new_access_token, httponly=True, samesite="lax", secure=is_secure, max_age=10800
         )
+        
+        csrf_token = secrets.token_hex(32)
+        response.set_cookie(
+            key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=10800
+        )
+        
         return {"message": "Token refreshed successfully"}
         
     except JWTError:

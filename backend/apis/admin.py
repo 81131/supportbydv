@@ -155,10 +155,20 @@ async def get_audit_logs(
         await db.execute(select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(100))
     ).scalars().all()
 
+    user_ids = set()
+    for log in logs:
+        if log.admin_id: user_ids.add(log.admin_id)
+        if log.target_user_id: user_ids.add(log.target_user_id)
+        
+    users_map = {}
+    if user_ids:
+        users = (await db.execute(select(User).filter(User.id.in_(user_ids)))).scalars().all()
+        users_map = {u.id: u for u in users}
+
     result = []
     for log in logs:
-        admin_user = (await db.execute(select(User).filter(User.id == log.admin_id))).scalars().first()
-        target_user = (await db.execute(select(User).filter(User.id == log.target_user_id))).scalars().first()
+        admin_user = users_map.get(log.admin_id)
+        target_user = users_map.get(log.target_user_id)
 
         result.append({
             "id": log.id,

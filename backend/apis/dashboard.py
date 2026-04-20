@@ -52,8 +52,9 @@ async def get_dashboard_feed(
         feed["quizzes"] = []
 
     # ── Notes ─────────────────────────────────────────────────────────────────
+    from sqlalchemy.orm import joinedload
     if "notes" not in hidden_sections:
-        stmt = select(Note)
+        stmt = select(Note).options(joinedload(Note.uploader))
         if hidden_modules:
             stmt = stmt.filter(Note.module_id.notin_(hidden_modules))
         stmt = stmt.order_by(desc(Note.created_at)).limit(10)

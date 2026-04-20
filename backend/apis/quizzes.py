@@ -120,6 +120,21 @@ async def get_my_analytics(
     # 1. Base Query for ALL Completed Attempts globally to figure out question difficulties and top users globally
     all_completed = (await db.execute(select(QuizAttempt).options(selectinload(QuizAttempt.question_attempts)).filter(QuizAttempt.status == "COMPLETED"))).scalars().all()
     
+    # Pre-fetch all quizzes and questions for batch processing to avoid N+1
+    all_quiz_ids = list(set([a.quiz_id for a in all_completed]))
+    from sqlalchemy.orm import joinedload
+    quizzes_map = {}
+    questions_map = {} # (quiz_id, version) -> list of questions
+    if all_quiz_ids:
+        all_quizzes = (await db.execute(select(Quiz).options(joinedload(Quiz.module)).filter(Quiz.id.in_(all_quiz_ids)))).scalars().all()
+        quizzes_map = {q.id: q for q in all_quizzes}
+        
+        all_questions = (await db.execute(select(Question).filter(Question.quiz_id.in_(all_quiz_ids)))).scalars().all()
+        for q in all_questions:
+            k = (q.quiz_id, q.version)
+            if k not in questions_map: questions_map[k] = []
+            questions_map[k].append(q)
+
     # 1a. Figure out global question difficulties
     # difficulty_map: question_id -> 'easy'|'medium'|'hard'
     question_stats = {} # q_id -> { "correct": 0, "total": 0 }
@@ -129,7 +144,7 @@ async def get_my_analytics(
     for a in all_completed:
         if a.user_id not in user_scores: user_scores[a.user_id] = {"earned": 0.0, "max": 0.0}
         user_scores[a.user_id]["earned"] += a.total_marks
-        qs = (await db.execute(select(Question).filter(Question.quiz_id == a.quiz_id, Question.version == a.quiz_version))).scalars().all()
+        qs = questions_map.get((a.quiz_id, a.quiz_version), [])
         q_dict = { q.id: q.marks for q in qs }
         user_scores[a.user_id]["max"] += sum(q_dict.values())
         
@@ -190,7 +205,7 @@ async def get_my_analytics(
     question_history = {} # q_id -> bool (was_fail)
     
     for a in my_attempts:
-        qs = (await db.execute(select(Question).filter(Question.quiz_id == a.quiz_id, Question.version == a.quiz_version))).scalars().all()
+        qs = questions_map.get((a.quiz_id, a.quiz_version), [])
         q_dict = { q.id: q.marks for q in qs }
         for qa in a.question_attempts:
             max_m = q_dict.get(qa.question_id, 1.0)
@@ -207,7 +222,7 @@ async def get_my_analytics(
     # Now deeply filter my_attempts
     filtered_my_attempts = []
     for a in my_attempts:
-        quiz = (await db.execute(select(Quiz).filter(Quiz.id == a.quiz_id))).scalars().first()
+        quiz = quizzes_map.get(a.quiz_id)
         if not quiz: continue
         if module_id != 'all' and str(quiz.module_id) != str(module_id): continue
         if attempt_type == 'first' and a.attempt_number > 1: continue
@@ -229,7 +244,7 @@ async def get_my_analytics(
     for a, quiz in filtered_my_attempts:
         if a.created_at: unique_dates.add(a.created_at.date())
         
-        current_questions = (await db.execute(select(Question).filter(Question.quiz_id == quiz.id, Question.version == a.quiz_version))).scalars().all()
+        current_questions = questions_map.get((quiz.id, a.quiz_version), [])
         q_dict = { q.id: q for q in current_questions }
         
         if difficulty != 'all':
