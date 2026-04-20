@@ -37,6 +37,12 @@ const QuizMaker = () => {
   const [importJsonText, setImportJsonText] = useState('');
   const [importError, setImportError] = useState('');
 
+  // Toast notification
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
   // Drag state for the Scroll Layout pill reordering
   const dragPillIndex = useRef<number | null>(null);
   const [dragOverPillIndex, setDragOverPillIndex] = useState<number | null>(null);
@@ -243,6 +249,37 @@ const QuizMaker = () => {
            newQ.options = rawOptions.map(opt => ({text: String(opt), isCorrect: true}));
         }
 
+        // --- Topic & Unit Association Logic ---
+        let foundUnit = null;
+        let missingTopicNames: string[] = [];
+
+        if (item.unit_identifier) {
+          foundUnit = moduleUnits.find(u => u.unit_identifier === item.unit_identifier);
+          if (foundUnit) {
+            newQ.unitId = foundUnit.id;
+          } else {
+            newQ.topicError = `Unit '${item.unit_identifier}' not found in this module.`;
+          }
+        }
+
+        if (foundUnit && Array.isArray(item.topics)) {
+          item.topics.forEach((t: any) => {
+            const topicName = t.name || t;
+            const matchedTopic = foundUnit!.topics.find(ft => ft.name === topicName);
+            if (matchedTopic) {
+              newQ.topicIds!.push(matchedTopic.id);
+            } else {
+              missingTopicNames.push(String(topicName));
+            }
+          });
+
+          if (missingTopicNames.length > 0) {
+            newQ.topicError = `Topics not found in Unit '${foundUnit.unit_identifier}': ${missingTopicNames.join(', ')}.`;
+          }
+        } else if (item.topics && !foundUnit) {
+           newQ.topicError = `Cannot assign topics because unit_identifier is missing or invalid.`;
+        }
+
         newQuestions.push(newQ);
       });
 
@@ -299,6 +336,10 @@ const QuizMaker = () => {
   };
 
   const saveQuiz = async (publish: boolean) => {
+    if (publish && questions.some(q => q.topicError)) {
+      alert("Cannot publish scroll. Please resolve all topic warnings (!) before publishing.");
+      return;
+    }
     if (!title || !moduleId || questions.length === 0) { alert('Please fill in required fields and add questions.'); return; }
 
     for (let i = 0; i < questions.length; i++) {
@@ -360,6 +401,28 @@ const QuizMaker = () => {
 
   return (
     <div className="quiz-layout-wrapper">
+
+      {/* ── TOAST NOTIFICATION ── */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed', top: '24px', right: '24px', zIndex: 9999,
+          background: 'var(--bg-secondary)', border: '1px solid var(--accent-gold)',
+          borderRadius: '12px', padding: '0.9rem 1.2rem',
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          animation: 'slideInRight 0.3s ease',
+          maxWidth: '340px'
+        }}>
+          <CheckCircle2 size={20} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+          <span style={{ color: 'var(--text-main)', fontSize: '0.88rem', lineHeight: 1.4 }}>{toastMsg}</span>
+          <button
+            onClick={() => setToastMsg(null)}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, marginLeft: 'auto', flexShrink: 0 }}
+          >
+            <XCircle size={16} />
+          </button>
+        </div>
+      )}
 
       {/* ── MOBILE DRAWER TOGGLE ── */}
       <div className="mobile-only" style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
@@ -506,6 +569,30 @@ const QuizMaker = () => {
               </span>
               <button onClick={() => setQuestions(questions.filter((_, i) => i !== qIndex))} className="btn-ghost-danger"><Trash2 size={16} /></button>
             </div>
+
+            {/* Topic Error Warning Banner */}
+            {q.topicError && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', background: 'rgba(255, 68, 68, 0.1)', border: '1px solid #ff4444', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+                <AlertCircle size={16} color="#ff4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ flex: 1 }}>
+                  <strong style={{ color: '#ff4444', fontSize: '0.85rem' }}>Topic / Unit Mismatch</strong>
+                  <p style={{ margin: '0.2rem 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{q.topicError}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newQs = [...questions];
+                    newQs[qIndex].topicError = undefined;
+                    newQs[qIndex].unitId = null;
+                    newQs[qIndex].topicIds = [];
+                    setQuestions(newQs);
+                  }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                  title="Dismiss and clear topic"
+                >
+                  <XCircle size={16} />
+                </button>
+              </div>
+            )}
 
             <textarea className="auth-input" value={q.text} onChange={(e) => {
               const newQs = [...questions]; newQs[qIndex].text = e.target.value; setQuestions(newQs);
@@ -701,13 +788,14 @@ const QuizMaker = () => {
               title="Drag to reorder · Click to jump"
             >
               <GripVertical size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <span style={{ flex: 1, marginLeft: '0.4rem', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              <span style={{ flex: 1, marginLeft: '0.4rem', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center' }}>
                 <span style={{ color: 'var(--accent-gold)', fontWeight: 700, marginRight: '0.4rem' }}>Q{i + 1}</span>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{q.type}</span>
               </span>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginLeft: '0.5rem', flexShrink: 0 }}>
                 {q.text ? q.text.slice(0, 14) + (q.text.length > 14 ? '…' : '') : <em>empty</em>}
               </span>
+              {q.topicError && <span title="Topic/Unit missing"><AlertCircle size={14} color="#ff4444" style={{ marginLeft: '0.5rem', flexShrink: 0, display: 'block' }} /></span>}
             </div>
           ))}
         </div>
@@ -852,6 +940,102 @@ const QuizMaker = () => {
             {importError && (
               <div style={{ marginTop: '1rem', padding: '0.8rem', background: 'rgba(231, 76, 60, 0.1)', color: 'var(--accent-red)', borderRadius: '4px', border: '1px solid rgba(231, 76, 60, 0.3)', whiteSpace: 'pre-wrap', fontSize: '0.85rem', maxHeight: '150px', overflowY: 'auto' }}>
                 {importError}
+              </div>
+            )}
+
+
+            {moduleId && moduleUnits.length > 0 && (
+              <div style={{ marginBottom: '0', marginTop: '1rem', background: 'var(--bg-deep)', padding: '1rem', borderRadius: '8px', border: '1px solid #a38524' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'var(--accent-gold)', fontWeight: 600, fontSize: '0.85rem' }}>🤖 AI Prompt Generator</span>
+                  <button
+                    onClick={() => {
+                      const outline = JSON.stringify(moduleUnits.map(u => ({
+                        unit_identifier: u.unit_identifier,
+                        name: u.name,
+                        topics: u.topics.map(t => ({ name: t.name }))
+                      })), null, 2);
+                      const prompt = `Here is my module outline as a JSON string.
+${outline}
+
+I want you to convert the questions I give you into a JSON array. Use the following examples to understand every supported question type:
+
+[
+  {
+    "type": "MCQ",
+    "text": "Which type of agent selects actions based solely on the current percept?",
+    "options": ["Model-based reflex agent", "Simple reflex agent", "Goal-based agent", "Utility-based agent"],
+    "correctAnswer": "Simple reflex agent",
+    "marks": 1,
+    "unit_identifier": "U1",
+    "topics": [{ "name": "Intelligent Agents" }]
+  },
+  {
+    "type": "CHECKBOX",
+    "text": "Which of the following are uninformed search strategies? (Select all that apply)",
+    "options": ["A* Search", "Breadth-First Search (BFS)", "Depth-First Search (DFS)", "Greedy Best-First Search"],
+    "correctAnswer": ["Breadth-First Search (BFS)", "Depth-First Search (DFS)"],
+    "unit_identifier": "U2",
+    "topics": [{ "name": "Uninformed Search Strategies" }]
+  },
+  {
+    "type": "ESSAY",
+    "text": "Explain the differences between supervised and unsupervised learning, with examples.",
+    "correctAnswer": "Rubric: Student should mention labelled vs unlabelled data, provide examples like classification (supervised) and clustering (unsupervised). Award marks for clarity and examples.",
+    "marks": 10,
+    "unit_identifier": "U5",
+    "topics": [{ "name": "Forms of Learning" }]
+  },
+  {
+    "type": "SHORT_TEXT",
+    "text": "What does the acronym 'CNN' stand for in deep learning?",
+    "correctAnswer": "Convolutional Neural Network",
+    "marks": 1,
+    "unit_identifier": "U6",
+    "topics": [{ "name": "Convolutional Neural Networks (CNNs)" }]
+  },
+  {
+    "type": "NUMBER",
+    "text": "How many layers does a simple perceptron have?",
+    "correctAnswer": 2,
+    "marks": 1
+  },
+  {
+    "type": "DRAG_DROP",
+    "text": "In adversarial search, the ___ algorithm evaluates game trees, while ___ pruning eliminates irrelevant branches.",
+    "options": ["Minimax", "Alpha-Beta"],
+    "unit_identifier": "U2",
+    "topics": [{ "name": "Adversarial Search and Games" }]
+  },
+  {
+    "type": "FILL_BLANK",
+    "text": "The ___ quantifier in First-Order Logic means 'for all elements in the domain'.",
+    "options": ["universal"],
+    "unit_identifier": "U3",
+    "topics": [{ "name": "First-Order Logic" }]
+  }
+]
+
+IMPORTANT RULES:
+- Each question MUST have a valid "type": MCQ, CHECKBOX, NUMBER, SHORT_TEXT, ESSAY, DRAG_DROP, or FILL_BLANK
+- Include "unit_identifier" and "topics" using the module outline above where applicable
+- MCQ/CHECKBOX: "options" is a string array; "correctAnswer" must exactly match one (MCQ) or more (CHECKBOX) option strings
+- ESSAY: provide a grading rubric as "correctAnswer"
+- SHORT_TEXT: provide the expected short answer as "correctAnswer"
+- NUMBER: "correctAnswer" must be a number (no quotes)
+- DRAG_DROP / FILL_BLANK: "options" contains the words/phrases to fill in the blanks, in order
+- Do NOT include any text, markdown, or explanation outside the JSON array`;
+                      navigator.clipboard.writeText(prompt).then(() => showToast('✅ AI prompt copied! Paste it into ChatGPT, Gemini, or any LLM.'));
+                    }}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}
+                  >
+                    Copy Prompt
+                  </button>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
+                  Copy and paste this prompt into ChatGPT, Gemini, or any LLM along with your questions. The outline for <strong style={{color:'var(--text-main)'}}>{availableModules.find(m => m.id === moduleId)?.name}</strong> is automatically embedded.
+                </p>
               </div>
             )}
 

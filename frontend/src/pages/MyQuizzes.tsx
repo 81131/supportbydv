@@ -41,7 +41,10 @@ const MyQuizzes: React.FC = () => {
                     {quizzes.map(q => (
                         <div key={q.id} className="item-card row">
                             <div>
-                                <h3 className="text-title" style={{ marginBottom: '0.5rem' }}>{q.title}</h3>
+                                <h3 className="text-title" style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    {q.title}
+                                    {!q.is_published && <span style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--bg-card)', border: '1px solid var(--accent-gold)', borderRadius: '12px', color: 'var(--accent-gold)' }}>Draft</span>}
+                                </h3>
                                 <p className="text-desc" style={{ marginBottom: '1rem' }}>{q.description}</p>
                                 <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-muted)' }}>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><FileText size={16} /> {q.question_count} Questions</span>

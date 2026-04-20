@@ -40,6 +40,7 @@ export interface Question {
   correctText?: string;     
   unitId?: number | null;
   topicIds?: number[];
+  topicError?: string; // 👈 Warning for bulk import missing topics
 }
 
 export interface Quiz {

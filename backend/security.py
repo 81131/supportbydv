@@ -12,7 +12,7 @@ from models.monetization import UserSubscription, SubscriptionTier
 
 SECRET_KEY = os.environ["SECRET_KEY"] # Throw error if missing
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 180
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 pwd_context = CryptContext(

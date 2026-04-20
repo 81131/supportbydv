@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { BookMarked, Save, ArrowLeft, Upload, X, Plus, Trash2 } from 'lucide-react';
+import { BookMarked, Save, ArrowLeft, Upload, X, Plus, Trash2, Download } from 'lucide-react';
 import Cropper from 'react-easy-crop';
 import type { LectureUnit } from '../types/quiz';
 import api, { API_BASE_URL } from '../api';
@@ -344,6 +344,26 @@ const EditModule: React.FC = () => {
               <h2 className="text-title">Lecture Units &amp; Topics</h2>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button onClick={() => { setBulkImportError(''); setBulkImportJson(''); setShowBulkImportModal(true); }} className="btn-ghost-gold"><Upload size={16}/> Bulk Import JSON</button>
+                  <button
+                    onClick={() => {
+                      const outline = units.map(u => ({
+                        unit_identifier: u.unit_identifier,
+                        name: u.name,
+                        topics: u.topics.map(t => ({ name: t.name }))
+                      }));
+                      const blob = new Blob([JSON.stringify(outline, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `module-outline.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="btn-ghost-gold"
+                    title="Download module outline as JSON"
+                  >
+                    <Download size={16}/> Export Outline
+                  </button>
                   <button onClick={handleAddUnit} className="btn-ghost-gold"><Plus size={16}/> Add Unit</button>
               </div>
            </div>

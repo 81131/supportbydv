@@ -89,7 +89,7 @@ async def create_quiz(quiz_in: QuizCreate, db: AsyncSession = Depends(get_db), c
 @router.get("/me")
 async def get_my_quizzes(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch all scrolls forged by the current scholar."""
-    quizzes = (await db.execute(select(Quiz).filter(Quiz.created_user_id == current_user.id))).scalars().all()
+    quizzes = (await db.execute(select(Quiz).filter(Quiz.created_user_id == current_user.id, Quiz.is_deleted == False))).scalars().all()
     # Attach question count and attempt count for the dashboard
     result = []
     for q in quizzes:
@@ -652,7 +652,7 @@ async def start_quiz_attempt(quiz_id: int, db: AsyncSession = Depends(get_db), c
     ))).scalars().first()
     
     if not attempt:
-        past_attempts = (await db.execute(select(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED"))).scalar() or 0
+        past_attempts = (await db.execute(select(func.count(QuizAttempt.id)).filter(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED"))).scalar() or 0
         attempt = QuizAttempt(
             user_id=current_user.id, 
             quiz_id=quiz.id, 

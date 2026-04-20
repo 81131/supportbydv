@@ -91,7 +91,7 @@ async def google_auth(
         is_secure = os.getenv("APP_ENV") == "production"
         # Access token lasts 15m (900s)
         response.set_cookie(
-            key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900
+            key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=10800
         )
         # Refresh token lasts 7 days
         response.set_cookie(
@@ -166,7 +166,7 @@ async def local_register(
         
         # Access token 15 min
         response.set_cookie(
-            key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900
+            key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=10800
         )
         # Refresh token 7 days
         response.set_cookie(
@@ -175,7 +175,7 @@ async def local_register(
         
         csrf_token = secrets.token_hex(32)
         response.set_cookie(
-            key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=900
+            key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=10800
         )
 
         return {"user": new_user}
@@ -218,11 +218,11 @@ async def local_login(
     refresh_token = create_refresh_token(data=token_data)
     
     is_secure = os.getenv("APP_ENV") == "production"
-    response.set_cookie(key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900)
+    response.set_cookie(key="access_token", value=access_token, httponly=True, samesite="lax", secure=is_secure, max_age=10800)
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="lax", secure=is_secure, max_age=604800, path="/auth/refresh")
     
     csrf_token = secrets.token_hex(32)
-    response.set_cookie(key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=900)
+    response.set_cookie(key="csrftoken", value=csrf_token, httponly=False, samesite="lax", secure=is_secure, max_age=10800)
 
     return {"user": user}
 
@@ -353,7 +353,7 @@ async def refresh_token(request: Request, response: Response, db: AsyncSession =
         
         is_secure = os.getenv("APP_ENV") == "production"
         response.set_cookie(
-            key="access_token", value=new_access_token, httponly=True, samesite="lax", secure=is_secure, max_age=900
+            key="access_token", value=new_access_token, httponly=True, samesite="lax", secure=is_secure, max_age=10800
         )
         return {"message": "Token refreshed successfully"}
         
