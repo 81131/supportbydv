@@ -274,7 +274,7 @@ body.light-theme .hero-subtitle {
     white-space: nowrap !important;
     justify-content: flex-start !important;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Hide scrollbar for clean look */
+    scrollbar-width: none; 
   }
   .scrollable-tabs-container::-webkit-scrollbar {
     display: none;
@@ -282,6 +282,26 @@ body.light-theme .hero-subtitle {
   .scrollable-tabs-container button {
     flex: 0 0 auto !important;
     padding: 1rem 1.5rem !important;
+  }
+
+  /* Stat Card Grid Fix */
+  .profile-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+  .profile-stats-grid > div {
+    padding: 1rem !important;
+  }
+  .profile-stats-grid div[style*="fontSize: '2rem'"] {
+    font-size: 1.5rem !important;
+  }
+
+  /* Hero Button Spacing */
+  .hero-cta-container {
+    margin-top: 3rem !important;
+    width: 100%;
+    display: flex;
+    justify-content: center;
   }
 }
 

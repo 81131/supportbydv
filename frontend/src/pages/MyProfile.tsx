@@ -313,7 +313,7 @@ const MyProfile: React.FC = () => {
         <p className="text-desc" style={{ textAlign: 'center', padding: '2rem' }}>Consulting the Grand Maester's records…</p>
       ) : (
         <>
-          <div style={{
+          <div className="profile-stats-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
             gap: '1rem',
@@ -330,7 +330,7 @@ const MyProfile: React.FC = () => {
               <h2 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '1.2rem' }}>
                 Battle Honours
               </h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+              <div className="profile-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                 <StatCard
                   label="Average Score"
                   value={stats.avg_score_pct !== null ? `${stats.avg_score_pct}%` : null}

@@ -115,9 +115,11 @@ export default function Home({ openModal, user }: { openModal: (mode: 'login' | 
       <p className="hero-subtitle">
         All men should die. But before that, all students must pass. Access your exam preparations, conquer the quizzes, and rise through the leaderboard ranks.
       </p>
-      <button className="btn-primary" style={{ padding: '1rem 2rem', fontSize: '1.2rem' }} onClick={() => openModal('login')}>
-        Valar Dohaeris!
-      </button>
+      <div className="hero-cta-container">
+        <button className="btn-primary" style={{ padding: '1rem 2rem', fontSize: '1.2rem' }} onClick={() => openModal('login')}>
+          Valar Dohaeris!
+        </button>
+      </div>
     </main>
   );
 }

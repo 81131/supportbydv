@@ -335,7 +335,8 @@ async def get_notes_by_module(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    stmt = select(Note).filter(Note.module_id == module_id)
+    from sqlalchemy.orm import joinedload
+    stmt = select(Note).options(joinedload(Note.uploader)).filter(Note.module_id == module_id)
     if unitId:
         stmt = stmt.filter(Note.unit_id == unitId)
     if topicId:
@@ -346,7 +347,7 @@ async def get_notes_by_module(
     
     result = []
     for n in notes:
-        uploader = (await db.execute(select(User).filter(User.id == n.uploader_id))).scalars().first()
+        uploader = n.uploader
         
         if uploader and hasattr(uploader.role, 'value'): creator_role = uploader.role.value
         elif uploader: creator_role = str(uploader.role).replace('UserRole.', '')
@@ -398,7 +399,8 @@ async def get_all_collections(module_id: Optional[int] = None, db: AsyncSession 
     # 2. Fetch Public + User's Private Collections
     is_admin = current_user.role.value in ["admin", "noOne"]
     
-    stmt = select(Collection).filter(
+    from sqlalchemy.orm import joinedload
+    stmt = select(Collection).options(joinedload(Collection.creator)).filter(
         (Collection.visibility == VisibilityEnum.PUBLIC) |
         (Collection.creator_id == current_user.id)
     )
@@ -410,7 +412,7 @@ async def get_all_collections(module_id: Optional[int] = None, db: AsyncSession 
     cols = (await db.execute(stmt)).scalars().all()
 
     for c in cols:
-        creator = (await db.execute(select(User).filter(User.id == c.creator_id))).scalars().first()
+        creator = c.creator
         creator_role = creator.role.value if creator and hasattr(creator.role, 'value') else "user"
         note_count = (await db.execute(select(CollectionNote).filter(CollectionNote.collection_id == c.id))).scalar() or 0
         
@@ -591,12 +593,13 @@ async def get_my_collections(db: AsyncSession = Depends(get_db), current_user: U
 @router.get("/collections/{collection_id}")
 async def get_collection_detail(collection_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Returns metadata for a single collection, including creator info."""
-    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
+    from sqlalchemy.orm import joinedload
+    col = (await db.execute(select(Collection).options(joinedload(Collection.creator)).filter(Collection.id == collection_id))).scalars().first()
     if not col:
         raise HTTPException(status_code=404, detail="Archive not found.")
     if col.visibility == VisibilityEnum.PRIVATE and col.creator_id != current_user.id and current_user.role.value != "noOne":
         raise HTTPException(status_code=403, detail="This archive is sealed.")
-    creator = (await db.execute(select(User).filter(User.id == col.creator_id))).scalars().first()
+    creator = col.creator
     note_count = (await db.execute(select(CollectionNote).filter(CollectionNote.collection_id == col.id))).scalar() or 0
     return {
         "id": col.id, "title": col.title, "description": col.description,
@@ -613,8 +616,10 @@ async def get_collection_detail(collection_id: int, db: AsyncSession = Depends(g
 async def get_notes_in_collection(collection_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetches all scrolls stored inside a specific archive."""
     # 1. Verify the collection exists and the user is allowed to see it
+    from sqlalchemy.orm import selectinload, joinedload
     links = (await db.execute(
         select(CollectionNote)
+        .options(joinedload(CollectionNote.note).joinedload(Note.uploader))
         .filter(CollectionNote.collection_id == collection_id)
         .order_by(CollectionNote.sort_order.asc(), CollectionNote.id.asc())
     )).scalars().all()
@@ -625,7 +630,7 @@ async def get_notes_in_collection(collection_id: int, db: AsyncSession = Depends
         if not n:
             continue
         is_fav = (await db.execute(select(FavoriteNote).filter(FavoriteNote.note_id == n.id, FavoriteNote.user_id == current_user.id))).scalars().first() is not None
-        uploader = (await db.execute(select(User).filter(User.id == n.uploader_id))).scalars().first()
+        uploader = n.uploader
         creator_name = uploader.first_name if uploader else "Scholar"
         result.append({
             "id": n.id, "title": n.title, "description": n.description,

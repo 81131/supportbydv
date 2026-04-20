@@ -432,20 +432,27 @@ async def get_my_analytics(
 
 @router.get("/module/{module_id}")
 async def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 0, db: AsyncSession = Depends(get_db)):
-    quizzes = (await db.execute(select(Quiz).filter(Quiz.module_id == module_id, Quiz.is_deleted == False, Quiz.is_published == True).offset(offset).limit(limit))).scalars().all()
+    # Optimized with joinedload to fetch creators in the same query
+    from sqlalchemy.orm import joinedload
+    quizzes = (await db.execute(
+        select(Quiz)
+        .options(joinedload(Quiz.created_by))
+        .filter(Quiz.module_id == module_id, Quiz.is_deleted == False, Quiz.is_published == True)
+        .offset(offset).limit(limit)
+    )).scalars().all()
     
     result = []
     for q in quizzes:
-        # 1. Fetch creator to extract the role securely
-        creator = (await db.execute(select(User).filter(User.id == q.created_user_id))).scalars().first()
+        creator = q.created_by
         
-        # 2. Safely extract the role (Handling SQLAlchemy Enum weirdness)
         if creator and hasattr(creator.role, 'value'):
             creator_role = creator.role.value
         elif creator:
             creator_role = str(creator.role).replace('UserRole.', '')
         else:
             creator_role = "user"
+        
+        creator_name = f"{creator.first_name} {creator.last_name}" if creator else "Unknown Scholar"
         
         # 3. Append EVERYTHING to the result
         creator_name = f"{creator.first_name} {creator.last_name}" if creator else "Unknown Scholar"
@@ -468,12 +475,17 @@ async def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 
 
 @router.get("/{quiz_id}")
 async def get_single_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
-    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
+    from sqlalchemy.orm import joinedload
+    quiz = (await db.execute(
+        select(Quiz)
+        .options(joinedload(Quiz.created_by))
+        .filter(Quiz.id == quiz_id, Quiz.is_deleted == False)
+    )).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     
-    creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
-    creator_role = creator.role.value if creator else "user"
+    creator = quiz.created_by
+    creator_role = creator.role.value if creator and hasattr(creator.role, 'value') else "user"
     
     questions_list = []
     # Filter questions by current quiz version
@@ -587,12 +599,17 @@ async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db), current_
 
 @router.get("/{quiz_id}/take")
 async def get_safe_quiz_for_taking(quiz_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    quiz = (await db.execute(select(Quiz).filter(Quiz.id == quiz_id, Quiz.is_deleted == False))).scalars().first()
+    from sqlalchemy.orm import joinedload
+    quiz = (await db.execute(
+        select(Quiz)
+        .options(joinedload(Quiz.created_by))
+        .filter(Quiz.id == quiz_id, Quiz.is_deleted == False)
+    )).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     
-    creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
-    creator_role = creator.role.value if creator else "user"
+    creator = quiz.created_by
+    creator_role = creator.role.value if creator and hasattr(creator.role, 'value') else "user"
     
     safe_questions = []
     # Only fetch questions for the CURRENT version of the quiz
