@@ -436,14 +436,14 @@ async def get_quizzes_by_module(module_id: int, limit: int = 100, offset: int = 
     from sqlalchemy.orm import joinedload
     quizzes = (await db.execute(
         select(Quiz)
-        .options(joinedload(Quiz.created_by))
+        .options(joinedload(Quiz.creator))
         .filter(Quiz.module_id == module_id, Quiz.is_deleted == False, Quiz.is_published == True)
         .offset(offset).limit(limit)
     )).scalars().all()
     
     result = []
     for q in quizzes:
-        creator = q.created_by
+        creator = q.creator
         
         if creator and hasattr(creator.role, 'value'):
             creator_role = creator.role.value
@@ -478,13 +478,13 @@ async def get_single_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
     from sqlalchemy.orm import joinedload
     quiz = (await db.execute(
         select(Quiz)
-        .options(joinedload(Quiz.created_by))
+        .options(joinedload(Quiz.creator))
         .filter(Quiz.id == quiz_id, Quiz.is_deleted == False)
     )).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     
-    creator = quiz.created_by
+    creator = quiz.creator
     creator_role = creator.role.value if creator and hasattr(creator.role, 'value') else "user"
     
     questions_list = []
@@ -602,13 +602,13 @@ async def get_safe_quiz_for_taking(quiz_id: int, db: AsyncSession = Depends(get_
     from sqlalchemy.orm import joinedload
     quiz = (await db.execute(
         select(Quiz)
-        .options(joinedload(Quiz.created_by))
+        .options(joinedload(Quiz.creator))
         .filter(Quiz.id == quiz_id, Quiz.is_deleted == False)
     )).scalars().first()
     if not quiz: 
         raise HTTPException(status_code=404, detail="Scroll not found.")
     
-    creator = quiz.created_by
+    creator = quiz.creator
     creator_role = creator.role.value if creator and hasattr(creator.role, 'value') else "user"
     
     safe_questions = []

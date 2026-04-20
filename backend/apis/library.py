@@ -115,16 +115,17 @@ async def hard_delete_note(
     if note.uploader_id != current_user.id and current_user.role.value not in ["admin", "noOne"]:
         raise HTTPException(status_code=403, detail="You do not have permission to burn this scroll.")
 
-    # 1. Destroy the object in R2
+    # 1. Destroy the DB record first (so it disappears from UI immediately)
+    await db.delete(note)
+    await db.commit()
+
+    # 2. Clean up the physical file in R2
     try:
         async with get_s3_client() as client:
             await client.delete_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
-    except Exception:
-        pass
-
-    # 2. Destroy the DB record (SQLAlchemy will automatically cascade and delete favorites/collection links!)
-    db.delete(note)
-    await db.commit()
+    except Exception as e:
+        # We don't raise an error here because the record is already gone from DB
+        print(f"R2 Cleanup Error for {note.file_url}: {e}")
     
     return {"message": "Scroll burned and erased from all collections."}
 
