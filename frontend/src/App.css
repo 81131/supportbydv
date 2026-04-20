@@ -229,8 +229,29 @@ body.light-theme .hero-subtitle {
   .hero-title { font-size: 2.5rem; }
 }
 
-/* --- MOBILE SPECIFIC FIXES --- */
+/* --- FLOATING RAVEN --- */
+.floating-raven-button {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+}
+
+.floating-raven-window {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 380px;
+  height: 600px;
+  max-height: 85vh;
+}
+
+/* --- MOBILE SPECIFIC --- */
 @media (max-width: 768px) {
+  /* Hide the desktop nav completely on mobile */
+  .desktop-nav {
+    display: none !important;
+  }
+  
   .page-container {
     padding: 1rem !important;
   }
@@ -267,6 +288,11 @@ body.light-theme .hero-subtitle {
     right: 1rem !important;
     bottom: 1rem !important;
     height: 70vh !important;
+  }
+
+  .floating-raven-button {
+    bottom: 1rem !important;
+    right: 1rem !important;
   }
 
   .scrollable-tabs-container {

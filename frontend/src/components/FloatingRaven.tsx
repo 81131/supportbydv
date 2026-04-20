@@ -175,8 +175,9 @@ const FloatingRaven: React.FC = () => {
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}
+          className="floating-raven-button"
           style={{
-            position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 9999,
+            zIndex: 9999,
             background: 'var(--bg-deep)', border: '2px solid var(--accent-gold)',
             color: 'var(--accent-gold)', borderRadius: '50%', width: 60, height: 60,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -197,11 +198,10 @@ const FloatingRaven: React.FC = () => {
 
       {isOpen && (
         <div className="floating-raven-window" style={{
-          position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 9999,
-          width: '380px', background: 'var(--bg-surface)', border: '1px solid var(--border-dark)',
+          zIndex: 9999,
+          background: 'var(--bg-surface)', border: '1px solid var(--border-dark)',
           borderRadius: 16, display: 'flex', flexDirection: 'column',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.5)', overflow: 'hidden',
-          height: '600px', maxHeight: '85vh'
+          boxShadow: '0 10px 40px rgba(0,0,0,0.5)', overflow: 'hidden'
         }}>
           {/* Header */}
           <div style={{ background: 'var(--bg-deep)', padding: '1rem', borderBottom: '1px solid var(--border-dark)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
