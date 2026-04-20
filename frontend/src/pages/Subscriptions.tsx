@@ -83,7 +83,7 @@ export default function Subscriptions() {
       )}
 
       {/* Pricing Cards (W3Schools Layout) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
         
         {/* Beginner */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dark)', borderRadius: 12, padding: '2.5rem', display: 'flex', flexDirection: 'column' }}>
@@ -164,9 +164,9 @@ export default function Subscriptions() {
 
       {/* Checkout Form */}
       {selectedTier && (
-        <section id="checkout-form" style={{ background: 'var(--bg-surface)', padding: '3rem', borderRadius: 12, border: '1px solid var(--border-dark)', marginTop: '2rem' }}>
+        <section id="checkout-form" className="subscription-checkout-section" style={{ background: 'var(--bg-surface)', padding: '3rem', borderRadius: 12, border: '1px solid var(--border-dark)', marginTop: '2rem' }}>
           <h2 className="brand-font" style={{ color: 'var(--accent-gold)', marginBottom: '2rem' }}>Complete your transaction: {selectedTier.toUpperCase()}</h2>
-          <form onSubmit={submitRequest} style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 1fr', gap: '2rem' }}>
+          <form onSubmit={submitRequest} className="subscription-checkout-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 1fr', gap: '2rem' }}>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <h4 style={{ margin: 0, color: 'var(--text-main)' }}>Configuration Details</h4>

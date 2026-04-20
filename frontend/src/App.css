@@ -229,6 +229,47 @@ body.light-theme .hero-subtitle {
   .hero-title { font-size: 2.5rem; }
 }
 
+/* --- MOBILE SPECIFIC FIXES --- */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 1rem !important;
+  }
+  
+  .brand-font {
+    font-size: 2rem !important;
+  }
+
+  /* Subscription Cards Fixes */
+  .subscription-checkout-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
+  
+  .subscription-checkout-section {
+    padding: 1.5rem !important;
+  }
+
+  /* Control Bar Fixes (Module/Quiz View) */
+  .control-bar {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 1rem !important;
+  }
+  
+  .control-bar select {
+    width: 100% !important;
+  }
+
+  /* Raven Responsive Width */
+  .floating-raven-window {
+    width: calc(100vw - 2rem) !important;
+    max-width: 380px;
+    right: 1rem !important;
+    bottom: 1rem !important;
+    height: 70vh !important;
+  }
+}
+
 /* --- MODALS & INPUTS --- */
 .modal-overlay {
   position: fixed;

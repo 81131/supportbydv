@@ -196,7 +196,7 @@ const FloatingRaven: React.FC = () => {
       )}
 
       {isOpen && (
-        <div style={{
+        <div className="floating-raven-window" style={{
           position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 9999,
           width: '380px', background: 'var(--bg-surface)', border: '1px solid var(--border-dark)',
           borderRadius: 16, display: 'flex', flexDirection: 'column',
