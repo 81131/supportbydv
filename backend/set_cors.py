@@ -3,7 +3,7 @@ from storage import s3_client, R2_BUCKET_NAME
 
 def configure_cors():
     print(f"Setting CORS configuration for bucket: {R2_BUCKET_NAME}")
-    allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost").split(",")
+    allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS").split(",")
     cors_configuration = {
         'CORSRules': [{
             'AllowedHeaders': ['*'],

@@ -7,15 +7,12 @@ services:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Removed public ports for security
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-
 
   backend:
     build:
@@ -24,8 +21,6 @@ services:
     restart: always
     env_file:
       - .env
-    # Port 8000 is NOT exposed to the host — all traffic flows through nginx.
-    # This enforces that CSRF/cookie checks can't be bypassed via direct API access.
     depends_on:
       db:
         condition: service_healthy
@@ -43,8 +38,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
     depends_on:
       - backend
+
+  certbot:
+    image: certbot/certbot
+    container_name: supportbydv-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
   postgres_data:

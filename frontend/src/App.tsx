@@ -37,6 +37,7 @@ import SubmitAd from './pages/SubmitAd';
 import BusinessContact from './pages/BusinessContact';
 import VideoUploader from './pages/VideoUploader';
 import VideoViewer from './pages/VideoViewer';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 // ── NotificationBell: lives inside <Router> so it can use useNavigate ─────────
 function NotificationBell({ notifications, onMarkRead, onRefresh }: {
@@ -113,6 +114,7 @@ function App() {
   const [lastName, setLastName] = useState('');
   const [modules, setModules] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -215,6 +217,10 @@ function App() {
 
   const handleLocalAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authMode === 'register' && !agreedToPrivacy) {
+      alert("A man must agree to the Privacy Policy before pledging loyalty.");
+      return;
+    }
     try {
       let response;
       if (authMode === 'register') {
@@ -356,6 +362,7 @@ function App() {
             <Route path="/business-contact" element={<BusinessContact />} />
             <Route path="/forge-video" element={<PrivilegedRoute user={user}><VideoUploader /></PrivilegedRoute>} />
             <Route path="/videos/watch/:videoId" element={<ProtectedRoute user={user}><VideoViewer /></ProtectedRoute>} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <FloatingRaven />
@@ -396,7 +403,28 @@ function App() {
                     style={{ width: '100%' }}
                   />
                 </div>
-                <button type="submit" className="btn-primary" style={{ width: '100%' }}>{authMode === 'login' ? 'Enter the House' : 'Pledge Loyalty'}</button>
+                 {authMode === 'register' && (
+                  <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                    <input 
+                      type="checkbox" 
+                      id="privacy-check"
+                      checked={agreedToPrivacy} 
+                      onChange={(e) => setAgreedToPrivacy(e.target.checked)} 
+                      required 
+                    />
+                    <label htmlFor="privacy-check">
+                      By pledging loyalty, I agree to the <Link to="/privacy-policy" target="_blank" onClick={(e) => e.stopPropagation()} style={{ color: 'var(--accent-gold)' }}>Privacy Policy</Link>
+                    </label>
+                  </div>
+                )}
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  style={{ width: '100%', opacity: (authMode === 'register' && !agreedToPrivacy) ? 0.5 : 1 }}
+                  disabled={authMode === 'register' && !agreedToPrivacy}
+                >
+                  {authMode === 'login' ? 'Enter the House' : 'Pledge Loyalty'}
+                </button>
               </form>
 
               <div className="auth-switch" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
