@@ -13,9 +13,13 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 # ── Shared helpers ─────────────────────────────────────────────────────────
 
+from sqlalchemy.orm import joinedload
+
 async def _get_ordered_achievements(user_id: int, db: AsyncSession):
     return (await db.execute(
-        select(UserAchievement).filter(
+        select(UserAchievement)
+        .options(joinedload(UserAchievement.achievement))
+        .filter(
             UserAchievement.user_id == user_id,
             UserAchievement.is_valid == True
         ).order_by(
