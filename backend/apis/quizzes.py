@@ -904,13 +904,16 @@ async def submit_and_grade_quiz(
             )
             db.add(essay_notification)
     
+    # Store properties before commit to avoid MissingGreenlet errors on expired objects
+    attempt_num = attempt.attempt_number
+    
     await db.commit()
 
     return {
         "message": "Trial complete.",
         "score": total_score,
         "max_score": max_score,
-        "attempt_number": attempt.attempt_number,
+        "attempt_number": attempt_num,
         "review": review_details
     }
 
