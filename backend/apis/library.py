@@ -477,7 +477,7 @@ async def toggle_favorite(note_id: int, db: AsyncSession = Depends(get_db), curr
     """Toggles the heart icon."""
     existing = (await db.execute(select(FavoriteNote).filter(FavoriteNote.note_id == note_id, FavoriteNote.user_id == current_user.id))).scalars().first()
     if existing:
-        db.delete(existing)
+        await db.delete(existing)
         await db.commit()
         return {"message": "Removed from favorites.", "is_favorited": False}
     
@@ -654,7 +654,7 @@ async def remove_note_from_collection(collection_id: int, note_id: int, db: Asyn
     ))).scalars().first()
     if not link:
         raise HTTPException(status_code=404, detail="Scroll not in this archive.")
-    db.delete(link)
+    await db.delete(link)
     await db.commit()
     return {"message": "Scroll removed from archive."}
 

@@ -118,7 +118,7 @@ async def delete_module(module_id: int, db: AsyncSession = Depends(get_db), curr
         raise HTTPException(status_code=403, detail="Unauthorized")
     module = (await db.execute(select(Module).filter(Module.id == module_id))).scalars().first()
     if not module: raise HTTPException(status_code=404)
-    db.delete(module)
+    await db.delete(module)
     await db.commit()
     return {"message": "Module deleted"}
 
@@ -201,7 +201,7 @@ async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db), current_
     videos = (await db.execute(select(Video).filter(Video.unit_id == unit_id))).scalars().all()
     for v in videos: v.unit_id = None
     
-    db.delete(unit)
+    await db.delete(unit)
     await db.commit()
     return {"message": "Unit deleted"}
 
@@ -242,7 +242,7 @@ async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db), curren
         except:
             pass
             
-    db.delete(topic)
+    await db.delete(topic)
     await db.commit()
     return {"message": "Topic deleted securely"}
 

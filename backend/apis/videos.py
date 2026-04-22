@@ -105,6 +105,6 @@ async def delete_video_link(video_id: int, db: AsyncSession = Depends(get_db), c
         raise HTTPException(status_code=403, detail="Unworthy.")
     video = (await db.execute(select(Video).filter(Video.id == video_id))).scalars().first()
     if video:
-        db.delete(video)
+        await db.delete(video)
         await db.commit()
-    return {"status": "Archived."}
+        return {"message": "Video removed securely from all collections"}
