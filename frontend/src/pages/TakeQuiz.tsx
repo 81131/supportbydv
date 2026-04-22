@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { Timer as TimerIcon, Send, RefreshCcw, AlertCircle, ArrowLeft, ArrowRight, Flag, Calculator, Hash, LayoutGrid, ListOrdered, FileText, CheckSquare, Edit3, XCircle } from 'lucide-react';
+import { Timer as TimerIcon, CheckCircle, Send, RefreshCcw, AlertCircle, ArrowLeft, ArrowRight, Flag, Calculator, Hash, LayoutGrid, ListOrdered, FileText, CheckSquare, Edit3, XCircle } from 'lucide-react';
 import ScientificCalculator from '../components/ScientificCalculator';
 
 const TakeQuiz: React.FC = () => {
@@ -15,6 +15,7 @@ const TakeQuiz: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [results, setResults] = useState<any>(null); // still used as a guard for timers/re-submission
   const [startTime, setStartTime] = useState<number | null>(null);
   const [isConsentAgreed, setIsConsentAgreed] = useState(false);
   const answersRef = useRef(answers);
@@ -194,6 +195,7 @@ const TakeQuiz: React.FC = () => {
         time_consumed_seconds: timeConsumedSeconds,
         is_draft: false
       });
+      setResults(res.data); // guard: stops timers and prevents re-submission
       // Redirect to the dedicated attempt review page
       navigate(`/quiz-attempt/${res.data.attempt_id}`, { replace: true });
     } catch (error) {
