@@ -149,7 +149,7 @@ async def chat_with_maester(
 
     try:
         # Prepend system instruction to the current message
-        full_message = f"SYSTEM INSTRUCTION: {system_prompt}\n\nUser: {req.message}"
+        full_message = f"SYSTEM INSTRUCTION: {system_prompt}\n\nUser: {request.message}"
         response = chat.send_message(full_message)
         reply = response.text
     except Exception as e:
