@@ -49,8 +49,11 @@ async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max
         parsed = json.loads(text)
         awarded = float(parsed.get("marks", 0.0))
         return max(0.0, min(awarded, float(max_marks)))
-    except Exception:
+    except Exception as e:
+        # Log the actual failure so it's visible in docker logs
+        print(f"[AI GRADER] Failed to grade essay for Q: '{question_text[:60]}...' — {type(e).__name__}: {e}")
         return 0.0
+
 
 @router.post("/resources/upload")
 async def upload_quiz_resource(
@@ -972,11 +975,18 @@ async def submit_and_grade_quiz(
     ai_graded_any = False  # Track if AI successfully graded at least one essay
 
     if api_key:
+        import asyncio
+        essay_count = 0
         for i, rev in enumerate(review_details):
             if rev["type"] == "ESSAY" and rev.get("user_answer", "No answer provided") not in ("No answer provided", "None"):
                 matching_q = next((q for q in current_questions
                                    if q.type.value == "ESSAY" and q.text == rev["question_text"]), None)
                 if matching_q:
+                    # Space out calls to avoid 429s when multiple essays exist
+                    if essay_count > 0:
+                        await asyncio.sleep(1.5)
+                    essay_count += 1
+
                     rubric = matching_q.correct_text or "Award marks based on relevance and accuracy."
                     ai_marks = await _ai_grade_essay(
                         question_text=matching_q.text,
@@ -985,37 +995,38 @@ async def submit_and_grade_quiz(
                         max_marks=matching_q.marks,
                         api_key=api_key
                     )
-                    # Update total_score: essay started at 0, so just add ai_marks
-                    total_score += ai_marks
 
-                    # Update in-memory review detail
-                    rev["marks_awarded"] = ai_marks
-                    rev["is_correct"] = ai_marks >= matching_q.marks
-                    rev["correct_answer"] = f"AI Graded ({ai_marks}/{matching_q.marks} marks). Rubric: {rubric}"
+                    if ai_marks > 0 or True:  # Always update — 0 may be a legitimate grade
+                        # Update total_score: essay started at 0, so just add ai_marks
+                        total_score += ai_marks
 
-                    # Update the QuestionAttempt row already in DB
-                    for qa_row in (await db.execute(
-                        select(QuestionAttempt).filter(
-                            QuestionAttempt.quiz_attempt_id == attempt.id,
-                            QuestionAttempt.question_id == matching_q.id
-                        )
-                    )).scalars().all():
-                        qa_row.marks_awarded = ai_marks
-                        qa_row.needs_manual_review = False  # AI handled it
+                        # Update in-memory review detail
+                        rev["marks_awarded"] = ai_marks
+                        rev["is_correct"] = ai_marks >= matching_q.marks
+                        rev["correct_answer"] = f"AI Graded ({ai_marks}/{matching_q.marks} marks). Rubric: {rubric}"
 
-                    ai_graded_any = True
+                        # Update the QuestionAttempt row already in DB
+                        for qa_row in (await db.execute(
+                            select(QuestionAttempt).filter(
+                                QuestionAttempt.quiz_attempt_id == attempt.id,
+                                QuestionAttempt.question_id == matching_q.id
+                            )
+                        )).scalars().all():
+                            qa_row.marks_awarded = ai_marks
+                            qa_row.needs_manual_review = False  # AI handled it — 0 is a valid grade
+
+                        ai_graded_any = True
     # ──────────────────────────────────────────────────────────────────────
 
     attempt.total_marks = total_score
     attempt.status = "COMPLETED"
 
-    # Only notify the quiz creator if AI did NOT grade all essays
-    # (i.e., no API key, or all essays failed AI grading)
+    # Notify creator only if essays still need human review after AI attempt
     has_ungraded_essays = any(
-        rev["type"] == "ESSAY" and rev["marks_awarded"] == 0.0
+        rev["type"] == "ESSAY" and rev.get("needs_manual_review", False)
         for rev in review_details
     )
-    if has_ungraded_essays and not ai_graded_any:
+    if has_ungraded_essays:
         creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
         if creator and creator.id != current_user.id:
             essay_notification = Notification(
