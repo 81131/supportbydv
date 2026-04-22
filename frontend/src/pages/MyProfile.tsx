@@ -81,7 +81,7 @@ const MyProfile: React.FC = () => {
     if (!newKeyValue.trim()) return;
     setIsKeyLoading(true);
     try {
-      await api.post('/api-keys', { label: newKeyLabel || 'Primary Key', key: newKeyValue });
+      await api.post('/api-keys/me', { label: newKeyLabel || 'Primary Key', raw_key: newKeyValue });
       setNewKeyLabel('');
       setNewKeyValue('');
       fetchKeys();
@@ -96,7 +96,7 @@ const MyProfile: React.FC = () => {
     if (!confirm("Are you sure? This will disable AI auto-grading and The Maester.")) return;
     setIsKeyLoading(true);
     try {
-      await api.delete(`/api-keys/${id}`);
+      await api.delete(`/api-keys/me/${id}`);
       fetchKeys();
     } catch { } finally {
       setIsKeyLoading(false);

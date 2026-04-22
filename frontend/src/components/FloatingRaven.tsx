@@ -228,7 +228,7 @@ const FloatingRaven: React.FC = () => {
     if (!newKeyValue.trim()) return;
     setIsLoading(true);
     try {
-      await api.post('/api-keys', { label: newKeyLabel || 'Raven Key', key: newKeyValue });
+      await api.post('/api-keys/me', { label: newKeyLabel || 'Raven Key', raw_key: newKeyValue });
       setNewKeyLabel('');
       setNewKeyValue('');
       // refresh
@@ -246,7 +246,7 @@ const FloatingRaven: React.FC = () => {
     if (!confirm("Are you sure? This will disable The Maester.")) return;
     setIsLoading(true);
     try {
-      await api.delete(`/api-keys/${id}`);
+      await api.delete(`/api-keys/me/${id}`);
       const res = await api.get('/api-keys/me');
       setPersonalKeys(res.data);
       setHasMaester(res.data.some((k: any) => k.is_active));
