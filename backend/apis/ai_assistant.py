@@ -39,48 +39,49 @@ async def _build_performance_context(user_id: int, db: AsyncSession) -> str:
     Build a concise performance summary for the system prompt.
     Includes overall accuracy, and which modules/topics have the lowest scores.
     """
-    attempts = (await db.execute(
+    # Fetch attempts with related data
+    stmt = (
         select(QuizAttempt)
         .options(selectinload(QuizAttempt.quiz), selectinload(QuizAttempt.question_attempts))
         .filter(QuizAttempt.user_id == user_id, QuizAttempt.status == "COMPLETED")
         .order_by(QuizAttempt.created_at.desc())
-        .limit(30)
-    )).scalars().all()
+        .limit(20)
+    )
+    attempts = (await db.execute(stmt)).scalars().all()
 
     if not attempts:
-        return "The student has not attempted any quizzes yet."
+        return "The student has not attempted any quizzes yet. Encourage them to try their first trial."
 
     total_earned = sum(a.total_marks for a in attempts)
-    total_max = 0
+    total_max = 0.0
     module_scores: dict = {}
 
     for attempt in attempts:
         quiz = attempt.quiz
         if not quiz:
             continue
+        
         module_id = quiz.module_id
         if module_id not in module_scores:
             module_scores[module_id] = {"earned": 0.0, "max": 0.0, "title": f"Module {module_id}"}
 
-        # Sum question marks for max
-        q_attempts = attempt.question_attempts
-        for qa in q_attempts:
-            module_scores[module_id]["earned"] += qa.marks_awarded or 0.0
-
-        # approximate max from attempt's quiz
-        questions = (await db.execute(
-            select(Question).filter(
-                Question.quiz_id == quiz.id,
-                Question.version == quiz.version
-            )
-        )).scalars().all()
-        q_max = sum(q.marks for q in questions)
+        # Use the version stored in the attempt, or fallback to current quiz version
+        target_version = getattr(attempt, "quiz_version", quiz.version)
+        
+        # Calculate max marks for this specific quiz version
+        q_max_stmt = select(func.sum(Question.marks)).filter(
+            Question.quiz_id == quiz.id, 
+            Question.version == target_version
+        )
+        q_max = (await db.execute(q_max_stmt)).scalar() or 0.0
+        
         total_max += q_max
+        module_scores[module_id]["earned"] += attempt.total_marks
         module_scores[module_id]["max"] += q_max
 
     overall_pct = round((total_earned / total_max) * 100, 1) if total_max > 0 else 0
 
-    lines = [f"Overall accuracy: {overall_pct}% across {len(attempts)} attempts."]
+    lines = [f"Overall accuracy: {overall_pct}% across {len(attempts)} trials."]
     for mod_id, s in module_scores.items():
         pct = round((s['earned'] / s['max']) * 100, 1) if s['max'] > 0 else 0
         lines.append(f"  - Module {mod_id}: {pct}% ({s['earned']:.1f}/{s['max']:.1f} marks)")
@@ -133,7 +134,7 @@ async def chat_with_maester(
 
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(performance_context=perf_context)
 
-    # Configure Gemini with student's key
+    # Configure Gemini with student's key (note: configure() is global state — safe under low concurrency)
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(model_name="gemini-2.5-flash")
 
@@ -142,7 +143,7 @@ async def chat_with_maester(
     for msg in (request.history or []):
         history_for_gemini.append({
             "role": msg.role,
-            "parts": [msg.parts]
+            "parts": [msg.content]  # ChatMessage.content, not .parts
         })
 
     chat = model.start_chat(history=history_for_gemini)
@@ -162,3 +163,37 @@ async def chat_with_maester(
         raise HTTPException(status_code=500, detail=f"The Maester could not respond: {str(e)}")
 
     return {"reply": reply}
+
+
+@router.get("/scholar-standing")
+async def get_scholar_standing(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Returns the student's overall accuracy and trial count for the Maester UI."""
+    # Fetch all completed attempts for this user
+    attempts = (await db.execute(
+        select(QuizAttempt)
+        .filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
+    )).scalars().all()
+
+    if not attempts:
+        return {"accuracy": 0, "trials": 0}
+
+    total_earned = sum(a.total_marks for a in attempts)
+    total_max = 0.0
+
+    # To avoid N+1 queries, we fetch the max marks for all relevant quiz versions
+    # We'll group by (quiz_id, version)
+    quiz_versions = set((a.quiz_id, a.quiz_version) for a in attempts)
+    max_marks_map = {}
+
+    for q_id, v in quiz_versions:
+        q_max = (await db.execute(
+            select(func.sum(Question.marks))
+            .filter(Question.quiz_id == q_id, Question.version == v)
+        )).scalar() or 0.0
+        max_marks_map[(q_id, v)] = q_max
+
+    for a in attempts:
+        total_max += max_marks_map.get((a.quiz_id, a.quiz_version), 0.0)
+
+    accuracy = round((total_earned / total_max) * 100, 1) if total_max > 0 else 0
+    return {"accuracy": accuracy, "trials": len(attempts)}

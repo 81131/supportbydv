@@ -81,10 +81,11 @@ const FloatingRaven: React.FC = () => {
         setHasMaester(active);
         
         if (active) {
-          const statsRes = await api.get('/auth/profile/stats');
+          // Use the dedicated scholar-standing endpoint (correct fields: accuracy, trials)
+          const statsRes = await api.get('/ai-assistant/scholar-standing');
           setScholarStatus({
-            accuracy: statsRes.data.accuracy_percentage || 0,
-            attempts: statsRes.data.total_quizzes_taken || 0,
+            accuracy: statsRes.data.accuracy ?? 0,
+            attempts: statsRes.data.trials ?? 0,
             weak: []
           });
         }

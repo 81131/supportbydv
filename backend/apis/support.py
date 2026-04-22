@@ -22,10 +22,6 @@ api_key = os.getenv("VITE_GEMINI_API_KEY")
 def get_support_model():
     if not api_key:
         return None
-    
-    masked_key = f"{api_key[:5]}...{api_key[-5:]}" if api_key else "None"
-    print(f"DEBUG: Support Raven using API Key: {masked_key}")
-
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-2.5-flash")
 
