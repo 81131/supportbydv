@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Save, BookOpen, ScrollText, Library, Swords, Trophy, Star, ArrowLeft, Edit2, Check, X, Linkedin, Github, Instagram, Facebook, Mail } from 'lucide-react';
+import { User, Save, BookOpen, ScrollText, Library, Swords, Trophy, Star, ArrowLeft, Edit2, Check, X, Linkedin, Github, Instagram, Facebook, Mail, Key } from 'lucide-react';
 import api from '../api';
 
 // ──────────────────────────────────────────
@@ -54,6 +54,12 @@ const MyProfile: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
+  // API Keys Management
+  const [personalKeys, setPersonalKeys] = useState<any[]>([]);
+  const [newKeyLabel, setNewKeyLabel] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [isKeyLoading, setIsKeyLoading] = useState(false);
+
   useEffect(() => {
     const stored = localStorage.getItem('user');
     if (stored) setUser(JSON.parse(stored));
@@ -61,7 +67,41 @@ const MyProfile: React.FC = () => {
     api.get('/auth/profile/stats').then(res => setStats(res.data)).catch(console.error);
     api.get('/users/me/achievements').then(res => setAchievements(res.data)).catch(console.error);
     api.get('/subscriptions/history/me').then(res => setPaymentHistory(res.data)).catch(console.error);
+    fetchKeys();
   }, []);
+
+  const fetchKeys = async () => {
+    try {
+      const res = await api.get('/api-keys/me');
+      setPersonalKeys(res.data);
+    } catch { }
+  };
+
+  const handleAddKey = async () => {
+    if (!newKeyValue.trim()) return;
+    setIsKeyLoading(true);
+    try {
+      await api.post('/api-keys', { label: newKeyLabel || 'Primary Key', key: newKeyValue });
+      setNewKeyLabel('');
+      setNewKeyValue('');
+      fetchKeys();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || "Failed to add key.");
+    } finally {
+      setIsKeyLoading(false);
+    }
+  };
+
+  const handleDeleteKey = async (id: number) => {
+    if (!confirm("Are you sure? This will disable AI auto-grading and The Maester.")) return;
+    setIsKeyLoading(true);
+    try {
+      await api.delete(`/api-keys/${id}`);
+      fetchKeys();
+    } catch { } finally {
+      setIsKeyLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -197,6 +237,13 @@ const MyProfile: React.FC = () => {
                 {memberSince && (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Member since {memberSince}</span>
                 )}
+                <button 
+                  onClick={() => navigate('/api-keys')}
+                  className="btn-ghost" 
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: 'var(--accent-gold)', borderColor: 'rgba(255,215,0,0.3)' }}
+                >
+                  <Key size={14} style={{ marginRight: '0.3rem' }} /> Gemini Keys
+                </button>
               </div>
             </div>
           ) : (
@@ -238,6 +285,45 @@ const MyProfile: React.FC = () => {
                         <option value={2}>Semester 2</option>
                     </select>
                 </div>
+              </div>
+
+              {/* API Keys Section inside Edit Mode */}
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(212,175,55,0.05)', borderRadius: '12px', border: '1px solid var(--border-dark)' }}>
+                <h3 className="brand-font" style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                   <Key size={18}/> Gemini API Keys
+                </h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1rem' }}>
+                  {personalKeys.map(k => (
+                    <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-surface)', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid var(--border-dark)' }}>
+                      <span style={{ fontSize: '0.85rem' }}>{k.label} (AIza...****)</span>
+                      <button onClick={() => handleDeleteKey(k.id)} style={{ color: '#ff6b6b', background: 'none', border: 'none', cursor: 'pointer' }}><X size={14}/></button>
+                    </div>
+                  ))}
+                  {personalKeys.length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No keys configured. The Maester is disabled.</p>}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    className="auth-input" 
+                    placeholder="Key Label" 
+                    value={newKeyLabel} 
+                    onChange={e => setNewKeyLabel(e.target.value)}
+                    style={{ margin: 0, flex: 1 }}
+                  />
+                  <input 
+                    className="auth-input" 
+                    type="password"
+                    placeholder="AIza... key" 
+                    value={newKeyValue} 
+                    onChange={e => setNewKeyValue(e.target.value)}
+                    style={{ margin: 0, flex: 2 }}
+                  />
+                  <button onClick={handleAddKey} disabled={isKeyLoading || !newKeyValue.trim()} className="btn-solid-gold" style={{ padding: '0 1rem', fontSize: '0.8rem' }}>
+                    {isKeyLoading ? '...' : 'Add'}
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>Keys are used for auto-grading your essay questions and powering The Maester.</p>
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>

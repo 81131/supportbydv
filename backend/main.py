@@ -18,6 +18,8 @@ from apis.ads import router as ads_router
 from apis.dashboard import router as dashboard_router
 from apis.support import router as support_router
 from apis import videos
+from apis.api_keys import router as api_keys_router
+from apis.ai_assistant import router as ai_assistant_router
 os.makedirs("uploads/modules", exist_ok=True)
 os.makedirs("uploads/notes", exist_ok=True)
 os.makedirs("uploads/badges", exist_ok=True)
@@ -163,6 +165,8 @@ app.include_router(ads_router)
 app.include_router(dashboard_router)
 app.include_router(support_router)
 app.include_router(videos.router, dependencies=[Depends(verify_csrf)])
+app.include_router(api_keys_router, dependencies=[Depends(verify_csrf)])
+app.include_router(ai_assistant_router, dependencies=[Depends(verify_csrf)])
 
 @app.get("/")
 def read_root():

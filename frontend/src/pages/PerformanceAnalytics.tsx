@@ -12,6 +12,9 @@ interface QuestionStat {
     question_text?: string;
     topic_ids?: string;
     unit_id?: number;
+    user_answer?: string;
+    correct_answer?: string;
+    max_marks?: number;
 }
 
 interface AttemptAnalytics {
@@ -506,30 +509,42 @@ const PerformanceAnalytics = () => {
                                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.95rem' }}>
                                                     <thead>
                                                         <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                                                            <th style={{ padding: '0.8rem 0.5rem', width: '50px' }}>Q</th>
-                                                            <th style={{ padding: '0.8rem 0.5rem', width: '100px' }}>Result</th>
-                                                            <th style={{ padding: '0.8rem 0.5rem', width: '150px' }}>Speed vs Cohort</th>
+                                                            <th style={{ padding: '0.8rem 0.5rem', width: '250px' }}>Question</th>
+                                                            <th style={{ padding: '0.8rem 0.5rem', width: '150px' }}>Your Answer</th>
+                                                            <th style={{ padding: '0.8rem 0.5rem', width: '150px' }}>Correct Answer</th>
+                                                            <th style={{ padding: '0.8rem 0.5rem', width: '100px' }}>Marks</th>
+                                                            <th style={{ padding: '0.8rem 0.5rem', width: '120px' }}>Speed</th>
                                                             <th style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>Remediation</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {attempt.detailed_questions.map((q) => {
-                                                            const isPerfect = q.marks_awarded > 0; // Approximation for perfect
+                                                            const isCorrect = q.marks_awarded >= (q.max_marks || 1.0);
+                                                            const isPartial = !isCorrect && q.marks_awarded > 0;
                                                             const isFaster = q.time_spent_seconds < q.peer_avg_time_seconds;
                                                             return (
                                                                 <tr key={q.question_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                                    <td style={{ padding: '0.8rem 0.5rem', color: 'var(--text-muted)' }}>#{q.question_id}</td>
-                                                                    <td style={{ padding: '0.8rem 0.5rem', color: isPerfect ? '#4caf50' : '#ff6b6b', fontWeight: 'bold' }}>
-                                                                        {isPerfect ? 'Success' : 'Failure'}
+                                                                    <td style={{ padding: '0.8rem 0.5rem', color: 'var(--text-main)', maxWidth: '250px' }}>
+                                                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Q{q.question_id}</div>
+                                                                        <div style={{ wordBreak: 'break-word' }}>{q.question_text || 'Unknown Question'}</div>
+                                                                    </td>
+                                                                    <td style={{ padding: '0.8rem 0.5rem', color: isCorrect ? '#4caf50' : isPartial ? '#ff9800' : '#ff6b6b', fontWeight: 'bold', maxWidth: '150px', wordBreak: 'break-word' }}>
+                                                                        {q.user_answer}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.8rem 0.5rem', color: '#4caf50', maxWidth: '150px', wordBreak: 'break-word' }}>
+                                                                        {q.correct_answer}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.8rem 0.5rem', fontWeight: 'bold', color: isCorrect ? '#4caf50' : isPartial ? '#ff9800' : '#ff6b6b' }}>
+                                                                        {q.marks_awarded} / {q.max_marks || '?'}
                                                                     </td>
                                                                     <td style={{ padding: '0.8rem 0.5rem' }}>
                                                                         <span style={{ color: 'var(--text-main)' }}>{q.time_spent_seconds}s</span>
-                                                                        <span style={{ color: isFaster ? '#4caf50' : '#ff6b6b', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                                                                        <div style={{ color: isFaster ? '#4caf50' : '#ff6b6b', fontSize: '0.75rem' }}>
                                                                             ({q.peer_avg_time_seconds}s avg)
-                                                                        </span>
+                                                                        </div>
                                                                     </td>
                                                                     <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>
-                                                                        {!isPerfect && (q.unit_id !== null && q.unit_id !== undefined) ? (
+                                                                        {!isCorrect && (q.unit_id !== null && q.unit_id !== undefined) ? (
                                                                             <button
                                                                                 className="btn-ghost"
                                                                                 style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
@@ -550,7 +565,7 @@ const PerformanceAnalytics = () => {
                                                                             >
                                                                                 Review Concept <BookOpen size={12} style={{ marginLeft: '4px' }} />
                                                                             </button>
-                                                                        ) : isPerfect ? (
+                                                                        ) : isCorrect ? (
                                                                             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Mastered</span>
                                                                         ) : (
                                                                             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No concept mapped</span>

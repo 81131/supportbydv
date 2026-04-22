@@ -13,12 +13,44 @@ from models.user import User, UserRole
 from security import get_current_user
 from pydantic import BaseModel
 from sqlalchemy import func
+from apis.api_keys import get_active_gemini_key
+import google.generativeai as genai
 
 
 router = APIRouter(prefix="/quizzes", tags=["Quizzes"])
 
 QUIZ_RESOURCE_DIR = "uploads/quiz_resources"
 os.makedirs(QUIZ_RESOURCE_DIR, exist_ok=True)
+
+async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max_marks: float, api_key: str) -> float:
+    """
+    Uses Gemini to grade an essay question.
+    Returns marks_awarded (float) clamped between 0 and max_marks.
+    Falls back to 0.0 on any error.
+    """
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        prompt = (
+            f"You are a strict academic examiner. Grade the following student essay answer.\n\n"
+            f"Question: {question_text}\n\n"
+            f"Marking Rubric / Model Answer: {rubric}\n\n"
+            f"Student's Answer: {user_answer}\n\n"
+            f"Maximum marks available: {max_marks}\n\n"
+            f"Return ONLY a JSON object in this exact format, no other text:\n"
+            f'{{"marks": <float>, "feedback": "<one sentence feedback>"}}'
+        )
+        response = model.generate_content(prompt)
+        import json, re
+        text = response.text.strip()
+        # Strip markdown code fences if present
+        text = re.sub(r'^```[a-z]*\n?', '', text)
+        text = re.sub(r'\n?```$', '', text)
+        parsed = json.loads(text)
+        awarded = float(parsed.get("marks", 0.0))
+        return max(0.0, min(awarded, float(max_marks)))
+    except Exception:
+        return 0.0
 
 @router.post("/resources/upload")
 async def upload_quiz_resource(
@@ -129,7 +161,7 @@ async def get_my_analytics(
         all_quizzes = (await db.execute(select(Quiz).options(joinedload(Quiz.module)).filter(Quiz.id.in_(all_quiz_ids)))).scalars().all()
         quizzes_map = {q.id: q for q in all_quizzes}
         
-        all_questions = (await db.execute(select(Question).filter(Question.quiz_id.in_(all_quiz_ids)))).scalars().all()
+        all_questions = (await db.execute(select(Question).options(selectinload(Question.options)).filter(Question.quiz_id.in_(all_quiz_ids)))).scalars().all()
         for q in all_questions:
             k = (q.quiz_id, q.version)
             if k not in questions_map: questions_map[k] = []
@@ -219,7 +251,50 @@ async def get_my_analytics(
             
             question_history[qa.question_id] = is_fail
 
-    # Now deeply filter my_attempts
+    import json
+
+    def decode_user_answer(user_answer_str: str, question: Question) -> str:
+        """Decode the stored JSON user answer into a human-readable string."""
+        if not user_answer_str:
+            return "No answer provided"
+        try:
+            data = json.loads(user_answer_str)
+        except Exception:
+            return user_answer_str
+
+        q_type = question.type.value if hasattr(question.type, 'value') else question.type
+
+        if q_type in ("MCQ", "CHECKBOX"):
+            selected_ids = data.get("selected_options", [])
+            opt_map = {opt.id: opt.text for opt in question.options}
+            texts = [opt_map[sid] for sid in selected_ids if sid in opt_map]
+            return ", ".join(texts) if texts else "None selected"
+        elif q_type == "NUMBER":
+            return str(data.get("numeric_answer", "None"))
+        elif q_type in ("SHORT_TEXT", "ESSAY"):
+            return data.get("text_answer", "None")
+        elif q_type == "FILL_BLANK":
+            words = data.get("fill_blank_answer", [])
+            return " / ".join(words) if words else "None"
+        elif q_type == "DRAG_DROP":
+            words = data.get("drag_drop_answer", [])
+            return " → ".join(words) if words else "None"
+        return str(data)
+
+    def get_correct_answer(question: Question) -> str:
+        q_type = question.type.value if hasattr(question.type, 'value') else question.type
+        if q_type in ("MCQ", "CHECKBOX"):
+            return ", ".join(opt.text for opt in question.options if opt.is_correct)
+        elif q_type == "NUMBER":
+            return str(question.correct_number)
+        elif q_type in ("SHORT_TEXT", "ESSAY"):
+            return question.correct_text or "Rubric-based"
+        elif q_type == "FILL_BLANK":
+            return " / ".join(opt.text for opt in question.options if opt.is_correct)
+        elif q_type == "DRAG_DROP":
+            return " → ".join(opt.text for opt in question.options if opt.is_correct)
+        return "N/A"
+
     filtered_my_attempts = []
     for a in my_attempts:
         quiz = quizzes_map.get(a.quiz_id)
@@ -311,9 +386,12 @@ async def get_my_analytics(
             questions_stats.append({
                 "question_id": qa.question_id,
                 "marks_awarded": qa.marks_awarded,
+                "max_marks": q_obj.marks,
                 "time_spent_seconds": qa.time_spent_seconds,
                 "peer_avg_time_seconds": avg_p_q_time,
                 "question_text": q_obj.text,
+                "user_answer": decode_user_answer(qa.user_answer, q_obj),
+                "correct_answer": get_correct_answer(q_obj),
                 "topic_ids": q_obj.topic_ids,
                 "unit_id": q_obj.unit_id
             })
@@ -889,6 +967,40 @@ async def submit_and_grade_quiz(
         await db.commit()
         return {"message": "Draft saved."}
 
+    # ── AI Essay Auto-Grading ──────────────────────────────────────────────
+    api_key = await get_active_gemini_key(current_user.id, db)
+    if api_key:
+        for i, rev in enumerate(review_details):
+            if rev["type"] == "ESSAY" and rev.get("user_answer", "No answer provided") != "No answer provided":
+                # Find the matching question for rubric
+                matching_q = next((q for q in current_questions
+                                   if q.type.value == "ESSAY" and q.text == rev["question_text"]), None)
+                if matching_q:
+                    rubric = matching_q.correct_text or "Award marks based on relevance and accuracy."
+                    ai_marks = await _ai_grade_essay(
+                        question_text=matching_q.text,
+                        rubric=rubric,
+                        user_answer=rev["user_answer"],
+                        max_marks=matching_q.marks,
+                        api_key=api_key
+                    )
+                    # Update the in-memory review detail
+                    rev["marks_awarded"] = ai_marks
+                    rev["is_correct"] = ai_marks >= matching_q.marks
+                    rev["correct_answer"] = f"AI Graded. Rubric: {rubric}"
+                    total_score += ai_marks
+                    # Update the already-added QuestionAttempt
+                    # Find the qa for this question
+                    for qa_row in (await db.execute(
+                        select(QuestionAttempt).filter(
+                            QuestionAttempt.quiz_attempt_id == attempt.id,
+                            QuestionAttempt.question_id == matching_q.id
+                        )
+                    )).scalars().all():
+                        qa_row.marks_awarded = ai_marks
+                        qa_row.needs_manual_review = False
+    # ──────────────────────────────────────────────────────────────────────
+
     attempt.total_marks = total_score
     attempt.status = "COMPLETED"
     
@@ -1057,4 +1169,121 @@ async def get_review_tasks(quiz_id: int, db: AsyncSession = Depends(get_db), cur
             "student_name": f"{student.first_name} {student.last_name}" if student else "Unknown Student",
             "marks_max": t.question.marks
         })
+    return result
+
+
+@router.get("/{quiz_id}/my-attempts")
+async def get_my_quiz_attempts(
+    quiz_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Returns all completed attempts by the current user for a specific quiz,
+    with full per-question breakdown: question text, user answer, correct answer, marks.
+    """
+    quiz = (await db.execute(
+        select(Quiz)
+        .options(selectinload(Quiz.questions).selectinload(Question.options))
+        .filter(Quiz.id == quiz_id, Quiz.is_deleted == False)
+    )).scalars().first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
+    attempts = (await db.execute(
+        select(QuizAttempt)
+        .options(selectinload(QuizAttempt.question_attempts))
+        .filter(
+            QuizAttempt.quiz_id == quiz_id,
+            QuizAttempt.user_id == current_user.id,
+            QuizAttempt.status == "COMPLETED"
+        )
+        .order_by(QuizAttempt.created_at.desc())
+    )).scalars().all()
+
+    # Build a lookup of all questions keyed by id (across all versions for history)
+    all_questions = (await db.execute(
+        select(Question)
+        .options(selectinload(Question.options))
+        .filter(Question.quiz_id == quiz_id)
+    )).scalars().all()
+    question_map = {q.id: q for q in all_questions}
+
+    import json
+
+    def decode_user_answer(user_answer_str: str, question: Question) -> str:
+        """Decode the stored JSON user answer into a human-readable string."""
+        if not user_answer_str:
+            return "No answer provided"
+        try:
+            data = json.loads(user_answer_str)
+        except Exception:
+            return user_answer_str
+
+        q_type = question.type.value if hasattr(question.type, 'value') else question.type
+
+        if q_type in ("MCQ", "CHECKBOX"):
+            selected_ids = data.get("selected_options", [])
+            opt_map = {opt.id: opt.text for opt in question.options}
+            texts = [opt_map[sid] for sid in selected_ids if sid in opt_map]
+            return ", ".join(texts) if texts else "None selected"
+        elif q_type == "NUMBER":
+            return str(data.get("numeric_answer", "None"))
+        elif q_type in ("SHORT_TEXT", "ESSAY"):
+            return data.get("text_answer", "None")
+        elif q_type == "FILL_BLANK":
+            words = data.get("fill_blank_answer", [])
+            return " / ".join(words) if words else "None"
+        elif q_type == "DRAG_DROP":
+            words = data.get("drag_drop_answer", [])
+            return " → ".join(words) if words else "None"
+        return str(data)
+
+    def get_correct_answer(question: Question) -> str:
+        q_type = question.type.value if hasattr(question.type, 'value') else question.type
+        if q_type in ("MCQ", "CHECKBOX"):
+            return ", ".join(opt.text for opt in question.options if opt.is_correct)
+        elif q_type == "NUMBER":
+            return str(question.correct_number)
+        elif q_type in ("SHORT_TEXT", "ESSAY"):
+            return question.correct_text or "Rubric-based"
+        elif q_type == "FILL_BLANK":
+            return " / ".join(opt.text for opt in question.options if opt.is_correct)
+        elif q_type == "DRAG_DROP":
+            return " → ".join(opt.text for opt in question.options if opt.is_correct)
+        return "N/A"
+
+    result = []
+    for attempt in attempts:
+        q_breakdown = []
+        for qa in attempt.question_attempts:
+            q = question_map.get(qa.question_id)
+            if not q:
+                continue
+            q_type = q.type.value if hasattr(q.type, 'value') else q.type
+            q_breakdown.append({
+                "question_id": q.id,
+                "question_text": q.text,
+                "type": q_type,
+                "user_answer": decode_user_answer(qa.user_answer, q),
+                "correct_answer": get_correct_answer(q),
+                "marks_awarded": qa.marks_awarded,
+                "max_marks": q.marks,
+                "needs_manual_review": qa.needs_manual_review,
+            })
+
+        # Compute max_score from questions at the attempt's quiz version
+        version_questions = [q for q in all_questions if q.version == attempt.quiz_version]
+        max_score = sum(q.marks for q in version_questions) if version_questions else sum(q.marks for q in all_questions)
+
+        result.append({
+            "attempt_id": attempt.id,
+            "attempt_number": attempt.attempt_number,
+            "score": attempt.total_marks,
+            "max_score": max_score,
+            "time_consumed_seconds": attempt.time_consumed_seconds,
+            "created_at": attempt.created_at.isoformat() if attempt.created_at else None,
+            "questions": q_breakdown,
+        })
+
     return result

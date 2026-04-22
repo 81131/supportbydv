@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, BookOpen, Pencil, Trash2, BadgeCheck, VenetianMask, Award, Pin, Filter, Crown } from 'lucide-react';
+import { Plus, BookOpen, Pencil, Trash2, BadgeCheck, VenetianMask, Award, Pin, Filter, Crown, History } from 'lucide-react';
 import api from '../api';
+import AttemptHistoryModal from './AttemptHistoryModal';
 
 interface QuizDisplayerProps {
   moduleId: number;
@@ -22,6 +23,7 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
   const [filterNoOne, setFilterNoOne] = useState(false);
 
   const [expandedAnalytics, setExpandedAnalytics] = useState<Record<number, any>>({});
+  const [attemptHistoryQuiz, setAttemptHistoryQuiz] = useState<{ id: number; title: string } | null>(null);
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -195,6 +197,14 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
                     </>
                   )}
 
+                  <button
+                    onClick={() => setAttemptHistoryQuiz({ id: quiz.id, title: quiz.title })}
+                    className="btn-ghost"
+                    style={{ color: 'var(--accent-gold)', borderColor: 'rgba(255,215,0,0.3)' }}
+                  >
+                    <History size={16} /> My Attempts
+                  </button>
+
                   <Link to={`/take-quiz/${quiz.id}`} className="btn-solid-gold" style={{ textDecoration: 'none' }}>
                     Start Trial
                   </Link>
@@ -223,6 +233,15 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
             );
           })}
         </div>
+      )}
+
+      {/* Attempt History Modal */}
+      {attemptHistoryQuiz && (
+        <AttemptHistoryModal
+          quizId={attemptHistoryQuiz.id}
+          quizTitle={attemptHistoryQuiz.title}
+          onClose={() => setAttemptHistoryQuiz(null)}
+        />
       )}
     </div>
   );

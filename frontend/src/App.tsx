@@ -38,6 +38,7 @@ import BusinessContact from './pages/BusinessContact';
 import VideoUploader from './pages/VideoUploader';
 import VideoViewer from './pages/VideoViewer';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import ApiKeySettings from './pages/ApiKeySettings';
 
 // ── NotificationBell: lives inside <Router> so it can use useNavigate ─────────
 function NotificationBell({ notifications, onMarkRead, onRefresh }: {
@@ -363,6 +364,7 @@ function App() {
             <Route path="/forge-video" element={<PrivilegedRoute user={user}><VideoUploader /></PrivilegedRoute>} />
             <Route path="/videos/watch/:videoId" element={<ProtectedRoute user={user}><VideoViewer /></ProtectedRoute>} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/api-keys" element={<ProtectedRoute user={user}><ApiKeySettings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <FloatingRaven />
