@@ -168,11 +168,16 @@ async def chat_with_maester(
 @router.get("/scholar-standing")
 async def get_scholar_standing(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Returns the student's overall accuracy and trial count for the Maester UI."""
+    # DEBUG: Log which user is being queried
+    print(f"DEBUG scholar-standing: current_user.id={current_user.id}, email={current_user.email}")
+
     # Fetch all completed attempts for this user
     attempts = (await db.execute(
         select(QuizAttempt)
         .filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
     )).scalars().all()
+
+    print(f"DEBUG scholar-standing: found {len(attempts)} attempts for user {current_user.id}")
 
     if not attempts:
         return {"accuracy": 0, "trials": 0}
@@ -180,8 +185,6 @@ async def get_scholar_standing(db: AsyncSession = Depends(get_db), current_user:
     total_earned = sum(a.total_marks for a in attempts)
     total_max = 0.0
 
-    # To avoid N+1 queries, we fetch the max marks for all relevant quiz versions
-    # We'll group by (quiz_id, version)
     quiz_versions = set((a.quiz_id, a.quiz_version) for a in attempts)
     max_marks_map = {}
 
@@ -196,4 +199,5 @@ async def get_scholar_standing(db: AsyncSession = Depends(get_db), current_user:
         total_max += max_marks_map.get((a.quiz_id, a.quiz_version), 0.0)
 
     accuracy = round((total_earned / total_max) * 100, 1) if total_max > 0 else 0
+    print(f"DEBUG scholar-standing: accuracy={accuracy}, trials={len(attempts)}, total_max={total_max}")
     return {"accuracy": accuracy, "trials": len(attempts)}
