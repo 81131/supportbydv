@@ -16,12 +16,16 @@ from models.notification import Notification
 
 router = APIRouter(prefix="/support", tags=["Support"])
 
-# Configure Gemini
+# Admin API key for support raven
 api_key = os.getenv("VITE_GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
-    
-model_instance = genai.GenerativeModel("gemini-2.5-flash")
+
+def get_support_model():
+    if not api_key:
+        return None
+    return genai.GenerativeModel(
+        "gemini-1.5-flash",
+        client_options={"api_key": api_key}
+    )
 
 SYSTEM_PROMPT = """You are the Citadel AI Raven, the official platform support assistant for SupportByDV.
 Your sole purpose is to help users navigate the platform, resolve billing issues, clarify subscription tiers, and report bugs regarding features (Quizzes, Notes, Subscriptions).
@@ -60,6 +64,10 @@ async def chat_with_raven(req: ChatRequest, current_user: User = Depends(get_cur
                 "parts": [h["parts"]]
             })
             
+        model_instance = get_support_model()
+        if not model_instance:
+             return {"reply": "The ravens are grounded. Support AI is not configured."}
+
         chat = model_instance.start_chat(history=formatted_history)
         
         subs = (await db.execute(select(UserSubscription).filter(UserSubscription.user_id == current_user.id))).scalars().all()
