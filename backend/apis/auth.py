@@ -312,13 +312,16 @@ async def get_profile_stats(
     best_score = max(scores) if scores else None
 
     return {
-        "quizzes_taken":    quizzes_taken,
-        "quizzes_made":     quizzes_made,
-        "notes_uploaded":   notes_uploaded,
-        "collections_made": collections_made,
-        "avg_score_pct":    avg_score,
-        "best_score_pct":   best_score,
-        "member_since":     current_user.created_at,
+        "quizzes_taken":         quizzes_taken,
+        "quizzes_made":          quizzes_made,
+        "notes_uploaded":        notes_uploaded,
+        "collections_made":      collections_made,
+        "avg_score_pct":         avg_score,
+        "best_score_pct":        best_score,
+        "member_since":          current_user.created_at,
+        # Aliases used by FloatingRaven.tsx Maester scholar stats
+        "accuracy_percentage":   avg_score or 0,
+        "total_quizzes_taken":   quizzes_taken,
     }
 
 from jose import jwt, JWTError
