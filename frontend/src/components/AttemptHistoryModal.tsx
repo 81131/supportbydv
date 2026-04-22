@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { X, ChevronDown, ChevronUp, Clock, Trophy, CheckCircle, XCircle, AlertCircle, History } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, Clock, CheckCircle, XCircle, AlertCircle, History } from 'lucide-react';
 
 interface QuestionBreakdown {
   question_id: number;

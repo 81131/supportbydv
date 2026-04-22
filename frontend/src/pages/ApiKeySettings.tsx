@@ -45,7 +45,7 @@ const ApiKeySettings: React.FC = () => {
     if (!newKey.trim()) return;
     setAdding(true);
     try {
-      const res = await api.post('/api-keys/me', { raw_key: newKey.trim(), label: newLabel.trim() || undefined });
+      await api.post('/api-keys/me', { raw_key: newKey.trim(), label: newLabel.trim() || undefined });
       showFlash('API key saved securely to the vault!', 'success');
       setNewKey('');
       setNewLabel('');

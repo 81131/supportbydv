@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, AlertCircle, Bird, Loader2, ChevronLeft, Search, Users, MessageSquare, CheckCircle, Sparkles, Trophy, BookOpen, Key, Plus, Trash2 } from 'lucide-react';
+import { X, Send, AlertCircle, Bird, Loader2, ChevronLeft, Search, Users, MessageSquare, CheckCircle, Sparkles, Trophy, BookOpen, Plus, Trash2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
@@ -23,10 +23,11 @@ const FloatingRaven: React.FC = () => {
   const [activeTicket, setActiveTicket] = useState<any>(null);
   const [ticketReply, setTicketReply] = useState('');
   
-  // User Side state
   const [messages, setMessages] = useState<{role: 'user' | 'model', parts: string}[]>([
     { role: 'model', parts: "I am the Citadel AI Raven. How may I assist your journey today? (Billing, Issues, Subscriptions)" }
   ]);
+  const [input, setInput] = useState('');
+  const [showDirectContact, setShowDirectContact] = useState(false);
   const [directIssue, setDirectIssue] = useState('');
 
   // Maester Chat state

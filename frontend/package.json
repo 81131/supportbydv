@@ -19,8 +19,10 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-easy-crop": "^5.2.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.22.3",
-    "recharts": "^2.15.4"
+    "recharts": "^2.15.4",
+    "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -29,6 +31,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/react-markdown": "^3.0.4",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
