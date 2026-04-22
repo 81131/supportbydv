@@ -1087,22 +1087,20 @@ async def ai_regrade_attempt(
             detail="No active Gemini API key found. Add one in your Keys settings to enable AI grading."
         )
 
+    # Fetch all questions for this quiz version first (needed to identify essay types)
+    all_questions = (await db.execute(
+        select(Question)
+        .filter(Question.quiz_id == attempt.quiz_id, Question.version == attempt.quiz_version)
+    )).scalars().all()
+    q_map = {q.id: q for q in all_questions}
+
     # Re-grade ALL essay question attempts (not just pending) so students can correct corrupt/wrong grades
-    import json as _json
-    all_qa_map = {qa.question_id: qa for qa in attempt.question_attempts}
     essay_qas = [
         qa for qa in attempt.question_attempts
         if q_map.get(qa.question_id) and q_map[qa.question_id].type.value == "ESSAY"
     ]
     if not essay_qas:
         return {"message": "No essay questions found for this attempt.", "regraded": 0}
-
-    # Fetch all questions for this quiz version
-    all_questions = (await db.execute(
-        select(Question)
-        .filter(Question.quiz_id == attempt.quiz_id, Question.version == attempt.quiz_version)
-    )).scalars().all()
-    q_map = {q.id: q for q in all_questions}
 
     import json, asyncio as _asyncio
     regraded = 0
