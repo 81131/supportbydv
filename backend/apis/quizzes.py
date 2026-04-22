@@ -22,11 +22,14 @@ router = APIRouter(prefix="/quizzes", tags=["Quizzes"])
 QUIZ_RESOURCE_DIR = "uploads/quiz_resources"
 os.makedirs(QUIZ_RESOURCE_DIR, exist_ok=True)
 
-async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max_marks: float, api_key: str) -> float:
+from typing import Optional
+
+async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max_marks: float, api_key: str) -> Optional[float]:
     """
     Uses Gemini to grade an essay question with partial marks.
-    Returns marks_awarded (float) clamped between 0 and max_marks.
-    Falls back to 0.0 on any error.
+    Returns marks_awarded (float, 0–max_marks) on success.
+    Returns None on any API error (quota, network, parse failure) so callers
+    can leave existing marks intact and keep needs_manual_review=True.
     """
     try:
         genai.configure(api_key=api_key)
@@ -49,16 +52,14 @@ async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max
         response = model.generate_content(prompt)
         import json, re
         text = response.text.strip()
-        # Strip markdown code fences if present
         text = re.sub(r'^```[a-z]*\n?', '', text)
         text = re.sub(r'\n?```$', '', text)
         parsed = json.loads(text)
         awarded = float(parsed.get("marks", 0.0))
         return max(0.0, min(awarded, float(max_marks)))
     except Exception as e:
-        # Log the actual failure so it's visible in docker logs
-        print(f"[AI GRADER] Failed to grade essay for Q: '{question_text[:60]}...' — {type(e).__name__}: {e}")
-        return 0.0
+        print(f"[AI GRADER] Failed to grade essay for Q: '{question_text[:60]}...' \u2014 {type(e).__name__}: {e}")
+        return None  # Signals failure — callers must not overwrite existing marks
 
 
 @router.post("/resources/upload")
@@ -1004,6 +1005,10 @@ async def submit_and_grade_quiz(
                         api_key=api_key
                     )
 
+                    if ai_marks is None:
+                        # AI failed (quota/network) — leave this essay as pending
+                        continue
+
                     # AI returned a result (even 0 is a valid grade for a wrong answer)
                     # Update total_score: essay started at 0, so just add ai_marks
                     total_score += ai_marks
@@ -1137,20 +1142,30 @@ async def ai_regrade_attempt(
             api_key=api_key
         )
 
+        if ai_marks is None:
+            # AI call failed (quota/network) — leave existing marks and pending flag intact
+            continue
+
         qa.marks_awarded = ai_marks
         qa.needs_manual_review = False
         regraded += 1
 
-    if regraded > 0:
-        # Recalculate total_marks from scratch to fix any previous corruption
-        all_qas = attempt.question_attempts
-        attempt.total_marks = sum(qa.marks_awarded for qa in all_qas)
-        await db.commit()
+    if regraded == 0:
+        total_essays = len(essay_qas)
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI could not grade any of the {total_essays} essay(s). Your API key may have hit its daily quota. Please try again later."
+        )
+
+    # Recalculate total_marks from scratch to fix any previous corruption
+    new_total = sum(qa.marks_awarded for qa in attempt.question_attempts)
+    attempt.total_marks = new_total
+    await db.commit()
 
     return {
         "message": f"AI re-graded {regraded} essay question(s).",
         "regraded": regraded,
-        "new_total_marks": attempt.total_marks
+        "new_total_marks": new_total  # Use local var — attempt is expired after commit
     }
 
 
