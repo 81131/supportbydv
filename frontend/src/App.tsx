@@ -39,6 +39,7 @@ import VideoUploader from './pages/VideoUploader';
 import VideoViewer from './pages/VideoViewer';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ApiKeySettings from './pages/ApiKeySettings';
+import AttemptReview from './pages/AttemptReview';
 
 // ── NotificationBell: lives inside <Router> so it can use useNavigate ─────────
 function NotificationBell({ notifications, onMarkRead, onRefresh }: {
@@ -365,6 +366,7 @@ function App() {
             <Route path="/videos/watch/:videoId" element={<ProtectedRoute user={user}><VideoViewer /></ProtectedRoute>} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/api-keys" element={<ProtectedRoute user={user}><ApiKeySettings /></ProtectedRoute>} />
+            <Route path="/quiz-attempt/:attemptId" element={<ProtectedRoute user={user}><AttemptReview /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <FloatingRaven />

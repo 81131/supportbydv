@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { Timer as TimerIcon, CheckCircle, XCircle, Send, RefreshCcw, AlertCircle, ArrowLeft, ArrowRight, Flag, Calculator, Hash, LayoutGrid, ListOrdered, FileText, CheckSquare, Edit3 } from 'lucide-react';
+import { Timer as TimerIcon, Send, RefreshCcw, AlertCircle, ArrowLeft, ArrowRight, Flag, Calculator, Hash, LayoutGrid, ListOrdered, FileText, CheckSquare, Edit3, XCircle } from 'lucide-react';
 import ScientificCalculator from '../components/ScientificCalculator';
 
 const TakeQuiz: React.FC = () => {
@@ -15,7 +15,6 @@ const TakeQuiz: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [results, setResults] = useState<any>(null); 
   const [startTime, setStartTime] = useState<number | null>(null);
   const [isConsentAgreed, setIsConsentAgreed] = useState(false);
   const answersRef = useRef(answers);
@@ -195,8 +194,8 @@ const TakeQuiz: React.FC = () => {
         time_consumed_seconds: timeConsumedSeconds,
         is_draft: false
       });
-      setResults(res.data);
-      window.scrollTo(0, 0);
+      // Redirect to the dedicated attempt review page
+      navigate(`/quiz-attempt/${res.data.attempt_id}`, { replace: true });
     } catch (error) {
       console.error("Submission failed", error);
       showFlash("Failed to submit the scroll. Check your connection.", "error");
@@ -249,47 +248,6 @@ const TakeQuiz: React.FC = () => {
     return <div className="page-container text-title" style={{ textAlign: 'center', marginTop: '5rem', color: 'var(--accent-gold)' }}>Question not found.</div>;
   }
 
-  if (results) {
-    const percentage = ((results.score / results.max_score) * 100).toFixed(1);
-    const passed = results.score >= (results.max_score / 2);
-
-    return (
-      <div className="page-container">
-        <div className="module-section" style={{ border: `2px solid ${passed ? '#4caf50' : 'var(--accent-red)'}`, textAlign: 'center', marginBottom: '3rem' }}>
-          {passed ? <CheckCircle size={64} color="#4caf50" style={{ margin: '0 auto 1rem' }}/> : <XCircle size={64} color="var(--accent-red)" style={{ margin: '0 auto 1rem' }}/>}
-          <h1 className="brand-font" style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0' }}>Trial Complete</h1>
-          <h2 style={{ fontSize: '3rem', margin: '0 0 0.5rem 0', color: passed ? '#4caf50' : 'var(--accent-red)' }}>{results.score} / {results.max_score}</h2>
-          <p className="text-desc" style={{ fontSize: '1.2rem' }}>Accuracy: {percentage}%</p>
-        </div>
-
-        <h3 className="brand-font" style={{ color: 'var(--accent-gold)', borderBottom: '1px solid var(--border-dark)', paddingBottom: '0.5rem', marginBottom: '2rem' }}>Performance Review</h3>
-        
-        {results.review.map((rev: any, i: number) => (
-          <div key={i} className="module-section" style={{ borderLeft: `4px solid ${rev.is_correct ? '#4caf50' : (rev.type === 'ESSAY' || rev.type === 'DRAG_DROP' ? 'var(--accent-gold)' : 'var(--accent-red)')}`, marginBottom: '1.5rem', padding: '1.5rem' }}>
-            <p className="text-title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Q{i + 1}: {rev.question_text}</p>
-            <div style={{ display: 'grid', gap: '0.5rem', backgroundColor: 'var(--bg-deep)', padding: '1rem', borderRadius: '4px', border: '1px solid var(--border-dark)' }}>
-              <p className="text-desc" style={{ margin: 0 }}><strong>Your Answer:</strong> <span style={{ color: rev.is_correct ? '#4caf50' : 'var(--text-main)' }}>{rev.user_answer}</span></p>
-              {(!rev.is_correct && rev.type !== 'ESSAY') && (
-                <p className="text-desc" style={{ margin: 0, color: '#4caf50' }}><strong>Correct Answer:</strong> {rev.correct_answer}</p>
-              )}
-              {rev.type === 'ESSAY' && (
-                <p className="text-desc" style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><AlertCircle size={16}/> Pending Maester Review</p>
-              )}
-              <div className="text-desc" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-dark)', textAlign: 'right', fontSize: '0.9rem' }}>
-                Marks Awarded: <span style={{ fontWeight: 'bold', color: rev.marks_awarded > 0 ? '#4caf50' : (rev.marks_awarded < 0 ? 'var(--accent-red)' : 'var(--text-muted)')}}>{rev.marks_awarded}</span> / {rev.max_marks}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '3rem' }}>
-          <button onClick={() => navigate(-1)} className="btn-ghost">
-            <ArrowLeft size={20} /> Return to Archives
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const q = quiz.questions[activeQuestionIndex];
   

@@ -1038,11 +1038,13 @@ async def submit_and_grade_quiz(
 
     # Store properties before commit to avoid MissingGreenlet errors on expired objects
     attempt_num = attempt.attempt_number
+    attempt_id_val = attempt.id
 
     await db.commit()
 
     return {
         "message": "Trial complete.",
+        "attempt_id": attempt_id_val,
         "score": total_score,
         "max_score": max_score,
         "attempt_number": attempt_num,
@@ -1133,6 +1135,118 @@ async def ai_regrade_attempt(
         "message": f"AI re-graded {regraded} essay question(s).",
         "regraded": regraded,
         "new_total_marks": attempt.total_marks
+    }
+
+
+# ── Attempt Review Endpoint ────────────────────────────────────────────────
+@router.get("/attempts/{attempt_id}")
+async def get_attempt_review(
+    attempt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Returns a full review of a completed attempt — used by the AttemptReview page.
+    Only accessible to the attempt owner.
+    """
+    import json
+
+    attempt = (await db.execute(
+        select(QuizAttempt)
+        .options(selectinload(QuizAttempt.question_attempts))
+        .filter(QuizAttempt.id == attempt_id, QuizAttempt.user_id == current_user.id)
+    )).scalars().first()
+
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found or does not belong to you.")
+
+    quiz = (await db.execute(select(Quiz).filter(Quiz.id == attempt.quiz_id))).scalars().first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
+    # Load the questions for this attempt's version
+    questions = (await db.execute(
+        select(Question)
+        .options(selectinload(Question.options))
+        .filter(Question.quiz_id == attempt.quiz_id, Question.version == attempt.quiz_version)
+        .order_by(Question.order)
+    )).scalars().all()
+
+    # Build a map of question_id -> question_attempt
+    qa_map = {qa.question_id: qa for qa in attempt.question_attempts}
+
+    # Get the max possible marks
+    max_score = sum(q.marks for q in questions)
+
+    review = []
+    for q in questions:
+        qa = qa_map.get(q.id)
+        q_type = q.type.value if hasattr(q.type, 'value') else str(q.type)
+
+        # Decode user answer
+        user_answer_display = "No answer"
+        if qa and qa.user_answer:
+            try:
+                data = json.loads(qa.user_answer)
+                if "text_answer" in data:
+                    user_answer_display = data["text_answer"] or "No answer"
+                elif "selected_options" in data:
+                    opt_ids = data["selected_options"] or []
+                    selected = [opt.text for opt in q.options if opt.id in opt_ids]
+                    user_answer_display = ", ".join(selected) if selected else "None selected"
+                elif "numeric_answer" in data:
+                    user_answer_display = str(data["numeric_answer"]) if data["numeric_answer"] is not None else "No answer"
+                elif "fill_blank_answer" in data:
+                    user_answer_display = " / ".join(data["fill_blank_answer"] or []) or "No answer"
+                elif "drag_drop_answer" in data:
+                    user_answer_display = " → ".join(data["drag_drop_answer"] or []) or "No answer"
+            except Exception:
+                user_answer_display = qa.user_answer
+
+        # Build correct answer display
+        if q_type in ("MCQ", "CHECKBOX"):
+            correct_texts = [opt.text for opt in q.options if opt.is_correct]
+            correct_answer_display = ", ".join(correct_texts)
+        elif q_type == "NUMBER":
+            correct_answer_display = str(q.correct_number)
+        elif q_type in ("SHORT_TEXT", "ESSAY"):
+            correct_answer_display = q.correct_text or ""
+        elif q_type == "FILL_BLANK":
+            correct_answer_display = " / ".join(opt.text for opt in q.options if opt.is_correct)
+        elif q_type == "DRAG_DROP":
+            correct_answer_display = " → ".join(opt.text for opt in q.options if opt.is_correct)
+        else:
+            correct_answer_display = ""
+
+        marks_awarded = qa.marks_awarded if qa else 0.0
+        needs_review = qa.needs_manual_review if qa else False
+        is_correct = (not needs_review) and (marks_awarded == q.marks) and q_type not in ("ESSAY",)
+
+        review.append({
+            "question_id": q.id,
+            "question_text": q.text,
+            "image_url": q.image_url,
+            "type": q_type,
+            "marks": q.marks,
+            "marks_awarded": marks_awarded,
+            "needs_manual_review": needs_review,
+            "is_correct": is_correct,
+            "user_answer": user_answer_display,
+            "correct_answer": correct_answer_display,
+            "options": [{"id": opt.id, "text": opt.text, "is_correct": opt.is_correct} for opt in q.options] if q.options else [],
+        })
+
+    return {
+        "attempt_id": attempt.id,
+        "quiz_id": quiz.id,
+        "quiz_title": quiz.title,
+        "attempt_number": attempt.attempt_number,
+        "status": attempt.status,
+        "total_marks": attempt.total_marks,
+        "max_score": max_score,
+        "time_consumed_seconds": attempt.time_consumed_seconds,
+        "submitted_at": attempt.created_at,
+        "review": review,
     }
 
 
