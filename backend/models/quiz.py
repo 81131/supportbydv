@@ -27,7 +27,7 @@ class Module(Base):
     banner_image_url = Column(String, nullable=True)
     module_phrase = Column(String, nullable=True)
     
-    quizzes = relationship("Quiz", back_populates="module")
+    quizzes = relationship("Quiz", back_populates="module", cascade="all, delete-orphan")
     units = relationship("LectureUnit", back_populates="module", cascade="all, delete-orphan")
 
 class LectureUnit(Base):
@@ -57,7 +57,7 @@ class Quiz(Base):
     title = Column(String, index=True)
     description = Column(String, nullable=True)
     
-    module_id = Column(Integer, ForeignKey("modules.id"))
+    module_id = Column(Integer, ForeignKey("modules.id", ondelete="CASCADE"))
     created_user_id = Column(Integer, ForeignKey("users.id"))
     
     created_at = Column(DateTime, default=datetime.utcnow)

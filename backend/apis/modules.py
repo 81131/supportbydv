@@ -116,7 +116,11 @@ async def update_module(
 async def delete_module(module_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
         raise HTTPException(status_code=403, detail="Unauthorized")
-    module = (await db.execute(select(Module).filter(Module.id == module_id))).scalars().first()
+    module = (await db.execute(
+        select(Module)
+        .options(selectinload(Module.quizzes), selectinload(Module.units))
+        .filter(Module.id == module_id)
+    )).scalars().first()
     if not module: raise HTTPException(status_code=404)
     await db.delete(module)
     await db.commit()
@@ -191,15 +195,42 @@ async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db), current_
         .filter(LectureUnit.id == unit_id)
     )).scalars().first()
     if not unit: raise HTTPException(status_code=404)
-    # Nullify unit_id in questions, notes, and videos to prevent IntegrityErrors
+    # Fetch topic IDs belonging to this unit
+    topic_ids = [t.id for t in unit.topics]
+    
+    # Nullify unit_id in questions, notes, and videos, AND remove deleted topic IDs
     questions = (await db.execute(select(Question).filter(Question.unit_id == unit_id))).scalars().all()
-    for q in questions: q.unit_id = None
+    for q in questions: 
+        q.unit_id = None
+        if q.topic_ids and topic_ids:
+            try:
+                t_ids = json.loads(q.topic_ids)
+                t_ids = [tid for tid in t_ids if tid not in topic_ids]
+                q.topic_ids = json.dumps(t_ids) if len(t_ids) > 0 else None
+            except:
+                pass
     
     notes = (await db.execute(select(Note).filter(Note.unit_id == unit_id))).scalars().all()
-    for n in notes: n.unit_id = None
+    for n in notes: 
+        n.unit_id = None
+        if n.topic_ids and topic_ids:
+            try:
+                t_ids = json.loads(n.topic_ids)
+                t_ids = [tid for tid in t_ids if tid not in topic_ids]
+                n.topic_ids = json.dumps(t_ids) if len(t_ids) > 0 else None
+            except:
+                pass
     
     videos = (await db.execute(select(Video).filter(Video.unit_id == unit_id))).scalars().all()
-    for v in videos: v.unit_id = None
+    for v in videos: 
+        v.unit_id = None
+        if v.topic_ids and topic_ids:
+            try:
+                t_ids = json.loads(v.topic_ids)
+                t_ids = [tid for tid in t_ids if tid not in topic_ids]
+                v.topic_ids = json.dumps(t_ids) if len(t_ids) > 0 else None
+            except:
+                pass
     
     await db.delete(unit)
     await db.commit()
@@ -231,7 +262,7 @@ async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db), curren
     topic = (await db.execute(select(LectureTopic).filter(LectureTopic.id == topic_id))).scalars().first()
     if not topic: raise HTTPException(status_code=404)
     
-    # Safely remove this topic ID from all questions' topic_ids
+    # Safely remove this topic ID from all questions', notes', and videos' topic_ids
     questions = (await db.execute(select(Question).filter(Question.topic_ids.isnot(None)))).scalars().all()
     for q in questions:
         try:
@@ -239,6 +270,26 @@ async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db), curren
             if topic_id in t_ids:
                 t_ids.remove(topic_id)
                 q.topic_ids = json.dumps(t_ids) if len(t_ids) > 0 else None
+        except:
+            pass
+            
+    notes = (await db.execute(select(Note).filter(Note.topic_ids.isnot(None)))).scalars().all()
+    for n in notes:
+        try:
+            t_ids = json.loads(n.topic_ids)
+            if topic_id in t_ids:
+                t_ids.remove(topic_id)
+                n.topic_ids = json.dumps(t_ids) if len(t_ids) > 0 else None
+        except:
+            pass
+            
+    videos = (await db.execute(select(Video).filter(Video.topic_ids.isnot(None)))).scalars().all()
+    for v in videos:
+        try:
+            t_ids = json.loads(v.topic_ids)
+            if topic_id in t_ids:
+                t_ids.remove(topic_id)
+                v.topic_ids = json.dumps(t_ids) if len(t_ids) > 0 else None
         except:
             pass
             

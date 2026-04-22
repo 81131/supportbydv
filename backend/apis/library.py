@@ -508,6 +508,20 @@ async def create_collection(data: CollectionCreate, db: AsyncSession = Depends(g
     await db.refresh(new_col)
     return {"id": new_col.id, "title": new_col.title, "visibility": new_col.visibility.value}
 
+@router.delete("/collections/{collection_id}")
+async def delete_collection(collection_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Deletes an archive and its associated links."""
+    col = (await db.execute(select(Collection).filter(Collection.id == collection_id))).scalars().first()
+    if not col:
+        raise HTTPException(status_code=404, detail="Collection not found")
+        
+    if col.creator_id != current_user.id and current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this collection")
+        
+    await db.delete(col)
+    await db.commit()
+    return {"message": "Archive successfully deleted."}
+
 @router.post("/collections/{collection_id}/notes/{note_id}")
 async def add_note_to_collection(collection_id: int, note_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Links a scroll to a specific archive."""
