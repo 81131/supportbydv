@@ -22,8 +22,12 @@ api_key = os.getenv("VITE_GEMINI_API_KEY")
 def get_support_model():
     if not api_key:
         return None
+    
+    masked_key = f"{api_key[:5]}...{api_key[-5:]}" if api_key else "None"
+    print(f"DEBUG: Support Raven using API Key: {masked_key}")
+
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-1.5-flash")
+    return genai.GenerativeModel("gemini-pro")
 
 SYSTEM_PROMPT = """You are the Citadel AI Raven, the official platform support assistant for SupportByDV.
 Your sole purpose is to help users navigate the platform, resolve billing issues, clarify subscription tiers, and report bugs regarding features (Quizzes, Notes, Subscriptions).

@@ -133,29 +133,32 @@ async def chat_with_maester(
 
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(performance_context=perf_context)
 
+    # Debug: Log which key is being used (masked)
+    masked_key = f"{api_key[:5]}...{api_key[-5:]}" if api_key else "None"
+    print(f"DEBUG: Maester using API Key: {masked_key}")
+
     # Configure Gemini with student's key
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=system_prompt
-    )
+    model = genai.GenerativeModel(model_name="gemini-pro")
 
     # Build conversation history for Gemini
     history_for_gemini = []
-    for msg in (request.history or []):
+    for msg in (req.history or []):
         history_for_gemini.append({
             "role": msg.role,
-            "parts": [msg.content]
+            "parts": [msg.parts]
         })
 
     chat = model.start_chat(history=history_for_gemini)
 
     try:
-        response = chat.send_message(request.message)
+        # Prepend system instruction to the current message for gemini-pro (legacy)
+        full_message = f"SYSTEM INSTRUCTION: {system_prompt}\n\nUser: {req.message}"
+        response = chat.send_message(full_message)
         reply = response.text
     except Exception as e:
         err_str = str(e).lower()
-        if "quota" in err_str or "rate" in err_str or "limit" in err_str:
+        if "quota" in err_str or "rate" in err_str or "limit" in err_str or "429" in err_str:
             raise HTTPException(
                 status_code=429,
                 detail="Your Gemini API key has hit its rate limit. Try again shortly or add another key."
