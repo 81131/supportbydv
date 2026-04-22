@@ -1169,7 +1169,7 @@ async def get_attempt_review(
         select(Question)
         .options(selectinload(Question.options))
         .filter(Question.quiz_id == attempt.quiz_id, Question.version == attempt.quiz_version)
-        .order_by(Question.order)
+        .order_by(Question.id)
     )).scalars().all()
 
     # Build a map of question_id -> question_attempt
