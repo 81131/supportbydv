@@ -821,7 +821,7 @@ async def submit_and_grade_quiz(
                     is_correct = True
 
             elif q_type == "SHORT_TEXT":
-                correct_answer_display = q.correct_text
+                correct_answer_display = q.correct_text or ""
                 user_answer_display = ans_data.text_answer or "None"
                 user_answer_db_string = json.dumps({"text_answer": ans_data.text_answer})
                 
@@ -833,7 +833,10 @@ async def submit_and_grade_quiz(
                 # Correct words stored in options with is_correct=True, in order
                 correct_words = [opt.text for opt in q.options if opt.is_correct]
                 correct_answer_display = " / ".join(correct_words)
-                user_words = ans_data.fill_blank_answer or []
+                
+                raw_user_words = ans_data.fill_blank_answer or []
+                user_words = [str(w) if w is not None else "" for w in raw_user_words]
+                
                 user_answer_display = " / ".join(user_words) if user_words else "None"
                 user_answer_db_string = json.dumps({"fill_blank_answer": user_words})
                 
@@ -852,10 +855,14 @@ async def submit_and_grade_quiz(
             elif q_type == "DRAG_DROP":
                 correct_order = [opt.text for opt in q.options if opt.is_correct]
                 correct_answer_display = " -> ".join(correct_order)
-                user_answer_display = " -> ".join(ans_data.drag_drop_answer) if ans_data.drag_drop_answer else "None sorted"
-                user_answer_db_string = json.dumps({"drag_drop_answer": ans_data.drag_drop_answer or []})
                 
-                if ans_data.drag_drop_answer == correct_order:
+                raw_drag_drop = ans_data.drag_drop_answer or []
+                user_drag_drop = [str(w) if w is not None else "" for w in raw_drag_drop]
+                
+                user_answer_display = " -> ".join(user_drag_drop) if user_drag_drop else "None sorted"
+                user_answer_db_string = json.dumps({"drag_drop_answer": user_drag_drop})
+                
+                if user_drag_drop == correct_order:
                     marks_awarded = q.marks
                     is_correct = True
 
