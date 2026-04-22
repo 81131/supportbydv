@@ -27,7 +27,7 @@ def get_support_model():
     print(f"DEBUG: Support Raven using API Key: {masked_key}")
 
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-pro")
+    return genai.GenerativeModel("gemini-2.5-flash")
 
 SYSTEM_PROMPT = """You are the Citadel AI Raven, the official platform support assistant for SupportByDV.
 Your sole purpose is to help users navigate the platform, resolve billing issues, clarify subscription tiers, and report bugs regarding features (Quizzes, Notes, Subscriptions).

@@ -133,17 +133,13 @@ async def chat_with_maester(
 
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(performance_context=perf_context)
 
-    # Debug: Log which key is being used (masked)
-    masked_key = f"{api_key[:5]}...{api_key[-5:]}" if api_key else "None"
-    print(f"DEBUG: Maester using API Key: {masked_key}")
-
     # Configure Gemini with student's key
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name="gemini-pro")
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash")
 
     # Build conversation history for Gemini
     history_for_gemini = []
-    for msg in (req.history or []):
+    for msg in (request.history or []):
         history_for_gemini.append({
             "role": msg.role,
             "parts": [msg.parts]
@@ -152,7 +148,7 @@ async def chat_with_maester(
     chat = model.start_chat(history=history_for_gemini)
 
     try:
-        # Prepend system instruction to the current message for gemini-pro (legacy)
+        # Prepend system instruction to the current message
         full_message = f"SYSTEM INSTRUCTION: {system_prompt}\n\nUser: {req.message}"
         response = chat.send_message(full_message)
         reply = response.text
