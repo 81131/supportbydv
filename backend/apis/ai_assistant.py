@@ -133,11 +133,11 @@ async def chat_with_maester(
 
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(performance_context=perf_context)
 
-    # Configure Gemini with student's key (client-based to avoid global state conflicts)
+    # Configure Gemini with student's key
+    genai.configure(api_key=api_key)
     model = genai.GenerativeModel(
         model_name="gemini-1.5-flash",
-        system_instruction=system_prompt,
-        client_options={"api_key": api_key}
+        system_instruction=system_prompt
     )
 
     # Build conversation history for Gemini

@@ -29,10 +29,8 @@ async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max
     Falls back to 0.0 on any error.
     """
     try:
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            client_options={"api_key": api_key}
-        )
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
         prompt = (
             f"You are a strict academic examiner. Grade the following student essay answer.\n\n"
             f"Question: {question_text}\n\n"
