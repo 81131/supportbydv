@@ -969,10 +969,11 @@ async def submit_and_grade_quiz(
 
     # ── AI Essay Auto-Grading ──────────────────────────────────────────────
     api_key = await get_active_gemini_key(current_user.id, db)
+    ai_graded_any = False  # Track if AI successfully graded at least one essay
+
     if api_key:
         for i, rev in enumerate(review_details):
-            if rev["type"] == "ESSAY" and rev.get("user_answer", "No answer provided") != "No answer provided":
-                # Find the matching question for rubric
+            if rev["type"] == "ESSAY" and rev.get("user_answer", "No answer provided") not in ("No answer provided", "None"):
                 matching_q = next((q for q in current_questions
                                    if q.type.value == "ESSAY" and q.text == rev["question_text"]), None)
                 if matching_q:
@@ -984,13 +985,15 @@ async def submit_and_grade_quiz(
                         max_marks=matching_q.marks,
                         api_key=api_key
                     )
-                    # Update the in-memory review detail
+                    # Update total_score: essay started at 0, so just add ai_marks
+                    total_score += ai_marks
+
+                    # Update in-memory review detail
                     rev["marks_awarded"] = ai_marks
                     rev["is_correct"] = ai_marks >= matching_q.marks
-                    rev["correct_answer"] = f"AI Graded. Rubric: {rubric}"
-                    total_score += ai_marks
-                    # Update the already-added QuestionAttempt
-                    # Find the qa for this question
+                    rev["correct_answer"] = f"AI Graded ({ai_marks}/{matching_q.marks} marks). Rubric: {rubric}"
+
+                    # Update the QuestionAttempt row already in DB
                     for qa_row in (await db.execute(
                         select(QuestionAttempt).filter(
                             QuestionAttempt.quiz_attempt_id == attempt.id,
@@ -998,15 +1001,21 @@ async def submit_and_grade_quiz(
                         )
                     )).scalars().all():
                         qa_row.marks_awarded = ai_marks
-                        qa_row.needs_manual_review = False
+                        qa_row.needs_manual_review = False  # AI handled it
+
+                    ai_graded_any = True
     # ──────────────────────────────────────────────────────────────────────
 
     attempt.total_marks = total_score
     attempt.status = "COMPLETED"
-    
-    # Send essay review notification to quiz creator if any essay questions exist
-    has_essays = any(rev["type"] == "ESSAY" for rev in review_details)
-    if has_essays:
+
+    # Only notify the quiz creator if AI did NOT grade all essays
+    # (i.e., no API key, or all essays failed AI grading)
+    has_ungraded_essays = any(
+        rev["type"] == "ESSAY" and rev["marks_awarded"] == 0.0
+        for rev in review_details
+    )
+    if has_ungraded_essays and not ai_graded_any:
         creator = (await db.execute(select(User).filter(User.id == quiz.created_user_id))).scalars().first()
         if creator and creator.id != current_user.id:
             essay_notification = Notification(
@@ -1015,10 +1024,10 @@ async def submit_and_grade_quiz(
                 destination_url=f"/review-essays/{quiz.id}"
             )
             db.add(essay_notification)
-    
+
     # Store properties before commit to avoid MissingGreenlet errors on expired objects
     attempt_num = attempt.attempt_number
-    
+
     await db.commit()
 
     return {
@@ -1026,7 +1035,93 @@ async def submit_and_grade_quiz(
         "score": total_score,
         "max_score": max_score,
         "attempt_number": attempt_num,
+        "ai_graded_essays": ai_graded_any,
         "review": review_details
+    }
+
+
+# ── AI Re-grade Endpoint ───────────────────────────────────────────────────
+@router.post("/attempts/{attempt_id}/ai-regrade")
+async def ai_regrade_attempt(
+    attempt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows a student to request AI re-evaluation of pending essay questions
+    in a completed attempt. Only works if they have an active personal API key.
+    Only the attempt owner can trigger this.
+    """
+    # Fetch the attempt — must belong to this user
+    attempt = (await db.execute(
+        select(QuizAttempt)
+        .options(selectinload(QuizAttempt.question_attempts))
+        .filter(QuizAttempt.id == attempt_id, QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
+    )).scalars().first()
+
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found or does not belong to you.")
+
+    api_key = await get_active_gemini_key(current_user.id, db)
+    if not api_key:
+        raise HTTPException(
+            status_code=402,
+            detail="No active Gemini API key found. Add one in your Keys settings to enable AI grading."
+        )
+
+    # Find pending essay question attempts
+    pending_qas = [qa for qa in attempt.question_attempts if qa.needs_manual_review]
+    if not pending_qas:
+        return {"message": "No pending essay questions found for this attempt.", "regraded": 0}
+
+    # Fetch all questions for this quiz version
+    all_questions = (await db.execute(
+        select(Question)
+        .filter(Question.quiz_id == attempt.quiz_id, Question.version == attempt.quiz_version)
+    )).scalars().all()
+    q_map = {q.id: q for q in all_questions}
+
+    import json
+    regraded = 0
+    marks_delta = 0.0
+
+    for qa in pending_qas:
+        question = q_map.get(qa.question_id)
+        if not question:
+            continue
+
+        # Decode user answer
+        try:
+            data = json.loads(qa.user_answer or "{}")
+            user_answer_text = data.get("text_answer", "")
+        except Exception:
+            user_answer_text = qa.user_answer or ""
+
+        if not user_answer_text or user_answer_text.strip() == "":
+            continue
+
+        rubric = question.correct_text or "Award marks based on relevance and accuracy."
+        ai_marks = await _ai_grade_essay(
+            question_text=question.text,
+            rubric=rubric,
+            user_answer=user_answer_text,
+            max_marks=question.marks,
+            api_key=api_key
+        )
+
+        marks_delta += ai_marks - qa.marks_awarded
+        qa.marks_awarded = ai_marks
+        qa.needs_manual_review = False
+        regraded += 1
+
+    if regraded > 0:
+        attempt.total_marks = max(0.0, attempt.total_marks + marks_delta)
+        await db.commit()
+
+    return {
+        "message": f"AI re-graded {regraded} essay question(s).",
+        "regraded": regraded,
+        "new_total_marks": attempt.total_marks
     }
 
 

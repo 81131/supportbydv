@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { X, ChevronDown, ChevronUp, Clock, CheckCircle, XCircle, AlertCircle, History } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, Clock, CheckCircle, XCircle, AlertCircle, History, Sparkles, Loader2 } from 'lucide-react';
 
 interface QuestionBreakdown {
   question_id: number;
@@ -33,13 +33,41 @@ const AttemptHistoryModal: React.FC<Props> = ({ quizId, quizTitle, onClose }) =>
   const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [regradingId, setRegradingId] = useState<number | null>(null);
+  const [regradeMsg, setRegradeMsg] = useState<Record<number, string>>({});
 
-  useEffect(() => {
+  const fetchAttempts = () => {
     api.get(`/quizzes/${quizId}/my-attempts`)
       .then(res => setAttempts(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [quizId]);
+  };
+
+  useEffect(() => { fetchAttempts(); }, [quizId]);
+
+  const handleAiRegrade = async (attemptId: number) => {
+    setRegradingId(attemptId);
+    setRegradeMsg(prev => ({ ...prev, [attemptId]: '' }));
+    try {
+      const res = await api.post(`/quizzes/attempts/${attemptId}/ai-regrade`);
+      setRegradeMsg(prev => ({
+        ...prev,
+        [attemptId]: res.data.message + (res.data.regraded > 0 ? ` New total: ${res.data.new_total_marks?.toFixed(1)} marks.` : '')
+      }));
+      if (res.data.regraded > 0) {
+        // Refresh to show updated marks
+        setLoading(true);
+        fetchAttempts();
+      }
+    } catch (err: any) {
+      setRegradeMsg(prev => ({
+        ...prev,
+        [attemptId]: err?.response?.data?.detail || 'AI grading failed. Check your API key in Keys settings.'
+      }));
+    } finally {
+      setRegradingId(null);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -151,9 +179,46 @@ const AttemptHistoryModal: React.FC<Props> = ({ quizId, quizTitle, onClose }) =>
                             <Clock size={12} /> {formatTime(attempt.time_consumed_seconds)}
                           </div>
                         </div>
+
+                        {/* AI Re-grade button — only shows when essays are pending */}
+                        {attempt.questions.some(q => q.needs_manual_review) && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleAiRegrade(attempt.attempt_id); }}
+                            disabled={regradingId === attempt.attempt_id}
+                            title="Re-evaluate pending essays with your Gemini AI"
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.4rem',
+                              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.4)',
+                              color: 'var(--accent-gold)', borderRadius: '8px',
+                              padding: '0.35rem 0.8rem', fontSize: '0.8rem',
+                              cursor: regradingId === attempt.attempt_id ? 'wait' : 'pointer',
+                              opacity: regradingId === attempt.attempt_id ? 0.6 : 1,
+                              transition: 'all 0.2s', whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {regradingId === attempt.attempt_id
+                              ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Grading…</>
+                              : <><Sparkles size={13} /> AI Grade</>}
+                          </button>
+                        )}
+
                         {isExpanded ? <ChevronUp size={18} color="var(--accent-gold)" /> : <ChevronDown size={18} color="var(--text-muted)" />}
                       </div>
                     </div>
+
+                    {/* AI re-grade status message */}
+                    {regradeMsg[attempt.attempt_id] && (
+                      <div style={{
+                        padding: '0.5rem 1.2rem',
+                        background: 'rgba(212,175,55,0.07)',
+                        borderTop: '1px solid rgba(212,175,55,0.2)',
+                        fontSize: '0.8rem',
+                        color: 'var(--accent-gold)'
+                      }}>
+                        <Sparkles size={12} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
+                        {regradeMsg[attempt.attempt_id]}
+                      </div>
+                    )}
 
                     {/* Question breakdown */}
                     {isExpanded && (
