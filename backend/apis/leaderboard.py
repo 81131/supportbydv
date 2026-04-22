@@ -21,6 +21,8 @@ async def get_global_leaderboard(db: AsyncSession = Depends(get_db)):
             func.sum(QuizAttempt.total_marks).label("total_score"),
             func.sum(QuizAttempt.time_consumed_seconds).label("total_time"),
         )
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(Quiz.is_deleted == False)
         .group_by(QuizAttempt.user_id)
         .subquery()
     )

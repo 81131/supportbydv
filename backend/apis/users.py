@@ -61,7 +61,9 @@ async def get_public_profile(user_id: int, db: AsyncSession = Depends(get_db)):
         select(
             func.sum(QuizAttempt.total_marks).label("total_score"),
             func.sum(QuizAttempt.time_consumed_seconds).label("total_time"),
-        ).filter(QuizAttempt.user_id == user_id)
+        )
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(QuizAttempt.user_id == user_id, Quiz.is_deleted == False)
     )).first()
 
     quiz_count_row = (await db.execute(
@@ -76,6 +78,8 @@ async def get_public_profile(user_id: int, db: AsyncSession = Depends(get_db)):
     # Global ranking
     all_points_sub = (
         select(QuizAttempt.user_id, func.sum(QuizAttempt.total_marks).label("total_score"))
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(Quiz.is_deleted == False)
         .group_by(QuizAttempt.user_id)
         .subquery()
     )

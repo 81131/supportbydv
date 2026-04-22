@@ -43,7 +43,8 @@ async def _build_performance_context(user_id: int, db: AsyncSession) -> str:
     stmt = (
         select(QuizAttempt)
         .options(selectinload(QuizAttempt.quiz), selectinload(QuizAttempt.question_attempts))
-        .filter(QuizAttempt.user_id == user_id, QuizAttempt.status == "COMPLETED")
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(QuizAttempt.user_id == user_id, QuizAttempt.status == "COMPLETED", Quiz.is_deleted == False)
         .order_by(QuizAttempt.created_at.desc())
         .limit(20)
     )
@@ -174,7 +175,8 @@ async def get_scholar_standing(db: AsyncSession = Depends(get_db), current_user:
     # Fetch all completed attempts for this user
     attempts = (await db.execute(
         select(QuizAttempt)
-        .filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED")
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(QuizAttempt.user_id == current_user.id, QuizAttempt.status == "COMPLETED", Quiz.is_deleted == False)
     )).scalars().all()
 
     print(f"DEBUG scholar-standing: found {len(attempts)} attempts for user {current_user.id}")

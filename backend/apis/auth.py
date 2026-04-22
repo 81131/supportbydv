@@ -284,7 +284,11 @@ async def get_profile_stats(
     from models.quiz import Question
     uid = current_user.id
 
-    res_q_taken = await db.execute(select(func.count(QuizAttempt.id)).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED"))
+    res_q_taken = await db.execute(
+        select(func.count(QuizAttempt.id))
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED", Quiz.is_deleted == False)
+    )
     quizzes_taken = res_q_taken.scalar() or 0
 
     res_q_made = await db.execute(select(func.count(Quiz.id)).filter(Quiz.created_user_id == uid, Quiz.is_deleted == False))
@@ -297,7 +301,11 @@ async def get_profile_stats(
     collections_made = res_col.scalar() or 0
 
     # Compute score percentages from completed attempts
-    res_attempts = await db.execute(select(QuizAttempt).filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED"))
+    res_attempts = await db.execute(
+        select(QuizAttempt)
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .filter(QuizAttempt.user_id == uid, QuizAttempt.status == "COMPLETED", Quiz.is_deleted == False)
+    )
     attempts = res_attempts.scalars().all()
     
     scores = []
