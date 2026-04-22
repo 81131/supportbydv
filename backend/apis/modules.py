@@ -8,6 +8,8 @@ from database import get_db
 from models.quiz import Module, LectureUnit, LectureTopic, Question
 from schemas.quiz import LectureUnitCreate, LectureTopicCreate, UnitBulkCreate
 from models.user import User, UserRole
+from models.user import User, UserRole
+from models.library import Note, Video
 from security import get_current_user
 import json
 
@@ -183,11 +185,22 @@ async def update_unit(unit_id: int, unit_in: LectureUnitCreate, db: AsyncSession
 @router.delete("/units/{unit_id}")
 async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.ADMIN, UserRole.NO_ONE]: raise HTTPException(status_code=403)
-    unit = (await db.execute(select(LectureUnit).filter(LectureUnit.id == unit_id))).scalars().first()
+    unit = (await db.execute(
+        select(LectureUnit)
+        .options(selectinload(LectureUnit.topics))
+        .filter(LectureUnit.id == unit_id)
+    )).scalars().first()
     if not unit: raise HTTPException(status_code=404)
-    # Nullify unit_id in questions
+    # Nullify unit_id in questions, notes, and videos to prevent IntegrityErrors
     questions = (await db.execute(select(Question).filter(Question.unit_id == unit_id))).scalars().all()
     for q in questions: q.unit_id = None
+    
+    notes = (await db.execute(select(Note).filter(Note.unit_id == unit_id))).scalars().all()
+    for n in notes: n.unit_id = None
+    
+    videos = (await db.execute(select(Video).filter(Video.unit_id == unit_id))).scalars().all()
+    for v in videos: v.unit_id = None
+    
     db.delete(unit)
     await db.commit()
     return {"message": "Unit deleted"}

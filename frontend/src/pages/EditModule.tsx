@@ -184,8 +184,13 @@ const EditModule: React.FC = () => {
 
   const handleDeleteUnit = async (uId: number) => {
       if(!confirm("Delete unit and all its topics?")) return;
-      await api.delete(`/modules/units/${uId}`);
-      setUnits(units.filter(u => u.id !== uId));
+      try {
+          await api.delete(`/modules/units/${uId}`);
+          setUnits(units.filter(u => u.id !== uId));
+      } catch (err: any) {
+          console.error(err);
+          alert(err.response?.data?.detail || "Failed to delete unit due to a server error.");
+      }
   };
 
   const handleAddTopic = (uId: number) => {
@@ -209,8 +214,13 @@ const EditModule: React.FC = () => {
 
   const handleDeleteTopic = async (uId: number, tId: number) => {
       if(!confirm("Are you sure? This will permanently wipe this topic securely from all questions containing it!")) return;
-      await api.delete(`/modules/topics/${tId}`);
-      setUnits(units.map(u => u.id === uId ? { ...u, topics: u.topics.filter(t => t.id !== tId) } : u));
+      try {
+          await api.delete(`/modules/topics/${tId}`);
+          setUnits(units.map(u => u.id === uId ? { ...u, topics: u.topics.filter(t => t.id !== tId) } : u));
+      } catch (err: any) {
+          console.error(err);
+          alert(err.response?.data?.detail || "Failed to delete topic due to a server error.");
+      }
   };
 
   const handleBulkImportUnits = async () => {
