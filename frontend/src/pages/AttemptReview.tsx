@@ -135,9 +135,26 @@ const AttemptReview: React.FC = () => {
       </h3>
 
       {data.review.map((rev: any, i: number) => {
-        const borderColor = rev.needs_manual_review
-          ? 'var(--accent-gold)'
-          : rev.is_correct ? '#4caf50' : 'var(--accent-red)';
+        const isEssay = rev.type === 'ESSAY';
+        const isPending = rev.needs_manual_review;
+        const isPartial = rev.marks_awarded > 0 && rev.marks_awarded < rev.marks;
+        const isFull = rev.marks_awarded >= rev.marks && !isPending;
+        const marksColor = isPending ? 'var(--accent-gold)'
+          : isFull ? '#4caf50'
+          : isPartial ? '#ff9800'
+          : 'var(--accent-red)';
+
+        const borderColor = isPending ? 'var(--accent-gold)'
+          : isFull ? '#4caf50'
+          : isPartial ? '#ff9800'
+          : 'var(--accent-red)';
+
+        // For AI-graded essays, parse out the rubric vs feedback from correct_answer
+        let aiRubric = rev.correct_answer;
+        if (isEssay && !isPending && rev.correct_answer?.startsWith('AI Graded')) {
+          const rubricIdx = rev.correct_answer.indexOf('Rubric:');
+          aiRubric = rubricIdx >= 0 ? rev.correct_answer.slice(rubricIdx + 7).trim() : '';
+        }
 
         return (
           <div
@@ -150,10 +167,10 @@ const AttemptReview: React.FC = () => {
                 Q{i + 1}: {rev.question_text}
               </p>
               <span style={{
-                flexShrink: 0, fontSize: '0.85rem', fontWeight: 'bold',
-                color: rev.marks_awarded > 0 ? '#4caf50' : rev.needs_manual_review ? 'var(--accent-gold)' : 'var(--text-muted)'
+                flexShrink: 0, fontSize: '0.9rem', fontWeight: 'bold',
+                color: marksColor, whiteSpace: 'nowrap'
               }}>
-                {rev.marks_awarded} / {rev.marks}
+                {Number(rev.marks_awarded).toFixed(1)} / {rev.marks}
               </span>
             </div>
 
@@ -174,20 +191,33 @@ const AttemptReview: React.FC = () => {
             }}>
               <p className="text-desc" style={{ margin: 0 }}>
                 <strong>Your Answer:</strong>{' '}
-                <span style={{ color: rev.is_correct ? '#4caf50' : 'var(--text-main)' }}>
+                <span style={{ color: 'var(--text-main)' }}>
                   {rev.user_answer}
                 </span>
               </p>
 
-              {rev.type === 'ESSAY' ? (
-                rev.needs_manual_review ? (
+              {isEssay ? (
+                isPending ? (
                   <p className="text-desc" style={{ margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <AlertCircle size={15} /> Pending Maester Review — use the button above to trigger AI grading.
                   </p>
                 ) : (
-                  <p className="text-desc" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    <strong>Rubric:</strong> {rev.correct_answer}
-                  </p>
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <Sparkles size={14} color="var(--accent-gold)" />
+                      <span style={{ fontSize: '0.82rem', color: 'var(--accent-gold)', fontWeight: 600 }}>
+                        AI Graded — {Number(rev.marks_awarded).toFixed(1)} / {rev.marks} marks
+                      </span>
+                      {isPartial && <span style={{ fontSize: '0.78rem', color: '#ff9800' }}>(partial credit)</span>}
+                      {isFull && <span style={{ fontSize: '0.78rem', color: '#4caf50' }}>(full marks)</span>}
+                      {rev.marks_awarded === 0 && <span style={{ fontSize: '0.78rem', color: 'var(--accent-red)' }}>(no marks awarded)</span>}
+                    </div>
+                    {aiRubric && (
+                      <p className="text-desc" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.83rem' }}>
+                        <strong>Model Answer / Rubric:</strong> {aiRubric}
+                      </p>
+                    )}
+                  </>
                 )
               ) : (
                 !rev.is_correct && (

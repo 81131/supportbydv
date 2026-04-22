@@ -24,7 +24,7 @@ os.makedirs(QUIZ_RESOURCE_DIR, exist_ok=True)
 
 async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max_marks: float, api_key: str) -> float:
     """
-    Uses Gemini to grade an essay question.
+    Uses Gemini to grade an essay question with partial marks.
     Returns marks_awarded (float) clamped between 0 and max_marks.
     Falls back to 0.0 on any error.
     """
@@ -32,13 +32,19 @@ async def _ai_grade_essay(question_text: str, rubric: str, user_answer: str, max
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(model_name="gemini-2.5-flash")
         prompt = (
-            f"You are a strict academic examiner. Grade the following student essay answer.\n\n"
+            f"You are a strict but fair academic examiner marking a student essay answer.\n\n"
             f"Question: {question_text}\n\n"
             f"Marking Rubric / Model Answer: {rubric}\n\n"
             f"Student's Answer: {user_answer}\n\n"
             f"Maximum marks available: {max_marks}\n\n"
-            f"Return ONLY a JSON object in this exact format, no other text:\n"
-            f'{{"marks": <float>, "feedback": "<one sentence feedback>"}}'
+            f"Instructions:\n"
+            f"- Award marks PROPORTIONALLY based on how much of the rubric the student covers.\n"
+            f"- Partial marks are expected and encouraged (e.g. {max_marks * 0.5}, {max_marks * 0.75}).\n"
+            f"- Award 0 only if the answer is completely wrong, blank, or entirely irrelevant.\n"
+            f"- Award full marks only if the answer fully satisfies all rubric criteria.\n"
+            f"- Be consistent: a 60% correct answer should get ~60% of the marks.\n\n"
+            f"Return ONLY a JSON object in this exact format, with no other text:\n"
+            f'{{"marks": <float between 0 and {max_marks}>, "feedback": "<one concise sentence of feedback>"}}'
         )
         response = model.generate_content(prompt)
         import json, re
@@ -836,6 +842,7 @@ async def submit_and_grade_quiz(
     )).scalars().all()
     max_score = sum([q.marks for q in current_questions])
     review_details = []
+    qa_objects: dict = {}  # {question_id: QuestionAttempt} — for AI grading updates
 
     for q in current_questions:
         q_type = q.type.value if hasattr(q.type, 'value') else q.type
@@ -950,8 +957,8 @@ async def submit_and_grade_quiz(
         total_score += marks_awarded
 
         q_attempt = QuestionAttempt(
-            quiz_attempt_id=attempt.id, 
-            question_id=q.id, 
+            quiz_attempt_id=attempt.id,
+            question_id=q.id,
             marks_awarded=marks_awarded if not submission.is_draft else 0.0,
             user_answer=user_answer_db_string,
             needs_manual_review=needs_manual_review if not submission.is_draft else False,
@@ -959,6 +966,7 @@ async def submit_and_grade_quiz(
             time_spent_seconds=getattr(ans_data, 'time_spent_seconds', 0) if ans_data else 0
         )
         db.add(q_attempt)
+        qa_objects[q.id] = q_attempt  # Keep reference for AI grading below
 
         review_details.append({
             "question_text": q.text, "type": q_type, "marks_awarded": marks_awarded,
@@ -996,26 +1004,23 @@ async def submit_and_grade_quiz(
                         api_key=api_key
                     )
 
-                    if ai_marks > 0 or True:  # Always update — 0 may be a legitimate grade
-                        # Update total_score: essay started at 0, so just add ai_marks
-                        total_score += ai_marks
+                    # AI returned a result (even 0 is a valid grade for a wrong answer)
+                    # Update total_score: essay started at 0, so just add ai_marks
+                    total_score += ai_marks
 
-                        # Update in-memory review detail
-                        rev["marks_awarded"] = ai_marks
-                        rev["is_correct"] = ai_marks >= matching_q.marks
-                        rev["correct_answer"] = f"AI Graded ({ai_marks}/{matching_q.marks} marks). Rubric: {rubric}"
+                    # Update in-memory review detail
+                    rev["marks_awarded"] = ai_marks
+                    rev["is_correct"] = ai_marks >= matching_q.marks
+                    rev["correct_answer"] = f"AI Graded ({ai_marks}/{matching_q.marks} marks). Rubric: {rubric}"
+                    rev["needs_manual_review"] = False
 
-                        # Update the QuestionAttempt row already in DB
-                        for qa_row in (await db.execute(
-                            select(QuestionAttempt).filter(
-                                QuestionAttempt.quiz_attempt_id == attempt.id,
-                                QuestionAttempt.question_id == matching_q.id
-                            )
-                        )).scalars().all():
-                            qa_row.marks_awarded = ai_marks
-                            qa_row.needs_manual_review = False  # AI handled it — 0 is a valid grade
+                    # Update the in-memory QuestionAttempt object directly (no DB SELECT needed)
+                    qa_obj = qa_objects.get(matching_q.id)
+                    if qa_obj:
+                        qa_obj.marks_awarded = ai_marks
+                        qa_obj.needs_manual_review = False  # AI graded it — 0 is valid
 
-                        ai_graded_any = True
+                    ai_graded_any = True
     # ──────────────────────────────────────────────────────────────────────
 
     attempt.total_marks = total_score
