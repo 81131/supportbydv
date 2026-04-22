@@ -72,7 +72,7 @@ api.interceptors.response.use(
       } catch (err) {
         processQueue(err);
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        window.location.href = '/';
         return Promise.reject(err);
       } finally {
         isRefreshing = false;
