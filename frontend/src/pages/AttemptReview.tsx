@@ -64,7 +64,7 @@ const AttemptReview: React.FC = () => {
 
   const pct = data.max_score > 0 ? ((data.total_marks / data.max_score) * 100).toFixed(1) : '0.0';
   const passed = data.total_marks >= data.max_score / 2;
-  const hasPendingEssays = data.review.some((r: any) => r.needs_manual_review);
+  const hasAnyEssays = data.review.some((r: any) => r.type === 'ESSAY');
 
   return (
     <div className="page-container" style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
@@ -98,7 +98,7 @@ const AttemptReview: React.FC = () => {
         <p className="text-desc" style={{ fontSize: '1.1rem', margin: 0 }}>Accuracy: {pct}%</p>
 
         {/* AI Re-grade button */}
-        {hasPendingEssays && (
+        {hasAnyEssays && (
           <div style={{ marginTop: '1.5rem' }}>
             <button
               onClick={handleAiRegrade}

@@ -1087,10 +1087,15 @@ async def ai_regrade_attempt(
             detail="No active Gemini API key found. Add one in your Keys settings to enable AI grading."
         )
 
-    # Find pending essay question attempts
-    pending_qas = [qa for qa in attempt.question_attempts if qa.needs_manual_review]
-    if not pending_qas:
-        return {"message": "No pending essay questions found for this attempt.", "regraded": 0}
+    # Re-grade ALL essay question attempts (not just pending) so students can correct corrupt/wrong grades
+    import json as _json
+    all_qa_map = {qa.question_id: qa for qa in attempt.question_attempts}
+    essay_qas = [
+        qa for qa in attempt.question_attempts
+        if q_map.get(qa.question_id) and q_map[qa.question_id].type.value == "ESSAY"
+    ]
+    if not essay_qas:
+        return {"message": "No essay questions found for this attempt.", "regraded": 0}
 
     # Fetch all questions for this quiz version
     all_questions = (await db.execute(
@@ -1099,14 +1104,17 @@ async def ai_regrade_attempt(
     )).scalars().all()
     q_map = {q.id: q for q in all_questions}
 
-    import json
+    import json, asyncio as _asyncio
     regraded = 0
-    marks_delta = 0.0
 
-    for qa in pending_qas:
+    for idx, qa in enumerate(essay_qas):
         question = q_map.get(qa.question_id)
         if not question:
             continue
+
+        # Stagger calls to avoid 429 rate limits
+        if idx > 0:
+            await _asyncio.sleep(1.5)
 
         # Decode user answer
         try:
@@ -1116,6 +1124,10 @@ async def ai_regrade_attempt(
             user_answer_text = qa.user_answer or ""
 
         if not user_answer_text or user_answer_text.strip() == "":
+            # No answer — mark as 0, clear review flag
+            qa.marks_awarded = 0.0
+            qa.needs_manual_review = False
+            regraded += 1
             continue
 
         rubric = question.correct_text or "Award marks based on relevance and accuracy."
@@ -1127,13 +1139,14 @@ async def ai_regrade_attempt(
             api_key=api_key
         )
 
-        marks_delta += ai_marks - qa.marks_awarded
         qa.marks_awarded = ai_marks
         qa.needs_manual_review = False
         regraded += 1
 
     if regraded > 0:
-        attempt.total_marks = max(0.0, attempt.total_marks + marks_delta)
+        # Recalculate total_marks from scratch to fix any previous corruption
+        all_qas = attempt.question_attempts
+        attempt.total_marks = sum(qa.marks_awarded for qa in all_qas)
         await db.commit()
 
     return {
