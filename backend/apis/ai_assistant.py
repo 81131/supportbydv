@@ -36,77 +36,133 @@ class ChatRequest(BaseModel):
 
 async def _build_performance_context(user_id: int, db: AsyncSession) -> str:
     """
-    Build a concise performance summary for the system prompt.
-    Includes overall accuracy, and which modules/topics have the lowest scores.
+    Build a rich performance summary for the Maester system prompt.
+    Includes: overall accuracy, per-quiz breakdown with quiz titles,
+    and per-question detail (question text, marks, correct/wrong/partial).
     """
-    # Fetch attempts with related data
+    import json as _json
+
+    # Fetch attempts (with question_attempts pre-loaded)
     stmt = (
         select(QuizAttempt)
-        .options(selectinload(QuizAttempt.quiz), selectinload(QuizAttempt.question_attempts))
+        .options(
+            selectinload(QuizAttempt.quiz),
+            selectinload(QuizAttempt.question_attempts)
+        )
         .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
         .filter(QuizAttempt.user_id == user_id, QuizAttempt.status == "COMPLETED", Quiz.is_deleted == False)
         .order_by(QuizAttempt.created_at.desc())
-        .limit(20)
+        .limit(10)  # Last 10 attempts for context window efficiency
     )
     attempts = (await db.execute(stmt)).scalars().all()
 
     if not attempts:
         return "The student has not attempted any quizzes yet. Encourage them to try their first trial."
 
-    total_earned = sum(a.total_marks for a in attempts)
+    total_earned = 0.0
     total_max = 0.0
     module_scores: dict = {}
+    lines = []
 
     for attempt in attempts:
         quiz = attempt.quiz
         if not quiz:
             continue
-        
-        module_id = quiz.module_id
-        if module_id not in module_scores:
-            module_scores[module_id] = {"earned": 0.0, "max": 0.0, "title": f"Module {module_id}"}
 
-        # Use the version stored in the attempt, or fallback to current quiz version
+        quiz_title = quiz.title or f"Quiz {quiz.id}"
+        module_id = quiz.module_id
         target_version = getattr(attempt, "quiz_version", quiz.version)
-        
-        # Calculate max marks for this specific quiz version
-        q_max_stmt = select(func.sum(Question.marks)).filter(
-            Question.quiz_id == quiz.id, 
-            Question.version == target_version
-        )
-        q_max = (await db.execute(q_max_stmt)).scalar() or 0.0
-        
+
+        # Load questions for this attempt version
+        questions = (await db.execute(
+            select(Question)
+            .filter(Question.quiz_id == quiz.id, Question.version == target_version)
+        )).scalars().all()
+        q_map = {q.id: q for q in questions}
+
+        q_max = sum(q.marks for q in questions)
         total_max += q_max
+        total_earned += attempt.total_marks
+
+        if module_id not in module_scores:
+            module_scores[module_id] = {"earned": 0.0, "max": 0.0}
         module_scores[module_id]["earned"] += attempt.total_marks
         module_scores[module_id]["max"] += q_max
 
+        pct = round((attempt.total_marks / q_max) * 100, 1) if q_max > 0 else 0
+        lines.append(f"\n📜 Quiz: \"{quiz_title}\" — Attempt #{attempt.attempt_number} — {attempt.total_marks:.1f}/{q_max:.1f} marks ({pct}%)")
+
+        # Per-question breakdown
+        wrong_or_partial = []
+        for qa in attempt.question_attempts:
+            q = q_map.get(qa.question_id)
+            if not q:
+                continue
+
+            q_type = q.type.value if hasattr(q.type, "value") else str(q.type)
+            awarded = qa.marks_awarded or 0.0
+            max_m = q.marks
+
+            # Determine result
+            if qa.needs_manual_review:
+                result = "⏳ Pending AI/Maester Review"
+            elif awarded >= max_m:
+                result = "✅ Correct"
+            elif awarded > 0:
+                result = f"🟠 Partial ({awarded:.1f}/{max_m})"
+            else:
+                result = f"❌ Wrong (0/{max_m})"
+
+            # Unit tag if available
+            unit_tag = f" [Unit {q.unit_id}]" if q.unit_id else ""
+
+            if awarded < max_m and not qa.needs_manual_review:
+                wrong_or_partial.append(f"    • [{q_type}]{unit_tag} {q.text[:120]} → {result}")
+            elif qa.needs_manual_review:
+                wrong_or_partial.append(f"    • [{q_type}]{unit_tag} {q.text[:120]} → {result}")
+
+        if wrong_or_partial:
+            lines.append("  Questions needing attention:")
+            lines.extend(wrong_or_partial)
+        else:
+            lines.append("  All questions answered correctly.")
+
+    # Overall summary header
     overall_pct = round((total_earned / total_max) * 100, 1) if total_max > 0 else 0
+    header = [
+        f"Overall accuracy: {overall_pct}% across {len(attempts)} completed trial(s).",
+        f"Total marks: {total_earned:.1f}/{total_max:.1f}",
+    ]
 
-    lines = [f"Overall accuracy: {overall_pct}% across {len(attempts)} trials."]
+    # Module breakdown
     for mod_id, s in module_scores.items():
-        pct = round((s['earned'] / s['max']) * 100, 1) if s['max'] > 0 else 0
-        lines.append(f"  - Module {mod_id}: {pct}% ({s['earned']:.1f}/{s['max']:.1f} marks)")
+        pct = round((s["earned"] / s["max"]) * 100, 1) if s["max"] > 0 else 0
+        header.append(f"  - Module {mod_id}: {pct}% ({s['earned']:.1f}/{s['max']:.1f} marks)")
 
-    weak = [f"Module {mid}" for mid, s in module_scores.items()
-            if s["max"] > 0 and (s["earned"] / s["max"]) < 0.5]
-    if weak:
-        lines.append(f"Weak areas (below 50%): {', '.join(weak)}")
+    weak_modules = [f"Module {mid}" for mid, s in module_scores.items()
+                    if s["max"] > 0 and (s["earned"] / s["max"]) < 0.6]
+    if weak_modules:
+        header.append(f"Weak modules (below 60%): {', '.join(weak_modules)}")
 
-    return "\n".join(lines)
+    return "\n".join(header + lines)
 
 
 SYSTEM_PROMPT_TEMPLATE = """You are "The Maester" — the personal AI study assistant for the Citadel learning platform.
 You are wise, encouraging, and precise. You speak in a slightly medieval academic tone but remain clear and helpful.
 You help students understand their weak spots, explain concepts, and suggest study strategies.
 
-Here is a snapshot of this student's current performance:
+Here is a detailed snapshot of this student's current performance, including each quiz they attempted,
+their score, and the specific questions they got wrong or partially correct:
+
 {performance_context}
 
 Rules:
-- Never reveal raw exam answers unless the student already submitted that quiz.
-- Keep responses concise and well-structured (use bullet points and headings where appropriate).
-- If you don't have enough data, say so gracefully.
+- You have access to the exact questions the student got wrong — use them to give SPECIFIC study advice.
+- Name the specific topics and concepts from the wrong questions, not just "review Module 1".
+- Never reveal the correct answers to questions the student hasn't submitted yet.
+- Keep responses well-structured (use bullet points and headings where appropriate).
 - Encourage and motivate — remind them that knowledge is power.
+- If a question shows ⏳ Pending Review, note that AI grading is still in progress for that essay.
 """
 
 
