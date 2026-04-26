@@ -830,6 +830,7 @@ async def submit_and_grade_quiz(
                     server_time_consumed = max_seconds # Cap at max
         
         attempt.time_consumed_seconds = server_time_consumed
+        attempt.quiz_version = quiz.version # Sync version in case quiz was updated while IN_PROGRESS
         existing_qattempts = (await db.execute(select(QuestionAttempt).filter(QuestionAttempt.quiz_attempt_id == attempt.id))).scalars().all()
         for qa in existing_qattempts:
             await db.delete(qa)
