@@ -41,6 +41,7 @@ const NoteViewer: React.FC = () => {
   const [blobUrl, setBlobUrl]         = useState<string | null>(null);
   const [pdfLoading, setPdfLoading]   = useState(true);
   const [pdfError, setPdfError]       = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
   const [showTTS, setShowTTS]         = useState(false);
   const [voice, setVoice]             = useState('en-US-JennyNeural');
@@ -72,13 +73,48 @@ const NoteViewer: React.FC = () => {
   // ── Load PDF ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!noteId) return;
+    let url = '';
     setPdfLoading(true);
+    setDownloadProgress(0);
     api.get(`/library/notes/download/${noteId}`)
-      .then((res) => {
-        setBlobUrl(res.data.url);
+      .then(async (res) => {
+        const response = await fetch(res.data.url);
+        if (!response.ok) throw new Error("Failed to retrieve scroll from vault.");
+        
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        
+        if (!response.body) {
+          const blob = await response.blob();
+          url = URL.createObjectURL(blob);
+          setBlobUrl(url);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedLength = 0;
+
+        while(true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedLength += value.length;
+          if (total > 0) {
+            setDownloadProgress(Math.round((receivedLength / total) * 100));
+          } else {
+            setDownloadProgress(p => (p < 90 ? p + 10 : 90));
+          }
+        }
+
+        const blob = new Blob(chunks, { type: 'application/pdf' });
+        url = URL.createObjectURL(blob);
+        setBlobUrl(url);
       })
       .catch(() => setPdfError('Could not load this scroll.'))
       .finally(() => setPdfLoading(false));
+      
+    return () => { if (url) URL.revokeObjectURL(url); };
   }, [noteId]);
 
   // ── Revoke audio blob on unmount / change ───────────────────────────────────
@@ -290,7 +326,15 @@ const NoteViewer: React.FC = () => {
             alignItems: 'center', justifyContent: 'center', color: 'var(--accent-gold)',
           }}>
             <Loader2 size={36} style={{ animation: 'nvspin 1s linear infinite', marginBottom: '1rem' }} />
-            <p style={{ margin: 0 }}>Loading scroll…</p>
+            <p style={{ margin: '0 0 0.75rem 0' }}>Loading scroll…</p>
+            {downloadProgress > 0 && (
+              <>
+                <div style={{ width: '200px', background: 'var(--bg-deep)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', background: 'var(--accent-gold)', width: `${downloadProgress}%`, transition: 'width 0.2s' }} />
+                </div>
+                <span style={{ fontSize: '0.8rem', marginTop: '0.5rem', fontWeight: 500 }}>{downloadProgress}%</span>
+              </>
+            )}
           </div>
         )}
         {pdfError && (
