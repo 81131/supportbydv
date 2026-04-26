@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { Trophy, CalendarDays, ChevronDown, ChevronUp, Users, Zap, Target, BookOpen, AlertTriangle, Maximize, X } from 'lucide-react';
+import { Trophy, CalendarDays, ChevronDown, ChevronUp, Users, Zap, Target, BookOpen, AlertTriangle, Maximize, X, Flame, Shield, Swords } from 'lucide-react';
 import { LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 
 interface QuestionStat {
@@ -276,11 +276,11 @@ const PerformanceAnalytics = () => {
                         {/* LEVEL 1: HERO SECTION */}
                         <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
                             <h1 className="brand-font" style={{ color: 'var(--accent-gold)', fontSize: '3rem', margin: '0 0 0.5rem 0' }}>The Arena</h1>
-                            <p style={{ color: 'var(--text-main)', fontSize: '1.2rem', fontStyle: 'italic', fontFamily: 'var(--font-reading)' }}>
-                                {kpis!.total_accuracy_percentage >= 80 ? "🔥 You are commanding the battlefield." :
-                                    kpis!.comeback_rate_percentage >= 50 ? "🛡️ A resilient scholar climbs upward." :
-                                        "⚔️ Stand firm. Sharpen your blade."}
-                            </p>
+                            <div style={{ color: 'var(--text-main)', fontSize: '1.2rem', fontStyle: 'italic', fontFamily: 'var(--font-reading)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                                {kpis!.total_accuracy_percentage >= 80 ? <><Flame size={20} color="#ff9800" /> You are commanding the battlefield.</> :
+                                    kpis!.comeback_rate_percentage >= 50 ? <><Shield size={20} color="#4caf50" /> A resilient scholar climbs upward.</> :
+                                        <><Swords size={20} color="var(--text-muted)" /> Stand firm. Sharpen your blade.</>}
+                            </div>
                         </div>
 
                         {/* LEVEL 2: VITAL SIGNS */}
@@ -314,7 +314,7 @@ const PerformanceAnalytics = () => {
                                 <Users size={32} color="var(--accent-gold)" style={{ margin: '0 auto 0.75rem auto', display: 'block' }} />
                                 <h3 className="brand-font" style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Global Standing</h3>
                                 <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: 1 }}>Top {100 - kpis!.peer_percentile}%</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>{kpis!.consistency_streak_days} Day Streak 🔥</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>{kpis!.consistency_streak_days} Day Streak <Flame size={14} color="#ff9800" /></div>
                             </div>
                         </div>
 
