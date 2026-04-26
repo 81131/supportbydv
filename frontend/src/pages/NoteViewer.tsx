@@ -69,24 +69,16 @@ const NoteViewer: React.FC = () => {
       .finally(() => setMetaLoading(false));
   }, [noteId]);
 
-  // ── Load PDF blob ────────────────────────────────────────────────────────────
+  // ── Load PDF ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!noteId) return;
-    let url = '';
     setPdfLoading(true);
     api.get(`/library/notes/download/${noteId}`)
-      .then(async (res) => {
-        // Fetch the object directly via the frontend to secure it into a blob
-        const pdfReq = await fetch(res.data.url);
-        if (!pdfReq.ok) throw new Error("Failed to retrieve scroll from vault.");
-        const pdfBlob = await pdfReq.blob();
-        
-        url = URL.createObjectURL(pdfBlob);
-        setBlobUrl(url);
+      .then((res) => {
+        setBlobUrl(res.data.url);
       })
       .catch(() => setPdfError('Could not load this scroll.'))
       .finally(() => setPdfLoading(false));
-    return () => { if (url) URL.revokeObjectURL(url); };
   }, [noteId]);
 
   // ── Revoke audio blob on unmount / change ───────────────────────────────────
