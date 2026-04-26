@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
@@ -130,12 +131,12 @@ const AdminDashboard: React.FC = () => {
         year: newModuleYear,
         semester: newModuleSemester
       });
-      alert("New module forged in the archives!");
+      toast.error("New module forged in the archives!");
       setNewModuleName('');
       setNewModuleCode('');
       fetchData();
     } catch (error: any) {
-      alert(error.response?.data?.detail || "Failed to create module.");
+      toast.error(error.response?.data?.detail || "Failed to create module.");
     }
   };
 
@@ -147,7 +148,7 @@ const AdminDashboard: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
       fetchData();
     } catch (error: any) {
-      alert(error.response?.data?.detail || "Failed to update role.");
+      toast.error(error.response?.data?.detail || "Failed to update role.");
     }
   };
 
@@ -160,7 +161,7 @@ const AdminDashboard: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, is_suspended: !currentStatus } : u));
       fetchData();
     } catch (error: any) {
-      alert(error.response?.data?.detail || `Failed to ${action} user.`);
+      toast.error(error.response?.data?.detail || `Failed to ${action} user.`);
     }
   };
 
@@ -168,14 +169,14 @@ const AdminDashboard: React.FC = () => {
     try {
       await api.put(`/subscriptions/requests/${id}/approve`);
       fetchData();
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error approving request.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error approving request.'); }
   };
 
   const handleRejectReq = async (id: number) => {
     try {
       await api.put(`/subscriptions/requests/${id}/reject`);
       fetchData();
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting request.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error rejecting request.'); }
   };
 
   const handleApproveAd = (req: any) => {
@@ -211,7 +212,7 @@ const AdminDashboard: React.FC = () => {
       setDeployTarget(null);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error deploying campaign.');
+      toast.error(err.response?.data?.detail || 'Error deploying campaign.');
     } finally {
       setIsDeploying(false);
     }
@@ -222,35 +223,35 @@ const AdminDashboard: React.FC = () => {
     try {
       await api.put(`/ads/campaigns/${id}/cancel`);
       fetchData();
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error terminating campaign.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error terminating campaign.'); }
   };
 
   const handleRejectAd = async (id: number) => {
     try {
       await api.put(`/ads/requests/${id}/reject`);
       fetchData();
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting ad.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error rejecting ad.'); }
   };
 
   const handleApproveBiz = async (id: number) => {
     try {
       await api.put(`/support/business/${id}/approve`);
       fetchData();
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error approving business req.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error approving business req.'); }
   };
 
   const handleRejectBiz = async (id: number) => {
     try {
       await api.put(`/support/business/${id}/reject`);
       fetchData();
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error rejecting business req.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error rejecting business req.'); }
   };
 
   const handleOpenTicket = async (id: number) => {
     try {
       const res = await api.get(`/support/tickets/${id}`);
       setActiveTicket(res.data);
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error opening ticket.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error opening ticket.'); }
   };
 
   const handleCloseTicket = () => {
@@ -265,7 +266,7 @@ const AdminDashboard: React.FC = () => {
       await api.post(`/support/tickets/${activeTicket.ticket.id}/reply`, { content: ticketReply });
       setTicketReply("");
       handleOpenTicket(activeTicket.ticket.id); // Refresh ticket
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error sending reply.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error sending reply.'); }
   };
 
   const handleResolveTicket = async () => {
@@ -274,7 +275,7 @@ const AdminDashboard: React.FC = () => {
       await api.put(`/support/tickets/${activeTicket.ticket.id}/resolve`);
       handleOpenTicket(activeTicket.ticket.id); // Refresh ticket
       fetchData(); // Refresh list to update status pill
-    } catch (err: any) { alert(err.response?.data?.detail || 'Error resolving ticket.'); }
+    } catch (err: any) { toast.error(err.response?.data?.detail || 'Error resolving ticket.'); }
   };
 
   const formatDate = (dateString: string) => {

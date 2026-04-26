@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  BookOpen, Download, X, Loader2, Volume2, VolumeX,
+  BookOpen, Download, X, Loader2, Volume2, VolumeX, Globe, RefreshCw, Play
 } from 'lucide-react';
 import api from '../api';
 
@@ -12,15 +12,15 @@ export interface PdfViewerProps {
 
 // ─── Available TTS Voices ──────────────────────────────────────────────────────
 const TTS_VOICES = [
-  { id: 'en-US-JennyNeural',   label: '🇺🇸 Jenny (US · Female)' },
-  { id: 'en-US-GuyNeural',     label: '🇺🇸 Guy (US · Male)' },
-  { id: 'en-US-AriaNeural',    label: '🇺🇸 Aria (US · Female)' },
-  { id: 'en-GB-SoniaNeural',   label: '🇬🇧 Sonia (British · Female)' },
-  { id: 'en-GB-RyanNeural',    label: '🇬🇧 Ryan (British · Male)' },
-  { id: 'en-AU-NatashaNeural', label: '🇦🇺 Natasha (Australian · Female)' },
-  { id: 'en-AU-WilliamNeural', label: '🇦🇺 William (Australian · Male)' },
-  { id: 'en-IN-NeerjaNeural',  label: '🇮🇳 Neerja (Indian · Female)' },
-  { id: 'en-IN-PrabhatNeural', label: '🇮🇳 Prabhat (Indian · Male)' },
+  { id: 'en-US-JennyNeural',   label: 'Jenny (US · Female)' },
+  { id: 'en-US-GuyNeural',     label: 'Guy (US · Male)' },
+  { id: 'en-US-AriaNeural',    label: 'Aria (US · Female)' },
+  { id: 'en-GB-SoniaNeural',   label: 'Sonia (British · Female)' },
+  { id: 'en-GB-RyanNeural',    label: 'Ryan (British · Male)' },
+  { id: 'en-AU-NatashaNeural', label: 'Natasha (Australian · Female)' },
+  { id: 'en-AU-WilliamNeural', label: 'William (Australian · Male)' },
+  { id: 'en-IN-NeerjaNeural',  label: 'Neerja (Indian · Female)' },
+  { id: 'en-IN-PrabhatNeural', label: 'Prabhat (Indian · Male)' },
 ];
 
 const TTS_RATES = [
@@ -161,7 +161,7 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ noteId, title, onClose }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
             {/* Voice */}
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              <Volume2 size={13} />
+              <Globe size={13} />
               <select value={voice} onChange={e => { setVoice(e.target.value); setAudioUrl(null); }}
                 className="auth-input" style={{ margin: 0, padding: '0.25rem 0.4rem', fontSize: '0.8rem', width: 'auto' }}>
                 {TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
@@ -180,10 +180,10 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ noteId, title, onClose }) => {
             {/* Generate / Regenerate */}
             <button onClick={generateAudio} disabled={isGenerating}
               className="btn-solid-gold"
-              style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem', opacity: isGenerating ? 0.6 : 1 }}>
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem', opacity: isGenerating ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
               {isGenerating
                 ? <><Loader2 size={14} style={{ animation: 'pdfspin 1s linear infinite' }} /> Generating…</>
-                : audioUrl ? '↻ Regenerate' : '▶ Generate Audio'}
+                : audioUrl ? <><RefreshCw size={14} /> Regenerate</> : <><Play size={14} /> Generate Audio</>}
             </button>
 
             {isGenerating && (

@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookMarked, Save, ArrowLeft, Upload, X } from 'lucide-react';
@@ -90,7 +91,7 @@ const CreateModule: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !code) {
-      alert('Please provide a module name and code.');
+      toast.error('Please provide a module name and code.');
       return;
     }
 
@@ -108,10 +109,10 @@ const CreateModule: React.FC = () => {
       await api.post('/modules', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert('Module successfully forged.');
+      toast.success('Module successfully forged.');
       navigate('/');
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to forge module.');
+      toast.error(error.response?.data?.detail || 'Failed to forge module.');
     } finally {
       setIsSubmitting(false);
     }

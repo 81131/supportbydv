@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import api from '../api';
 
 /**
@@ -22,9 +23,9 @@ export const openProtectedFile = async (filePath: string) => {
   } catch (error: any) {
     console.error("The Maesters have blocked access:", error);
     if (error.response?.status === 401) {
-      alert("A man is not authorized to see these archives. Please log in first! 🛡️");
+      toast.error("A man is not authorized to see these archives. Please log in first! 🛡️");
     } else {
-      alert("The archive could not be retrieved from the Citadel. 🏰");
+      toast.error("The archive could not be retrieved from the Citadel. 🏰");
     }
   }
 };

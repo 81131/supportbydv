@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, AlertCircle, Bird, Loader2, ChevronLeft, Search, Users, MessageSquare, CheckCircle, Sparkles, Trophy, BookOpen, Plus, Trash2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
@@ -237,7 +238,7 @@ const FloatingRaven: React.FC = () => {
       setPersonalKeys(res.data);
       setHasMaester(res.data.some((k: any) => k.is_active));
     } catch (e: any) {
-      alert(e.response?.data?.detail || "Failed to add key.");
+      toast.error(e.response?.data?.detail || "Failed to add key.");
     } finally {
       setIsLoading(false);
     }

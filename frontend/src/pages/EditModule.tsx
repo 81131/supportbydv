@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BookMarked, Save, ArrowLeft, Upload, X, Plus, Trash2, Download } from 'lucide-react';
@@ -69,7 +70,7 @@ const EditModule: React.FC = () => {
         api.get(`/modules/${id}/units-with-topics`).then(r => setUnits(r.data)).catch(console.error);
       } catch (e) {
         console.error(e);
-        alert("Failed to load module details.");
+        toast.error("Failed to load module details.");
         navigate('/');
       } finally {
         setIsLoading(false);
@@ -137,7 +138,7 @@ const EditModule: React.FC = () => {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !code) {
-      alert('Please provide a module name and code.');
+      toast.error('Please provide a module name and code.');
       return;
     }
 
@@ -155,10 +156,10 @@ const EditModule: React.FC = () => {
       await api.put(`/modules/${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert('Module successfully revised.');
+      toast.success('Module successfully revised.');
       window.location.href = `/module/${id}`;
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to revise module.');
+      toast.error(error.response?.data?.detail || 'Failed to revise module.');
     } finally {
       setIsSubmitting(false);
     }
@@ -178,7 +179,7 @@ const EditModule: React.FC = () => {
         setUnits([...units, { ...res.data, topics: [] }]);
         setShowUnitModal(false);
     } catch(err) {
-        alert("Failed to add unit");
+        toast.error("Failed to add unit");
     }
   };
 
@@ -189,7 +190,7 @@ const EditModule: React.FC = () => {
           setUnits(units.filter(u => u.id !== uId));
       } catch (err: any) {
           console.error(err);
-          alert(err.response?.data?.detail || "Failed to delete unit due to a server error.");
+          toast.error(err.response?.data?.detail || "Failed to delete unit due to a server error.");
       }
   };
 
@@ -208,7 +209,7 @@ const EditModule: React.FC = () => {
           setShowTopicModal(false);
           setActiveUnitForTopic(null);
       } catch(err) {
-          alert("Failed to add topic");
+          toast.error("Failed to add topic");
       }
   };
 
@@ -219,7 +220,7 @@ const EditModule: React.FC = () => {
           setUnits(units.map(u => u.id === uId ? { ...u, topics: u.topics.filter(t => t.id !== tId) } : u));
       } catch (err: any) {
           console.error(err);
-          alert(err.response?.data?.detail || "Failed to delete topic due to a server error.");
+          toast.error(err.response?.data?.detail || "Failed to delete topic due to a server error.");
       }
   };
 
@@ -239,7 +240,7 @@ const EditModule: React.FC = () => {
       setUnits(res.data);
       setShowBulkImportModal(false);
       setBulkImportJson('');
-      alert("Units bulk imported successfully.");
+      toast.success("Units bulk imported successfully.");
     } catch (err: any) {
       setBulkImportError(`Import failed: ${err.response?.data?.detail || err.message}`);
     }

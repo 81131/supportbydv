@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import api from '../api';
@@ -35,7 +36,7 @@ export default function SubmitAd() {
         .join(',');
 
     if (!desired) {
-        alert("Please select at least one desired placement.");
+        toast.error("Please select at least one desired placement.");
         setIsSubmitting(false);
         return;
     }

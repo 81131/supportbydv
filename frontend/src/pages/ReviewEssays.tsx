@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
@@ -37,12 +38,12 @@ const ReviewEssays: React.FC = () => {
         marks_awarded: marks,
         feedback: feedback
       });
-      alert("Decree issued! The student has been notified.");
+      toast.error("Decree issued! The student has been notified.");
       setSelectedTask(null);
       setFeedback('');
       fetchTasks();
     } catch (error: any) {
-      alert(error.response?.data?.detail || "Failed to submit review.");
+      toast.error(error.response?.data?.detail || "Failed to submit review.");
     }
   };
 

@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { Library, DownloadCloud, Pin, Award, VenetianMask, BadgeCheck, Filter, Heart, Lock, Globe, EyeOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -44,35 +45,35 @@ const CollectionDisplayer: React.FC<CollectionDisplayerProps> = ({ moduleId }) =
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (error) { alert("Failed to compile the archive. It may be empty."); }
+    } catch (error) { toast.error("Failed to compile the archive. It may be empty."); }
   };
 
   const handleVisibilityChange = async (collectionId: number, newVis: string) => {
     try {
       await api.put(`/library/collections/${collectionId}/visibility`, { visibility: newVis });
       setCollections(collections.map(c => c.id === collectionId ? { ...c, visibility: newVis } : c));
-    } catch (error) { alert("Failed to update visibility."); }
+    } catch (error) { toast.error("Failed to update visibility."); }
   };
 
   const handleHideToggle = async (collectionId: number, currentStatus: boolean) => {
     try {
       await api.put(`/library/collections/${collectionId}/hide`);
       setCollections(collections.map(c => c.id === collectionId ? { ...c, is_hidden: !currentStatus } : c));
-    } catch (error) { alert("Only Admins can hide an archive."); }
+    } catch (error) { toast.error("Only Admins can hide an archive."); }
   };
 
   const handlePinToggle = async (collectionId: number, currentStatus: boolean) => {
     try {
       await api.put(`/library/collections/${collectionId}/governance`, { is_pinned: !currentStatus });
       setCollections(collections.map(c => c.id === collectionId ? { ...c, is_pinned: !currentStatus } : c));
-    } catch (error) { alert("Only No One can pin an archive."); }
+    } catch (error) { toast.error("Only No One can pin an archive."); }
   };
 
   const handleRecommendToggle = async (collectionId: number, currentStatus: boolean) => {
     try {
       await api.put(`/library/collections/${collectionId}/governance`, { is_recommended: !currentStatus });
       setCollections(collections.map(c => c.id === collectionId ? { ...c, is_recommended: !currentStatus } : c));
-    } catch (error) { alert("Only No One can bestow this honor."); }
+    } catch (error) { toast.error("Only No One can bestow this honor."); }
   };
 
   const processedCollections = collections.filter(col => {

@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { ShieldAlert } from 'lucide-react';
@@ -32,10 +33,10 @@ const VideoUploader: React.FC = () => {
         semester: parseInt(formData.semester),
         topic_ids: formData.topic_ids
       });
-      alert('Premium Video Linked Successfully!');
+      toast.success('Premium Video Linked Successfully!');
       setFormData({ title: '', description: '', bunny_video_id: '', module_id: '', year: '2', semester: '2', topic_ids: '' });
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to link video.');
+      toast.error(err.response?.data?.detail || 'Failed to link video.');
     }
   };
 

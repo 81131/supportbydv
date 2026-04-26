@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Save, BookOpen, ScrollText, Library, Swords, Trophy, Star, ArrowLeft, Edit2, Check, X, Linkedin, Github, Instagram, Facebook, Mail, Key } from 'lucide-react';
@@ -86,7 +87,7 @@ const MyProfile: React.FC = () => {
       setNewKeyValue('');
       fetchKeys();
     } catch (e: any) {
-      alert(e.response?.data?.detail || "Failed to add key.");
+      toast.error(e.response?.data?.detail || "Failed to add key.");
     } finally {
       setIsKeyLoading(false);
     }
@@ -125,7 +126,7 @@ const MyProfile: React.FC = () => {
   }, [user]);
 
   const handleSave = async () => {
-    if (!firstName.trim()) { alert('First name cannot be empty.'); return; }
+    if (!firstName.trim()) { toast.error('First name cannot be empty.'); return; }
     setIsSaving(true);
     setSaveMsg(null);
     try {
@@ -163,7 +164,7 @@ const MyProfile: React.FC = () => {
       setSaveMsg('✓ Name saved. It will persist across Google re-logins.');
       setTimeout(() => setSaveMsg(null), 4000);
     } catch (e: any) {
-      alert(e.response?.data?.detail || 'Failed to save.');
+      toast.error(e.response?.data?.detail || 'Failed to save.');
     } finally {
       setIsSaving(false);
     }
@@ -533,7 +534,7 @@ const MyProfile: React.FC = () => {
                             return pa - pb;
                           })
                       );
-                    } catch { alert('Could not update priority.'); }
+                    } catch { toast.error('Could not update priority.'); }
                   }}
                   style={{
                     background: 'var(--bg-deep)', border: '1px solid var(--border-dark)',

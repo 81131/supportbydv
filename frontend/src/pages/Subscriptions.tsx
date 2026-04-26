@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
@@ -43,7 +44,7 @@ export default function Subscriptions() {
 
   const submitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slip) { alert('Please attach a payment slip (Image or PDF).'); return; }
+    if (!slip) { toast.error('Please attach a payment slip (Image or PDF).'); return; }
     
     setIsSubmitting(true);
     const formData = new FormData();
@@ -56,10 +57,10 @@ export default function Subscriptions() {
 
     try {
       await api.post('/subscriptions/request', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      alert('Proof of Payment submitted! Redirecting to history...');
+      toast.error('Proof of Payment submitted! Redirecting to history...');
       navigate('/profile#billing');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to submit request.');
+      toast.error(err.response?.data?.detail || 'Failed to submit request.');
     } finally {
       setIsSubmitting(false);
     }

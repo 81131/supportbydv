@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
@@ -15,7 +16,7 @@ const MyQuizzes: React.FC = () => {
                 setQuizzes(res.data);
             } catch (error) {
                 console.error(error);
-                alert("Failed to load your scrolls.");
+                toast.error("Failed to load your scrolls.");
             } finally {
                 setIsLoading(false);
             }

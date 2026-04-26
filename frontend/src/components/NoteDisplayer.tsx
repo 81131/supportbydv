@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { FileText, Download, Heart, FolderPlus, Trash2, Pin, VenetianMask, BadgeCheck, Award, Filter, X, Plus, Upload, BookOpen, Crown } from 'lucide-react';
@@ -145,7 +146,7 @@ const NoteDisplayer: React.FC<NoteDisplayerProps> = ({ moduleId }) => {
     try {
       await api.put(`/library/notes/${noteId}/governance`, { is_pinned: !currentStatus });
       setNotes(notes.map(n => n.id === noteId ? { ...n, is_pinned: !currentStatus } : n));
-    } catch (error) { alert("Only No One can pin a scroll."); }
+    } catch (error) { toast.error("Only No One can pin a scroll."); }
   };
 
   const handleRecommendToggle = async (noteId: number, currentStatus: boolean) => {

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { Bell } from 'lucide-react';
+import { Toaster, toast } from 'react-hot-toast';
 import './App.css';
 import api from './api';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -213,14 +214,14 @@ function App() {
       fetchModules();
     } catch (error: any) {
       console.error("Authentication failed:", error);
-      alert(error.response?.data?.detail || "Failed to log in.");
+      toast.error(error.response?.data?.detail || "Failed to log in.");
     }
   };
 
   const handleLocalAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (authMode === 'register' && !agreedToPrivacy) {
-      alert("A man must agree to the Privacy Policy before pledging loyalty.");
+      toast.error("A man must agree to the Privacy Policy before pledging loyalty.");
       return;
     }
     try {
@@ -237,7 +238,7 @@ function App() {
       fetchNotifications();
       fetchModules();
     } catch (error: any) {
-      alert(error.response?.data?.detail || "Authentication Failed.");
+      toast.error(error.response?.data?.detail || "Authentication Failed.");
     }
   };
 
@@ -272,6 +273,20 @@ function App() {
   return (
     <Router>
       <div className="app-container">
+        <Toaster
+          position="bottom-center"
+          toastOptions={{
+            style: {
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-main)',
+              border: '1px solid var(--accent-gold)',
+              borderRadius: '8px',
+            },
+            success: {
+              iconTheme: { primary: 'var(--accent-gold)', secondary: 'black' },
+            },
+          }}
+        />
         <nav ref={navbarRef} className="navbar">
           <Link to="/" className="logo brand-font">Support by DV</Link>
 

@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, CheckCircle2, GripVertical, AlertCircle, Clock, BookOpen, CheckSquare, FileText, Save, ListOrdered, Edit3, Settings, Upload, LayoutGrid, XCircle, Image as ImageIcon } from 'lucide-react';
@@ -308,7 +309,7 @@ const QuizMaker = () => {
         setQuestions(newQs);
         setShowTopicModal(false);
     } catch(err) {
-        alert("Failed to forge topic.");
+        toast.error("Failed to forge topic.");
     }
   };
 
@@ -316,7 +317,7 @@ const QuizMaker = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      alert("The Maesters cannot permit files over 10MB as resources.");
+      toast.error("The Maesters cannot permit files over 10MB as resources.");
       return;
     }
     setIsSaving(true);
@@ -328,7 +329,7 @@ const QuizMaker = () => {
       });
       setAllowedResources([...allowedResources, res.data.file_url]);
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Upload failed.");
+      toast.error(err.response?.data?.detail || "Upload failed.");
     } finally {
       setIsSaving(false);
     }
@@ -337,21 +338,21 @@ const QuizMaker = () => {
 
   const saveQuiz = async (publish: boolean) => {
     if (publish && questions.some(q => q.topicError)) {
-      alert("Cannot publish scroll. Please resolve all topic warnings (!) before publishing.");
+      toast.error("Cannot publish scroll. Please resolve all topic warnings (!) before publishing.");
       return;
     }
-    if (!title || !moduleId || questions.length === 0) { alert('Please fill in required fields and add questions.'); return; }
+    if (!title || !moduleId || questions.length === 0) { toast.error('Please fill in required fields and add questions.'); return; }
 
     for (let i = 0; i < questions.length; i++) {
        const q = questions[i];
-       if (!q.text.trim()) { alert(`Question ${i + 1} needs text.`); return; }
+       if (!q.text.trim()) { toast.error(`Question ${i + 1} needs text.`); return; }
        if (q.type === 'MCQ' || q.type === 'CHECKBOX' || q.type === 'DRAG_DROP') {
-           if ((q.type === 'MCQ' || q.type === 'CHECKBOX') && !q.options?.some(o => o.isCorrect)) { alert(`Question ${i + 1} needs at least one correct option.`); return; }
-           if (q.options?.some(o => !o.text.trim())) { alert(`Question ${i + 1} has empty action items.`); return; }
-           if (q.type === 'DRAG_DROP' && q.options && q.options.length < 2) { alert(`Drag & Drop Question ${i + 1} needs at least 2 items to sort.`); return; }
+           if ((q.type === 'MCQ' || q.type === 'CHECKBOX') && !q.options?.some(o => o.isCorrect)) { toast.error(`Question ${i + 1} needs at least one correct option.`); return; }
+           if (q.options?.some(o => !o.text.trim())) { toast.error(`Question ${i + 1} has empty action items.`); return; }
+           if (q.type === 'DRAG_DROP' && q.options && q.options.length < 2) { toast.error(`Drag & Drop Question ${i + 1} needs at least 2 items to sort.`); return; }
        }
-       if (q.type === 'NUMBER' && q.correctNumber === undefined) { alert(`Question ${i + 1} needs a required numeric answer.`); return; }
-       if (q.type === 'SHORT_TEXT' && !q.correctText?.trim()) { alert(`Question ${i + 1} needs a strict correct string to match.`); return; }
+       if (q.type === 'NUMBER' && q.correctNumber === undefined) { toast.error(`Question ${i + 1} needs a required numeric answer.`); return; }
+       if (q.type === 'SHORT_TEXT' && !q.correctText?.trim()) { toast.error(`Question ${i + 1} needs a strict correct string to match.`); return; }
     }
 
     setIsSaving(true);
@@ -395,7 +396,7 @@ const QuizMaker = () => {
       navigate('/my-quizzes');
     } catch (error: any) { 
       console.error('Failed to save quiz', error.response?.data || error); 
-      alert("Failed to save scroll. Check the console for details.");
+      toast.error("Failed to save scroll. Check the console for details.");
     } finally { setIsSaving(false); }
   };
 
@@ -612,13 +613,13 @@ const QuizMaker = () => {
                   <input type="file" style={{ display: 'none' }} accept="image/*" onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    if (file.size > 10 * 1024 * 1024) { alert("Image too large"); return; }
+                    if (file.size > 10 * 1024 * 1024) { toast.error("Image too large"); return; }
                     setIsSaving(true);
                     const fd = new FormData(); fd.append('file', file);
                     try {
                       const res = await api.post('/files/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' }});
                       const newQs = [...questions]; newQs[qIndex].imageUrl = res.data.image_url; setQuestions(newQs);
-                    } catch(err) { alert('Upload failed'); } finally { setIsSaving(false); }
+                    } catch(err) { toast.error('Upload failed'); } finally { setIsSaving(false); }
                     e.target.value = '';
                   }} />
                 </label>

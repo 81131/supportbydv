@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, BookOpen, Pencil, Trash2, BadgeCheck, VenetianMask, Award, Pin, Filter, Crown, History } from 'lucide-react';
@@ -46,21 +47,21 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
     try {
       await api.put(`/quizzes/${quizId}/governance`, { is_pinned: !currentStatus });
       setQuizzes(quizzes.map(q => q.id === quizId ? { ...q, is_pinned: !currentStatus } : q));
-    } catch (error) { alert("Only No One can pin a scroll."); }
+    } catch (error) { toast.error("Only No One can pin a scroll."); }
   };
 
   const handleRecommendToggle = async (quizId: number, currentStatus: boolean) => {
     try {
       await api.put(`/quizzes/${quizId}/governance`, { is_recommended: !currentStatus });
       setQuizzes(quizzes.map(q => q.id === quizId ? { ...q, is_recommended: !currentStatus } : q));
-    } catch (error) { alert("Only No One can bestow this honor."); }
+    } catch (error) { toast.error("Only No One can bestow this honor."); }
   };
 
   const handlePremiumToggle = async (quizId: number, currentStatus: boolean) => {
     try {
       await api.put(`/quizzes/${quizId}/governance`, { is_premium: !currentStatus });
       setQuizzes(quizzes.map(q => q.id === quizId ? { ...q, is_premium: !currentStatus } : q));
-    } catch (error) { alert("Only No One can make this premium."); }
+    } catch (error) { toast.error("Only No One can make this premium."); }
   };
 
   const handleDelete = async (quizId: number) => {
@@ -68,7 +69,7 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
       try {
         await api.delete(`/quizzes/${quizId}`);
         setQuizzes(quizzes.filter(q => q.id !== quizId)); 
-      } catch (error) { alert("Failed to delete the scroll."); }
+      } catch (error) { toast.error("Failed to delete the scroll."); }
     }
   };
 
@@ -79,7 +80,7 @@ const QuizDisplayer: React.FC<QuizDisplayerProps> = ({ moduleId, moduleShortName
       try {
         const res = await api.get(`/quizzes/${quizId}/analytics`);
         setExpandedAnalytics(prev => ({...prev, [quizId]: res.data}));
-      } catch (error) { alert("Failed to load metrics. You might lack permissions."); }
+      } catch (error) { toast.error("Failed to load metrics. You might lack permissions."); }
     }
   };
 
