@@ -2,21 +2,21 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, BookOpen, Download, Heart, Award, VenetianMask,
-  BadgeCheck, Pin, Volume2, VolumeX, Loader2, ExternalLink,
+  BadgeCheck, Pin, Volume2, VolumeX, Loader2, ExternalLink, RefreshCw, Play, Globe
 } from 'lucide-react';
 import api from '../api';
 
 // ─── TTS Voice / Rate options (mirrors backend allowlist) ─────────────────────
 const TTS_VOICES = [
-  { id: 'en-US-JennyNeural',   label: '🇺🇸 Jenny (US · Female)' },
-  { id: 'en-US-GuyNeural',     label: '🇺🇸 Guy (US · Male)' },
-  { id: 'en-US-AriaNeural',    label: '🇺🇸 Aria (US · Female)' },
-  { id: 'en-GB-SoniaNeural',   label: '🇬🇧 Sonia (British · Female)' },
-  { id: 'en-GB-RyanNeural',    label: '🇬🇧 Ryan (British · Male)' },
-  { id: 'en-AU-NatashaNeural', label: '🇦🇺 Natasha (Australian · Female)' },
-  { id: 'en-AU-WilliamNeural', label: '🇦🇺 William (Australian · Male)' },
-  { id: 'en-IN-NeerjaNeural',  label: '🇮🇳 Neerja (Indian · Female)' },
-  { id: 'en-IN-PrabhatNeural', label: '🇮🇳 Prabhat (Indian · Male)' },
+  { id: 'en-US-JennyNeural',   label: 'Jenny (US · Female)' },
+  { id: 'en-US-GuyNeural',     label: 'Guy (US · Male)' },
+  { id: 'en-US-AriaNeural',    label: 'Aria (US · Female)' },
+  { id: 'en-GB-SoniaNeural',   label: 'Sonia (British · Female)' },
+  { id: 'en-GB-RyanNeural',    label: 'Ryan (British · Male)' },
+  { id: 'en-AU-NatashaNeural', label: 'Natasha (Australian · Female)' },
+  { id: 'en-AU-WilliamNeural', label: 'William (Australian · Male)' },
+  { id: 'en-IN-NeerjaNeural',  label: 'Neerja (Indian · Female)' },
+  { id: 'en-IN-PrabhatNeural', label: 'Prabhat (Indian · Male)' },
 ];
 
 const TTS_RATES = [
@@ -52,6 +52,22 @@ const NoteViewer: React.FC = () => {
   const audioRef                       = useRef<HTMLAudioElement>(null);
 
   const [isFav, setIsFav]             = useState(false);
+
+  const loadingMessages = [
+    "Summoning the ravens...",
+    "Retrieving from the Citadel...",
+    "Unsealing the scroll...",
+    "Translating ancient runes..."
+  ];
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+
+  useEffect(() => {
+    if (!pdfLoading) return;
+    const interval = setInterval(() => {
+      setLoadingMsgIdx(prev => (prev + 1) % loadingMessages.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [pdfLoading]);
 
   // ── Load metadata ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -270,7 +286,7 @@ const NoteViewer: React.FC = () => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              Voice
+              <Globe size={14} /> Voice
               <select value={voice} onChange={e => { setVoice(e.target.value); setAudioUrl(null); }}
                 className="auth-input" style={{ margin: 0, padding: '0.25rem 0.4rem', fontSize: '0.8rem', width: 'auto' }}>
                 {TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
@@ -287,10 +303,10 @@ const NoteViewer: React.FC = () => {
 
             <button onClick={generateAudio} disabled={isGenerating}
               className="btn-solid-gold"
-              style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem', opacity: isGenerating ? 0.65 : 1 }}>
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem', opacity: isGenerating ? 0.65 : 1, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
               {isGenerating
                 ? <><Loader2 size={14} style={{ animation: 'nvspin 1s linear infinite' }} /> Generating…</>
-                : audioUrl ? '↻ Regenerate' : '▶ Generate Audio'}
+                : audioUrl ? <><RefreshCw size={14} /> Regenerate</> : <><Play size={14} /> Generate Audio</>}
             </button>
 
             {isGenerating && (
@@ -326,7 +342,7 @@ const NoteViewer: React.FC = () => {
             alignItems: 'center', justifyContent: 'center', color: 'var(--accent-gold)',
           }}>
             <Loader2 size={36} style={{ animation: 'nvspin 1s linear infinite', marginBottom: '1rem' }} />
-            <p style={{ margin: '0 0 0.75rem 0' }}>Loading scroll…</p>
+            <p style={{ margin: '0 0 0.75rem 0', minHeight: '1.2rem', transition: 'opacity 0.3s' }}>{loadingMessages[loadingMsgIdx]}</p>
             {downloadProgress > 0 && (
               <>
                 <div style={{ width: '200px', background: 'var(--bg-deep)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
