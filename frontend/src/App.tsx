@@ -308,6 +308,9 @@ function App() {
                   ))}
                 <Link to="/my-quizzes" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Quizzes</Link>
                 <Link to="/my-vault" className="nav-item" onClick={() => setIsMenuOpen(false)}>My Vault</Link>
+                {user.current_year === 1 && (
+                  <Link to="/year01" className="nav-item" onClick={() => setIsMenuOpen(false)}>Year 01 Archives</Link>
+                )}
               </>
             )}
             <Link to="/leaderboard" className="nav-item" onClick={() => setIsMenuOpen(false)}>Throne Room</Link>
