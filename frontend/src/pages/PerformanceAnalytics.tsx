@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { Trophy, CalendarDays, ChevronDown, ChevronUp, Users, Zap, Target, BookOpen, AlertTriangle } from 'lucide-react';
+import { Trophy, CalendarDays, ChevronDown, ChevronUp, Users, Zap, Target, BookOpen, AlertTriangle, Maximize, X } from 'lucide-react';
 import { LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 
 interface QuestionStat {
@@ -75,6 +75,7 @@ const PerformanceAnalytics = () => {
 
     const [expandedAttemptId, setExpandedAttemptId] = useState<number | null>(null);
     const [radarView, setRadarView] = useState<'module' | 'topic' | 'unit'>('module');
+    const [fullScreenChart, setFullScreenChart] = useState<'timeline' | 'radar' | null>(null);
 
     useEffect(() => {
         api.get('/modules').then(res => setAvailableModules(res.data)).catch(console.error);
@@ -333,33 +334,45 @@ const PerformanceAnalytics = () => {
 
                         {/* LEVEL 3: BATTLEFIELD (VISUALS) — full width stacked */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', marginBottom: '4rem' }}>
-                            <div className="dashboard-card" style={{ padding: '1.5rem', height: '400px' }}>
-                                <h3 className="brand-font" style={{ marginBottom: '1rem', color: 'var(--accent-gold)' }}>Timeline Progression</h3>
-                                <ResponsiveContainer width="100%" height="90%">
-                                    <LineChart data={data.analytics.map((a, i) => ({ name: `T${i + 1}`, myScore: (a.my_score / (a.my_max_score || 1)) * 100, peerAvg: (a.peer_avg_score / (a.my_max_score || 1)) * 100 }))}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                        <XAxis dataKey="name" stroke="var(--text-muted)" />
-                                        <YAxis stroke="var(--text-muted)" domain={[0, 100]} />
-                                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
-                                        <Legend />
-                                        <Line type="monotone" name="Your Score %" dataKey="myScore" stroke="var(--accent-gold)" strokeWidth={3} dot={{ r: 5 }}>
-                                            <LabelList dataKey="myScore" position="top" formatter={(val: number) => val.toFixed(0)} fill="var(--accent-gold)" fontSize={12} offset={10} />
-                                        </Line>
-                                        <Line type="monotone" name={`${peerGroup.toUpperCase()} Avg %`} dataKey="peerAvg" stroke="#b39ddb" strokeWidth={2} strokeDasharray="5 5">
-                                            <LabelList dataKey="peerAvg" position="bottom" formatter={(val: number) => val.toFixed(0)} fill="#b39ddb" fontSize={12} offset={10} />
-                                        </Line>
-                                    </LineChart>
-                                </ResponsiveContainer>
+                            <div className="dashboard-card" style={fullScreenChart === 'timeline' ? { position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg-deep)', padding: '2rem', display: 'flex', flexDirection: 'column' } : { padding: '1.5rem', height: '400px', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                    <h3 className="brand-font" style={{ color: 'var(--accent-gold)', margin: 0 }}>Timeline Progression</h3>
+                                    <button className="btn-ghost" onClick={() => setFullScreenChart(fullScreenChart === 'timeline' ? null : 'timeline')} style={{ padding: '0.4rem' }}>
+                                        {fullScreenChart === 'timeline' ? <X size={18} /> : <Maximize size={18} />}
+                                    </button>
+                                </div>
+                                <div style={{ flex: 1, minHeight: 0 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={data.analytics.map((a, i) => ({ name: `T${i + 1}`, myScore: (a.my_score / (a.my_max_score || 1)) * 100, peerAvg: (a.peer_avg_score / (a.my_max_score || 1)) * 100 }))}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                            <XAxis dataKey="name" stroke="var(--text-muted)" />
+                                            <YAxis stroke="var(--text-muted)" domain={[0, 100]} />
+                                            <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
+                                            <Legend />
+                                            <Line type="monotone" name="Your Score %" dataKey="myScore" stroke="var(--accent-gold)" strokeWidth={3} dot={{ r: 5 }}>
+                                                <LabelList dataKey="myScore" position="top" formatter={(val: number) => val.toFixed(0)} fill="var(--accent-gold)" fontSize={12} offset={10} />
+                                            </Line>
+                                            <Line type="monotone" name={`${peerGroup.toUpperCase()} Avg %`} dataKey="peerAvg" stroke="#b39ddb" strokeWidth={2} strokeDasharray="5 5">
+                                                <LabelList dataKey="peerAvg" position="bottom" formatter={(val: number) => val.toFixed(0)} fill="#b39ddb" fontSize={12} offset={10} />
+                                            </Line>
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
 
-                            <div className="dashboard-card" style={{ padding: '1.5rem', height: '420px', display: 'flex', flexDirection: 'column' }}>
+                            <div className="dashboard-card" style={fullScreenChart === 'radar' ? { position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg-deep)', padding: '2rem', display: 'flex', flexDirection: 'column' } : { padding: '1.5rem', height: '420px', display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                    <h3 className="brand-font" style={{ color: 'var(--accent-gold)' }}>Dominance Radar</h3>
-                                    <select className="auth-input" style={{ padding: '0.2rem 0.5rem', width: 'auto', fontSize: '0.85rem' }} value={radarView} onChange={(e) => setRadarView(e.target.value as 'module' | 'topic' | 'unit')}>
-                                        <option value="module">By Module</option>
-                                        <option value="topic">By Topic</option>
-                                        <option value="unit">By Unit</option>
-                                    </select>
+                                    <h3 className="brand-font" style={{ color: 'var(--accent-gold)', margin: 0 }}>Dominance Radar</h3>
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <select className="auth-input" style={{ padding: '0.2rem 0.5rem', width: 'auto', margin: 0, fontSize: '0.85rem' }} value={radarView} onChange={(e) => setRadarView(e.target.value as 'module' | 'topic' | 'unit')}>
+                                            <option value="module">By Module</option>
+                                            <option value="topic">By Topic</option>
+                                            <option value="unit">By Unit</option>
+                                        </select>
+                                        <button className="btn-ghost" onClick={() => setFullScreenChart(fullScreenChart === 'radar' ? null : 'radar')} style={{ padding: '0.4rem' }}>
+                                            {fullScreenChart === 'radar' ? <X size={18} /> : <Maximize size={18} />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div style={{ display: 'flex', flex: 1, gap: '1.5rem', overflow: 'hidden' }}>
                                     <div style={{ flex: '2', height: '100%', minWidth: 0 }}>
