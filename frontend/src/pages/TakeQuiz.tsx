@@ -44,6 +44,18 @@ const TakeQuiz: React.FC = () => {
              const remaining = res.data.time_limit_minutes * 60 - consumed;
              setTimeLeft(remaining > 0 ? remaining : 0); 
            }
+           
+           if (res.data.draft && Object.keys(res.data.draft).length > 0) {
+             const loadedAnswers: Record<number, any> = {};
+             Object.entries(res.data.draft).forEach(([qId, d]: [string, any]) => {
+               loadedAnswers[parseInt(qId)] = {
+                 is_flagged: d.is_flagged,
+                 ...d.parsed
+               };
+             });
+             setAnswers(loadedAnswers);
+           }
+
            if (!questionIndex && res.data.questions?.length > 0) {
              navigate(`/take-quiz/${id}/q/1`, { replace: true });
            }
