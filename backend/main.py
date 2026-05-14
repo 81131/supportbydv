@@ -171,3 +171,21 @@ app.include_router(ai_assistant_router, dependencies=[Depends(verify_csrf)])
 @app.get("/")
 def read_root():
     return {"message": "Valar Dohaeris. The API is running."}
+
+@app.get("/images/{filename}")
+async def get_image(filename: str):
+    """Generates a presigned URL for an image and redirects the browser to it."""
+    from storage import get_s3_client, R2_BUCKET_NAME
+    from fastapi.responses import RedirectResponse
+    from fastapi import HTTPException
+    
+    try:
+        async with get_s3_client() as client:
+            presigned_url = await client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': R2_BUCKET_NAME, 'Key': f"images/{filename}"},
+                ExpiresIn=3600
+            )
+        return RedirectResponse(url=presigned_url)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch image: {str(e)}")
