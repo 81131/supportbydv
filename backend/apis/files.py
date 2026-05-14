@@ -16,14 +16,18 @@ router = APIRouter(prefix="/files", tags=["Files"])
 
 async def _upload_to_r2(file_bytes: bytes, key: str, content_type: str):
     """Async helper to upload bytes to Cloudflare R2 via aioboto3."""
-    import io
     async with get_s3_client() as client:
-        await client.upload_fileobj(
-            io.BytesIO(file_bytes),
-            R2_BUCKET_NAME,
-            key,
-            ExtraArgs={"ContentType": content_type}
-        )
+        try:
+            await client.put_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=key,
+                Body=file_bytes,
+                ContentType=content_type
+            )
+            print(f"Successfully uploaded {key} to R2")
+        except Exception as e:
+            print(f"Failed to upload {key} to R2: {e}")
+            raise e
 
 
 @router.post("/upload-image")
