@@ -38,9 +38,9 @@ async def regrade_attempts():
                     correct_words = [opt.text for opt in question.options if opt.is_correct]
                     
                     user_words = []
-                    if qa.user_answer_db_string:
+                    if qa.user_answer:
                         try:
-                            ans_data = json.loads(qa.user_answer_db_string)
+                            ans_data = json.loads(qa.user_answer)
                             if q_type == "FILL_BLANK":
                                 user_words = ans_data.get("fill_blank_answer", [])
                             else:
@@ -66,19 +66,16 @@ async def regrade_attempts():
                     marks_awarded = (correct_count / num_blanks) * question.marks
                     if marks_awarded > question.marks:
                         marks_awarded = question.marks
-                        
-                    is_correct = (correct_count == num_blanks)
                     
-                    if abs(marks_awarded - qa.marks_awarded) > 0.001 or is_correct != qa.is_correct:
+                    if abs(marks_awarded - qa.marks_awarded) > 0.001:
                         print(f"Regrading attempt {attempt.id}, question {qa.question_id}: {qa.marks_awarded} -> {marks_awarded}")
                         qa.marks_awarded = marks_awarded
-                        qa.is_correct = is_correct
                         attempt_changed = True
                 
                 new_total_score += qa.marks_awarded
                 
-            if attempt_changed or abs(new_total_score - attempt.score) > 0.001:
-                attempt.score = new_total_score
+            if attempt_changed or abs(new_total_score - attempt.total_marks) > 0.001:
+                attempt.total_marks = new_total_score
                 updated_attempts_count += 1
                 
         if updated_attempts_count > 0:
