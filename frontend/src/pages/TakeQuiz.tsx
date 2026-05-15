@@ -412,9 +412,11 @@ const TakeQuiz: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-main" style={{ fontSize: '1.2rem', lineHeight: 1.6, marginBottom: '2rem' }}>
-              {q.text}
-            </div>
+            {!['DRAG_DROP', 'FILL_BLANK'].includes(q.type) && (
+              <div className="text-main" style={{ fontSize: '1.2rem', lineHeight: 1.6, marginBottom: '2rem' }}>
+                {q.text}
+              </div>
+            )}
 
             {q.image_url && (
               <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
@@ -488,24 +490,27 @@ const TakeQuiz: React.FC = () => {
               {q.type === 'FILL_BLANK' && (
                 <div style={{ border: '1px solid var(--border-dark)', borderRadius: '6px', padding: '1rem', backgroundColor: 'var(--bg-deep)' }}>
                   <p className="text-desc" style={{ marginBottom: '1rem' }}><Edit3 size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }}/>Provide exactly the words to fill in the blanks in sequence:</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {q.options.map((_: any, bIdx: number) => {
-                      const currentFills = answers[q.id]?.fill_blank_answer || [];
-                      return (
-                        <div key={bIdx} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                          <span style={{ fontWeight: 'bold', color: 'var(--accent-gold)' }}>Blank {bIdx + 1}:</span>
-                          <input 
-                            type="text" className="auth-input" placeholder="Enter word/phrase..." 
-                            style={{ margin: 0, flex: 1 }} value={currentFills[bIdx] || ''}
-                            onChange={(e) => {
-                              const newVals = [...currentFills];
-                              newVals[bIdx] = e.target.value;
-                              updateAnswer(q.id, 'fill_blank_answer', newVals);
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
+                  <div style={{ fontSize: '1.2rem', lineHeight: 2, padding: '0.5rem' }}>
+                    {(() => {
+                       const currentFills = answers[q.id]?.fill_blank_answer || [];
+                       return q.text.split('___').map((part: string, idx: number, arr: string[]) => (
+                        <React.Fragment key={idx}>
+                          <span>{part}</span>
+                          {idx < arr.length - 1 && (
+                            <input 
+                              type="text" className="auth-input" placeholder="Type here..." 
+                              style={{ display: 'inline-block', width: '150px', margin: '0 8px', padding: '0.2rem 0.5rem', textAlign: 'center' }}
+                              value={currentFills[idx] || ''}
+                              onChange={(e) => {
+                                const newVals = [...currentFills];
+                                newVals[idx] = e.target.value;
+                                updateAnswer(q.id, 'fill_blank_answer', newVals);
+                              }}
+                            />
+                          )}
+                        </React.Fragment>
+                      ));
+                    })()}
                   </div>
                 </div>
               )}

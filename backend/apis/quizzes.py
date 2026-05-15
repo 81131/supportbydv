@@ -919,21 +919,36 @@ async def submit_and_grade_quiz(
                     marks_awarded = q.marks
                     is_correct = True
 
-            elif q_type == "FILL_BLANK":
-                # Correct words stored in options with is_correct=True, in order
+            elif q_type in ["FILL_BLANK", "DRAG_DROP"]:
                 correct_words = [opt.text for opt in q.options if opt.is_correct]
-                correct_answer_display = " / ".join(correct_words)
+                separator = " / " if q_type == "FILL_BLANK" else " -> "
+                correct_answer_display = separator.join(correct_words)
                 
-                raw_user_words = ans_data.fill_blank_answer or []
+                raw_user_words = ans_data.fill_blank_answer if q_type == "FILL_BLANK" else ans_data.drag_drop_answer
+                raw_user_words = raw_user_words or []
                 user_words = [str(w) if w is not None else "" for w in raw_user_words]
                 
-                user_answer_display = " / ".join(user_words) if user_words else "None"
-                user_answer_db_string = json.dumps({"fill_blank_answer": user_words})
+                user_answer_display = separator.join(user_words) if user_words else "None"
+                user_answer_db_string = json.dumps({("fill_blank_answer" if q_type == "FILL_BLANK" else "drag_drop_answer"): user_words})
                 
-                if len(user_words) == len(correct_words) and correct_words:
-                    if all(u.lower().strip() == c.lower().strip() for u, c in zip(user_words, correct_words)):
-                        marks_awarded = q.marks
-                        is_correct = True
+                num_blanks = q.text.count("___")
+                if num_blanks == 0:
+                    num_blanks = 1
+                    
+                available_correct = [c.lower().strip() for c in correct_words]
+                correct_count = 0
+                
+                for u in user_words:
+                    u_clean = u.lower().strip()
+                    if u_clean and u_clean in available_correct:
+                        correct_count += 1
+                        available_correct.remove(u_clean)
+                
+                marks_awarded = (correct_count / num_blanks) * q.marks
+                if marks_awarded > q.marks:
+                    marks_awarded = q.marks
+                    
+                is_correct = (correct_count == num_blanks)
 
             elif q_type == "ESSAY":
                 correct_answer_display = "Manual review required. Rubric: " + (q.correct_text or "")
@@ -941,20 +956,6 @@ async def submit_and_grade_quiz(
                 user_answer_db_string = json.dumps({"text_answer": ans_data.text_answer})
                 marks_awarded = 0.0 
                 needs_manual_review = True
-                
-            elif q_type == "DRAG_DROP":
-                correct_order = [opt.text for opt in q.options if opt.is_correct]
-                correct_answer_display = " -> ".join(correct_order)
-                
-                raw_drag_drop = ans_data.drag_drop_answer or []
-                user_drag_drop = [str(w) if w is not None else "" for w in raw_drag_drop]
-                
-                user_answer_display = " -> ".join(user_drag_drop) if user_drag_drop else "None sorted"
-                user_answer_db_string = json.dumps({"drag_drop_answer": user_drag_drop})
-                
-                if user_drag_drop == correct_order:
-                    marks_awarded = q.marks
-                    is_correct = True
 
         total_score += marks_awarded
 

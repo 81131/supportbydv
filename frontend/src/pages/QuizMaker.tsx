@@ -346,10 +346,20 @@ const QuizMaker = () => {
     for (let i = 0; i < questions.length; i++) {
        const q = questions[i];
        if (!q.text.trim()) { toast.error(`Question ${i + 1} needs text.`); return; }
-       if (q.type === 'MCQ' || q.type === 'CHECKBOX' || q.type === 'DRAG_DROP') {
+       if (q.type === 'MCQ' || q.type === 'CHECKBOX' || q.type === 'DRAG_DROP' || q.type === 'FILL_BLANK') {
            if ((q.type === 'MCQ' || q.type === 'CHECKBOX') && !q.options?.some(o => o.isCorrect)) { toast.error(`Question ${i + 1} needs at least one correct option.`); return; }
            if (q.options?.some(o => !o.text.trim())) { toast.error(`Question ${i + 1} has empty action items.`); return; }
-           if (q.type === 'DRAG_DROP' && q.options && q.options.length < 2) { toast.error(`Drag & Drop Question ${i + 1} needs at least 2 items to sort.`); return; }
+           
+           if (q.type === 'DRAG_DROP' || q.type === 'FILL_BLANK') {
+               const numBlanks = (q.text.match(/___/g) || []).length;
+               if (numBlanks === 0) {
+                   toast.error(`Question ${i + 1} (${q.type}) needs at least one blank '___' in the text.`); return;
+               }
+               const numCorrect = q.options?.filter(o => o.isCorrect).length || 0;
+               if (numCorrect < numBlanks) {
+                   toast.error(`Question ${i + 1} has ${numBlanks} blanks but only ${numCorrect} correct options marked. Please mark distractors by unchecking them.`); return;
+               }
+           }
        }
        if (q.type === 'NUMBER' && q.correctNumber === undefined) { toast.error(`Question ${i + 1} needs a required numeric answer.`); return; }
        if (q.type === 'SHORT_TEXT' && !q.correctText?.trim()) { toast.error(`Question ${i + 1} needs a strict correct string to match.`); return; }
@@ -362,7 +372,7 @@ const QuizMaker = () => {
       if (['MCQ', 'CHECKBOX', 'DRAG_DROP', 'FILL_BLANK'].includes(q.type)) {
          mappedOptions = q.options?.map(o => ({
              text: o.text,
-             is_correct: ['FILL_BLANK'].includes(q.type) ? true : o.isCorrect
+             is_correct: o.isCorrect
          }));
       }
       return {
@@ -632,8 +642,7 @@ const QuizMaker = () => {
                 {q.type === 'FILL_BLANK' && <p className="text-desc" style={{ color: 'var(--text-muted)' }}>List the words/phrases to fill in the blanks sequentially. Use <b>___</b> in the text as blank markers.</p>}
                 {q.options?.map((opt, oIndex) => (
                   <div key={oIndex} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--bg-deep)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-dark)' }}>
-                    {q.type !== 'FILL_BLANK' && (
-                      <input type={q.type === 'MCQ' ? 'radio' : 'checkbox'} name={`q-${q.id}`} 
+                    <input type={q.type === 'MCQ' ? 'radio' : 'checkbox'} name={`q-${q.id}`} 
                         checked={opt.isCorrect}
                         onChange={(e) => {
                           const newQs = [...questions];
@@ -644,9 +653,7 @@ const QuizMaker = () => {
                           }
                           setQuestions(newQs);
                         }} style={{ accentColor: 'var(--accent-gold)', width: '18px', height: '18px' }} title="Is Correct?" />
-                    )}
-                    {q.type === 'DRAG_DROP' && <span className="text-desc" style={{ fontSize: '0.75rem', color: opt.isCorrect ? '#4caf50' : 'var(--accent-red)' }}>{opt.isCorrect ? 'Correct blank in sequence' : 'Decoy'}</span>}
-                    {q.type === 'FILL_BLANK' && <span className="text-desc" style={{ background: 'var(--accent-gold)', color: 'black', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 'bold' }}>{oIndex + 1}</span>}
+                    {(q.type === 'DRAG_DROP' || q.type === 'FILL_BLANK') && <span className="text-desc" style={{ fontSize: '0.75rem', color: opt.isCorrect ? '#4caf50' : 'var(--accent-red)' }}>{opt.isCorrect ? 'Valid Answer' : 'Distractor'}</span>}
                     <input type="text" className="auth-input" style={{ margin: 0, padding: '0.5rem', flex: 1, background: 'transparent', border: 'none' }} value={opt.text} placeholder={['DRAG_DROP', 'FILL_BLANK'].includes(q.type) ? `Item ${oIndex + 1}` : `Option ${oIndex + 1}`} onChange={(e) => {
                       const newQs = [...questions];
                       newQs[qIndex].options![oIndex].text = e.target.value;
