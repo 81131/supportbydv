@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from database import SessionLocal
-from models.quiz import QuizAttempt, QuestionAttempt, Question
+from models.quiz import Question
+from models.attempts import QuizAttempt, QuestionAttempt
 
 async def regrade_attempts():
     async with SessionLocal() as db:
