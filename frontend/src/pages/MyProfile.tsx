@@ -160,6 +160,7 @@ const MyProfile: React.FC = () => {
       };
       localStorage.setItem('user', JSON.stringify(updated));
       setUser(updated);
+      window.dispatchEvent(new Event('user-updated'));
       setIsEditing(false);
       setSaveMsg('✓ Name saved. It will persist across Google re-logins.');
       setTimeout(() => setSaveMsg(null), 4000);

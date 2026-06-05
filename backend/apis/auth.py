@@ -237,15 +237,10 @@ async def logout(response: Response):
     return {"message": "You have left the Citadel. Your watch has ended."}
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserResponse)
 async def get_me(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Validates the current session cookie. Returns 401 if the user no longer exists in DB."""
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "role": current_user.role.value,
-        "first_name": current_user.first_name,
-    }
+    return current_user
 
 
 # ─── Profile Endpoints ───────────────────────────────────────────────────────

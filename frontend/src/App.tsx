@@ -161,6 +161,15 @@ function App() {
       setIsLoading(false);
     };
     initApp();
+
+    const handleUserUpdated = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    };
+    window.addEventListener('user-updated', handleUserUpdated);
+    return () => window.removeEventListener('user-updated', handleUserUpdated);
   }, [fetchNotifications]);
 
   // ── Poll for new notifications every 30s ───────────────────────────────────
