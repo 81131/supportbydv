@@ -1,4 +1,4 @@
-import { openProtectedFile } from '../utils/fileUtils';
+
 
 export default function Year01() {
   return (
@@ -40,26 +40,26 @@ export default function Year01() {
           <div style={{ marginTop: '1.5rem' }}>
             <h3 className="text-title" style={{ marginBottom: '0.5rem' }}>Object Oriented Programming (OOP)</h3>
             <ul style={{ listStyleType: 'none', padding: 0, lineHeight: '2' }}>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/oop/OOP Lecture 01.pdf'); }} className="nav-item">Lecture 01 Short Notes</a></li>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/oop/OOP Lecture 02.pdf'); }} className="nav-item">Lecture 02 Short Notes</a></li>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/oop/OOP Lecture 03.pdf'); }} className="nav-item">Lecture 03 Short Notes</a></li>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/oop/finalPaper.pdf'); }} className="nav-item" style={{ color: 'var(--accent-red)' }}>Final Model Paper</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/OOP/ShortNotes/OOP%20Lecture%2001.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 01 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/OOP/ShortNotes/OOP%20Lecture%2002.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 02 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/OOP/ShortNotes/OOP%20Lecture%2003.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 03 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/OOP/finalPaper.pdf" target="_blank" rel="noreferrer" className="nav-item" style={{ color: 'var(--accent-red)' }}>Final Model Paper</a></li>
             </ul>
           </div>
 
           <div style={{ marginTop: '1.5rem' }}>
             <h3 className="text-title" style={{ marginBottom: '0.5rem' }}>Data Structures And Algorithms (DSA)</h3>
             <ul style={{ listStyleType: 'none', padding: 0, lineHeight: '2' }}>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/dsa/Lecture 01.pdf'); }} className="nav-item">Lecture 01 Short Notes</a></li>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/dsa/Lecture 03.pdf'); }} className="nav-item">Lecture 03 Short Notes</a></li>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/dsa/Lecture 04.pdf'); }} className="nav-item">Lecture 04 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/DSA/ShortNotes/Lecture%2001.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 01 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/DSA/ShortNotes/Lecture%2003.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 03 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/DSA/ShortNotes/Lecture%2004.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 04 Short Notes</a></li>
             </ul>
           </div>
 
           <div style={{ marginTop: '1.5rem' }}>
             <h3 className="text-title" style={{ marginBottom: '0.5rem' }}>Discrete Mathematics (DM)</h3>
             <ul style={{ listStyleType: 'none', padding: 0, lineHeight: '2' }}>
-              <li><a href="#" onClick={(e) => { e.preventDefault(); openProtectedFile('/archive/Y1S2/dm/Lecture 01.pdf'); }} className="nav-item">Lecture 01 Short Notes</a></li>
+              <li><a href="https://github.com/81131/lifeSaver/raw/main/Y1S2/DM/ShortNotes/Lecture%2001.pdf" target="_blank" rel="noreferrer" className="nav-item">Lecture 01 Short Notes</a></li>
             </ul>
           </div>
 
