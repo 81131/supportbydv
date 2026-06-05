@@ -239,6 +239,9 @@ const MyProfile: React.FC = () => {
                 {memberSince && (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Member since {memberSince}</span>
                 )}
+                <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem', border: '1px solid var(--border-dark)', padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'var(--bg-deep)' }}>
+                  Year {user.current_year || 2} • Semester {user.current_semester || 2}
+                </span>
                 <button 
                   onClick={() => navigate('/api-keys')}
                   className="btn-ghost" 
