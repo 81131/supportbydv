@@ -125,18 +125,29 @@ const AdminDashboard: React.FC = () => {
   const handleCreateModule = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/modules', {
-        name: newModuleName,
-        code: newModuleCode,
-        year: newModuleYear,
-        semester: newModuleSemester
+      const formData = new FormData();
+      formData.append('name', newModuleName);
+      formData.append('code', newModuleCode);
+      formData.append('year', newModuleYear.toString());
+      formData.append('semester', newModuleSemester.toString());
+      
+      await api.post('/modules', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      toast.error("New module forged in the archives!");
+      toast.success("New module forged in the archives!");
       setNewModuleName('');
       setNewModuleCode('');
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to create module.");
+      console.error("Admin Forge Error:", error.response?.data);
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string') {
+        toast.error(detail);
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        toast.error(`Validation Error: ${detail[0].loc?.join('.')} - ${detail[0].msg}`);
+      } else {
+        toast.error('Failed to create module.');
+      }
     }
   };
 
@@ -148,7 +159,10 @@ const AdminDashboard: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to update role.");
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string') toast.error(detail);
+      else if (Array.isArray(detail)) toast.error(`Validation Error: ${detail[0].loc?.join('.')} - ${detail[0].msg}`);
+      else toast.error("Failed to update role.");
     }
   };
 
@@ -161,7 +175,10 @@ const AdminDashboard: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, is_suspended: !currentStatus } : u));
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || `Failed to ${action} user.`);
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string') toast.error(detail);
+      else if (Array.isArray(detail)) toast.error(`Validation Error: ${detail[0].loc?.join('.')} - ${detail[0].msg}`);
+      else toast.error(`Failed to ${action} user.`);
     }
   };
 
