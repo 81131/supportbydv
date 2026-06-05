@@ -112,7 +112,15 @@ const CreateModule: React.FC = () => {
       toast.success('Module successfully forged.');
       navigate('/');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to forge module.');
+      console.error("Module Forge Error:", error.response?.data);
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string') {
+        toast.error(detail);
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        toast.error(`Validation Error: ${detail[0].loc?.join('.')} - ${detail[0].msg}`);
+      } else {
+        toast.error('Failed to forge module.');
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -159,7 +159,15 @@ const EditModule: React.FC = () => {
       toast.success('Module successfully revised.');
       window.location.href = `/module/${id}`;
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to revise module.');
+      console.error("Module Update Error:", error.response?.data);
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string') {
+        toast.error(detail);
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        toast.error(`Validation Error: ${detail[0].loc?.join('.')} - ${detail[0].msg}`);
+      } else {
+        toast.error('Failed to update module.');
+      }
     } finally {
       setIsSubmitting(false);
     }
