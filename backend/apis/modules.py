@@ -25,9 +25,9 @@ async def create_module(
     code: str = Form(...),
     year: int = Form(...),
     semester: int = Form(...),
-    module_phrase: str = Form(None),
-    card_image: UploadFile = File(None),
-    banner_image: UploadFile = File(None),
+    module_phrase: str | None = Form(None),
+    card_image: UploadFile | None = File(None),
+    banner_image: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
@@ -70,9 +70,9 @@ async def update_module(
     code: str = Form(...),
     year: int = Form(...),
     semester: int = Form(...),
-    module_phrase: str = Form(None),
-    card_image: UploadFile = File(None),
-    banner_image: UploadFile = File(None),
+    module_phrase: str | None = Form(None),
+    card_image: UploadFile | None = File(None),
+    banner_image: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):

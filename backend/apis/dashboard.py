@@ -24,14 +24,22 @@ async def get_dashboard_feed(
     feed = {}
 
     # Prefetch all modules for fast lookups
-    modules_map = {
-        m.id: m
-        for m in (await db.execute(select(Module))).scalars().all()
-    }
+    modules = (await db.execute(select(Module))).scalars().all()
+    modules_map = {m.id: m for m in modules}
+
+    # Filter to only modules in the user's current year and semester
+    user_year = current_user.current_year or 2
+    user_sem = current_user.current_semester or 2
+    allowed_module_ids = [m.id for m in modules if m.year == user_year and m.semester == user_sem]
+
+    # If no modules exist for this semester, we can just return empty lists early
+    if not allowed_module_ids:
+        return {"quizzes": [], "notes": [], "collections": []}
 
     # ── Quizzes ───────────────────────────────────────────────────────────────
     if "quizzes" not in hidden_sections:
         stmt = select(Quiz).filter(Quiz.is_deleted == False, Quiz.is_published == True)
+        stmt = stmt.filter(Quiz.module_id.in_(allowed_module_ids))
         if hidden_modules:
             stmt = stmt.filter(Quiz.module_id.notin_(hidden_modules))
         stmt = stmt.order_by(desc(Quiz.created_at)).limit(10)
@@ -55,6 +63,7 @@ async def get_dashboard_feed(
     from sqlalchemy.orm import joinedload
     if "notes" not in hidden_sections:
         stmt = select(Note).options(joinedload(Note.uploader))
+        stmt = stmt.filter(Note.module_id.in_(allowed_module_ids))
         if hidden_modules:
             stmt = stmt.filter(Note.module_id.notin_(hidden_modules))
         stmt = stmt.order_by(desc(Note.created_at)).limit(10)
@@ -82,6 +91,7 @@ async def get_dashboard_feed(
     # ── Collections ───────────────────────────────────────────────────────────
     if "collections" not in hidden_sections:
         stmt = select(Collection).filter(Collection.visibility == VisibilityEnum.PUBLIC)
+        stmt = stmt.filter(Collection.module_id.in_(allowed_module_ids))
         if hidden_modules:
             stmt = stmt.filter(Collection.module_id.notin_(hidden_modules))
         stmt = stmt.order_by(desc(Collection.created_at)).limit(10)
