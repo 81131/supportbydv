@@ -236,14 +236,22 @@ async def text_to_speech_note(
         rate = "+0%"
 
     note = (await db.execute(select(Note).filter(Note.id == note_id))).scalars().first()
-    if not note or not os.path.exists(note.file_url):
+    if not note:
         raise HTTPException(status_code=404, detail="Scroll not found.")
     if note.file_type != "pdf":
         raise HTTPException(status_code=400, detail="Only PDF scrolls support audio reading.")
 
-    # Extract text
+    # Extract text from R2
     try:
-        reader = PdfReader(note.file_url)
+        async with get_s3_client() as client:
+            try:
+                response = await client.get_object(Bucket=R2_BUCKET_NAME, Key=note.file_url)
+                pdf_bytes = await response['Body'].read()
+            except Exception as e:
+                raise HTTPException(status_code=404, detail="Scroll file is missing in the clouds.")
+        
+        pdf_stream = io.BytesIO(pdf_bytes)
+        reader = PdfReader(pdf_stream)
         pages = [p.extract_text() or "" for p in reader.pages]
         text = "\n\n".join(pages).strip()
         if not text:
