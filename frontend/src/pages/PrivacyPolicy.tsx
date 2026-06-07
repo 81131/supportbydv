@@ -41,9 +41,12 @@ export default function PrivacyPolicy() {
           Your data is stored securely on our encrypted servers. We implement industry-standard security measures to prevent unauthorized access, alteration, or disclosure of your personal information.
         </p>
 
-        <h2 style={{ color: 'var(--accent-gold)', marginTop: '2rem', marginBottom: '1rem', fontSize: '1.4rem' }}>4. Third-Party Services</h2>
+        <h2 style={{ color: 'var(--accent-gold)', marginTop: '2rem', marginBottom: '1rem', fontSize: '1.4rem' }}>4. Third-Party Services & Analytics</h2>
         <p>
-          We use third-party services like <strong>Google OAuth</strong> for authentication and <strong>Cloudflare/R2</strong> for asset storage. These services have their own privacy policies. We do not sell your personal data to third parties.
+          We use third-party services like <strong>Google OAuth</strong> for authentication, <strong>Cloudflare/R2</strong> for asset storage, and <strong>Google Analytics</strong> to analyze traffic and usage patterns.
+        </p>
+        <p style={{ marginTop: '0.5rem' }}>
+          By using our platform, you acknowledge and consent to the collection and processing of your data by Google Analytics, including the association of such data with visitation information to help us improve your experience. These services operate under their own privacy policies. We do not sell your personal data to third parties.
         </p>
 
         <h2 style={{ color: 'var(--accent-gold)', marginTop: '2rem', marginBottom: '1rem', fontSize: '1.4rem' }}>5. Your Rights</h2>
