@@ -98,40 +98,42 @@ const NoteViewer: React.FC = () => {
       .then(async (res) => {
         setPresignedUrl(res.data.url);
         
-        if (note.file_type === 'pdf') {
-          const response = await fetch(res.data.url);
-          if (!response.ok) throw new Error("Failed to retrieve scroll from vault.");
-          
-          const contentLength = response.headers.get('content-length');
-          const total = contentLength ? parseInt(contentLength, 10) : 0;
-          
-          if (!response.body) {
-            const blob = await response.blob();
-            url = URL.createObjectURL(blob);
-            setBlobUrl(url);
-            return;
-          }
+        // Always fetch the file into a Blob for downloading, regardless of type
+        const response = await fetch(res.data.url);
+        if (!response.ok) throw new Error("Failed to retrieve scroll from vault.");
+        
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        
+        const contentType = note.file_type === 'pdf' ? 'application/pdf' : 
+                          (note.file_type === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/octet-stream');
 
-          const reader = response.body.getReader();
-          const chunks = [];
-          let receivedLength = 0;
-
-          while(true) {
-            const {done, value} = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            receivedLength += value.length;
-            if (total > 0) {
-              setDownloadProgress(Math.round((receivedLength / total) * 100));
-            } else {
-              setDownloadProgress(p => (p < 90 ? p + 10 : 90));
-            }
-          }
-
-          const blob = new Blob(chunks, { type: 'application/pdf' });
+        if (!response.body) {
+          const blob = await response.blob();
           url = URL.createObjectURL(blob);
           setBlobUrl(url);
+          return;
         }
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedLength = 0;
+
+        while(true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedLength += value.length;
+          if (total > 0) {
+            setDownloadProgress(Math.round((receivedLength / total) * 100));
+          } else {
+            setDownloadProgress(p => (p < 90 ? p + 10 : 90));
+          }
+        }
+
+        const blob = new Blob(chunks, { type: contentType });
+        url = URL.createObjectURL(blob);
+        setBlobUrl(url);
       })
       .catch(() => setPdfError('Could not load this scroll.'))
       .finally(() => setPdfLoading(false));
@@ -244,8 +246,8 @@ const NoteViewer: React.FC = () => {
             </button>
           )}
 
-          {(blobUrl || (presignedUrl && !isPdf)) && (
-            <a href={isPdf && blobUrl ? blobUrl : (presignedUrl || '')} download={`${note?.title}.${note?.file_type || 'pdf'}`} className="btn-ghost"
+          {blobUrl && (
+            <a href={blobUrl} download={`${note?.title}.${note?.file_type || 'pdf'}`} className="btn-ghost"
               style={{ fontSize: '0.82rem', padding: '0.35rem 0.7rem' }}>
               <Download size={15} /> Download
             </a>
