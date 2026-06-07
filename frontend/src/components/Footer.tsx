@@ -26,6 +26,7 @@ export default function Footer() {
             <li><Link to="/about" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>About The Citadel</Link></li>
             <li><Link to="/subscriptions" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Subscriptions</Link></li>
             <li><Link to="/privacy-policy" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Privacy Policy</Link></li>
+            <li><Link to="/terms" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Terms of Service</Link></li>
           </ul>
         </div>
 

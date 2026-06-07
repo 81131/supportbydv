@@ -39,6 +39,7 @@ import BusinessContact from './pages/BusinessContact';
 import VideoUploader from './pages/VideoUploader';
 import VideoViewer from './pages/VideoViewer';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import ApiKeySettings from './pages/ApiKeySettings';
 import AttemptReview from './pages/AttemptReview';
 
@@ -392,6 +393,7 @@ function App() {
             <Route path="/forge-video" element={<PrivilegedRoute user={user}><VideoUploader /></PrivilegedRoute>} />
             <Route path="/videos/watch/:videoId" element={<ProtectedRoute user={user}><VideoViewer /></ProtectedRoute>} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
             <Route path="/api-keys" element={<ProtectedRoute user={user}><ApiKeySettings /></ProtectedRoute>} />
             <Route path="/quiz-attempt/:attemptId" element={<ProtectedRoute user={user}><AttemptReview /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
