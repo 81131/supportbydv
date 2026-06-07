@@ -38,6 +38,7 @@ async def upload_note(
     topic_ids: str = Form(None),
     file: UploadFile = File(...),
     is_premium: bool = Form(False),
+    convert_to_pdf: bool = Form(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -69,6 +70,42 @@ async def upload_note(
     # 4. Read file content into memory
     file_bytes = await file.read()
     import io
+
+    # Convert to PDF using LibreOffice if requested
+    if convert_to_pdf and file_extension in ["doc", "docx"]:
+        import tempfile
+        import subprocess
+        
+        with tempfile.NamedTemporaryFile(suffix=f".{file_extension}", delete=False) as tmp_docx:
+            tmp_docx.write(file_bytes)
+            tmp_docx_path = tmp_docx.name
+        
+        tmp_out_dir = tempfile.mkdtemp()
+        try:
+            subprocess.run([
+                "libreoffice", "--headless", "--convert-to", "pdf", 
+                tmp_docx_path, "--outdir", tmp_out_dir
+            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            pdf_filename = os.path.basename(tmp_docx_path).replace(f".{file_extension}", ".pdf")
+            pdf_path = os.path.join(tmp_out_dir, pdf_filename)
+            
+            if os.path.exists(pdf_path):
+                with open(pdf_path, "rb") as pdf_file:
+                    file_bytes = pdf_file.read()
+                file_extension = "pdf"
+                file.content_type = "application/pdf"
+                base_name = file.filename.rsplit(".", 1)[0]
+                safe_filename = f"notes/user_{current_user.id}_mod_{module_id}_{base_name}.pdf"
+            else:
+                raise Exception("PDF file was not created by LibreOffice.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to convert document to PDF: {str(e)}")
+        finally:
+            if os.path.exists(tmp_docx_path):
+                os.unlink(tmp_docx_path)
+            if os.path.exists(tmp_out_dir):
+                shutil.rmtree(tmp_out_dir, ignore_errors=True)
 
     # 5. Upload to Cloudflare R2 without blocking the event loop
     try:

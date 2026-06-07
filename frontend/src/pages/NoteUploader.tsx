@@ -106,6 +106,7 @@ const NoteUploader: React.FC = () => {
   
   const [uploadMode, setUploadMode] = useState<'idle' | 'direct' | 'edit'>('idle');
   const [directFile, setDirectFile] = useState<File | null>(null);
+  const [convertToPdf, setConvertToPdf] = useState(false);
   
   const [images, setImages] = useState<{ url: string; file: File }[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -226,6 +227,7 @@ const NoteUploader: React.FC = () => {
     try {
       if (uploadMode === 'direct' && directFile) {
         formData.append('file', directFile);
+        if (convertToPdf) formData.append('convert_to_pdf', 'true');
       } else if (uploadMode === 'edit') {
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -363,6 +365,14 @@ const NoteUploader: React.FC = () => {
             <label className="text-desc" style={{ display: 'block', marginBottom: '0.5rem' }}>Attach Files (PDF, DOCX, JPG, PNG)</label>
             <input type="file" multiple accept=".pdf,.doc,.docx,.odt,image/png,image/jpeg,image/jpg" onChange={handleFileChange} style={{ color: 'var(--text-muted)' }} />
           </div>
+          {uploadMode === 'direct' && directFile && (directFile.name.endsWith('.docx') || directFile.name.endsWith('.doc')) && (
+            <div style={{ padding: '1rem', background: 'var(--bg-deep)', borderRadius: '8px', border: '1px solid var(--accent-gold)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-main)' }}>
+                <input type="checkbox" checked={convertToPdf} onChange={e => setConvertToPdf(e.target.checked)} style={{ accentColor: 'var(--accent-gold)', width: '18px', height: '18px' }} />
+                <span>🪄 <strong>Convert to PDF</strong> (Preserves formatting & enables Read-Aloud)</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {isProcessing && <p style={{ color: 'var(--accent-gold)', textAlign: 'center' }}>Calculating perfect dimensions... ⏳</p>}

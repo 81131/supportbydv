@@ -7,7 +7,12 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
-# Install dependencies
+# Install system dependencies including LibreOffice for docx->pdf conversion
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the backend code

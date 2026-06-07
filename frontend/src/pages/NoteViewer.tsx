@@ -86,52 +86,58 @@ const NoteViewer: React.FC = () => {
       .finally(() => setMetaLoading(false));
   }, [noteId]);
 
-  // ── Load PDF ─────────────────────────────────────────────────────────────────
+  const [presignedUrl, setPresignedUrl] = useState<string | null>(null);
+
+  // ── Load PDF or Presigned URL ────────────────────────────────────────────────
   useEffect(() => {
-    if (!noteId) return;
+    if (!noteId || !note) return;
     let url = '';
     setPdfLoading(true);
     setDownloadProgress(0);
     api.get(`/library/notes/download/${noteId}`)
       .then(async (res) => {
-        const response = await fetch(res.data.url);
-        if (!response.ok) throw new Error("Failed to retrieve scroll from vault.");
+        setPresignedUrl(res.data.url);
         
-        const contentLength = response.headers.get('content-length');
-        const total = contentLength ? parseInt(contentLength, 10) : 0;
-        
-        if (!response.body) {
-          const blob = await response.blob();
+        if (note.file_type === 'pdf') {
+          const response = await fetch(res.data.url);
+          if (!response.ok) throw new Error("Failed to retrieve scroll from vault.");
+          
+          const contentLength = response.headers.get('content-length');
+          const total = contentLength ? parseInt(contentLength, 10) : 0;
+          
+          if (!response.body) {
+            const blob = await response.blob();
+            url = URL.createObjectURL(blob);
+            setBlobUrl(url);
+            return;
+          }
+
+          const reader = response.body.getReader();
+          const chunks = [];
+          let receivedLength = 0;
+
+          while(true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            receivedLength += value.length;
+            if (total > 0) {
+              setDownloadProgress(Math.round((receivedLength / total) * 100));
+            } else {
+              setDownloadProgress(p => (p < 90 ? p + 10 : 90));
+            }
+          }
+
+          const blob = new Blob(chunks, { type: 'application/pdf' });
           url = URL.createObjectURL(blob);
           setBlobUrl(url);
-          return;
         }
-
-        const reader = response.body.getReader();
-        const chunks = [];
-        let receivedLength = 0;
-
-        while(true) {
-          const {done, value} = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          receivedLength += value.length;
-          if (total > 0) {
-            setDownloadProgress(Math.round((receivedLength / total) * 100));
-          } else {
-            setDownloadProgress(p => (p < 90 ? p + 10 : 90));
-          }
-        }
-
-        const blob = new Blob(chunks, { type: 'application/pdf' });
-        url = URL.createObjectURL(blob);
-        setBlobUrl(url);
       })
       .catch(() => setPdfError('Could not load this scroll.'))
       .finally(() => setPdfLoading(false));
       
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [noteId]);
+  }, [noteId, note?.file_type]);
 
   // ── Revoke audio blob on unmount / change ───────────────────────────────────
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
@@ -238,8 +244,8 @@ const NoteViewer: React.FC = () => {
             </button>
           )}
 
-          {blobUrl && (
-            <a href={blobUrl} download={`${note?.title}.pdf`} className="btn-ghost"
+          {(blobUrl || (presignedUrl && !isPdf)) && (
+            <a href={isPdf && blobUrl ? blobUrl : (presignedUrl || '')} download={`${note?.title}.${note?.file_type || 'pdf'}`} className="btn-ghost"
               style={{ fontSize: '0.82rem', padding: '0.35rem 0.7rem' }}>
               <Download size={15} /> Download
             </a>
@@ -333,7 +339,7 @@ const NoteViewer: React.FC = () => {
         </div>
       )}
 
-      {/* ── PDF Viewer ──────────────────────────────────────────────────────── */}
+      {/* ── Document Viewer ──────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
         {pdfLoading && (
           <div style={{
@@ -343,7 +349,7 @@ const NoteViewer: React.FC = () => {
           }}>
             <Loader2 size={36} style={{ animation: 'nvspin 1s linear infinite', marginBottom: '1rem' }} />
             <p style={{ margin: '0 0 0.75rem 0', minHeight: '1.2rem', transition: 'opacity 0.3s' }}>{loadingMessages[loadingMsgIdx]}</p>
-            {downloadProgress > 0 && (
+            {downloadProgress > 0 && isPdf && (
               <>
                 <div style={{ width: '200px', background: 'var(--bg-deep)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', background: 'var(--accent-gold)', width: `${downloadProgress}%`, transition: 'width 0.2s' }} />
@@ -358,11 +364,17 @@ const NoteViewer: React.FC = () => {
             <p style={{ color: '#ef5350', textAlign: 'center', padding: '2rem' }}>{pdfError}</p>
           </div>
         )}
-        {blobUrl && !pdfError && (
+        {blobUrl && !pdfError && isPdf && (
           <embed
             src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=1`}
             type="application/pdf"
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          />
+        )}
+        {presignedUrl && !pdfError && !isPdf && (
+          <iframe
+            src={`https://docs.google.com/gview?url=${encodeURIComponent(presignedUrl)}&embedded=true`}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block', backgroundColor: 'white' }}
           />
         )}
       </div>
